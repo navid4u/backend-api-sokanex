@@ -945,6 +945,20 @@ paths:
       responses:
         '204':
           description: No response body
+  /api/dashboard/:
+    get:
+      operationId: dashboard_retrieve
+      tags:
+      - dashboard
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DashboardResponse'
+          description: ''
   /api/livestream/:
     get:
       operationId: livestream_list
@@ -2540,6 +2554,69 @@ components:
       required:
       - password
       - username
+    Dashboard:
+      type: object
+      properties:
+        user:
+          $ref: '#/components/schemas/User'
+        stats:
+          type: object
+          additionalProperties: {}
+        capabilities:
+          type: object
+          additionalProperties: {}
+        recent_signals:
+          type: array
+          items:
+            $ref: '#/components/schemas/SignalList'
+        recent_articles:
+          type: array
+          items:
+            $ref: '#/components/schemas/ArticleList'
+        recent_videos:
+          type: array
+          items:
+            $ref: '#/components/schemas/VideoList'
+        recent_notifications:
+          type: array
+          items:
+            $ref: '#/components/schemas/Notification'
+        chat_rooms:
+          type: array
+          items:
+            $ref: '#/components/schemas/ChatRoom'
+        live_events:
+          type: array
+          items:
+            $ref: '#/components/schemas/LiveEventList'
+        upcoming_live_events:
+          type: array
+          items:
+            $ref: '#/components/schemas/LiveEventList'
+      required:
+      - capabilities
+      - chat_rooms
+      - live_events
+      - recent_articles
+      - recent_notifications
+      - recent_signals
+      - recent_videos
+      - stats
+      - upcoming_live_events
+      - user
+    DashboardResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+        data:
+          $ref: '#/components/schemas/Dashboard'
+      required:
+      - data
+      - message
+      - success
     DirectionEnum:
       enum:
       - buy
