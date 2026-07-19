@@ -4,7 +4,6 @@ from django.db.models import (
     OuterRef,
     Q,
 )
-
 from rest_framework.exceptions import (
     PermissionDenied,
     ValidationError,
@@ -20,14 +19,11 @@ from .models import (
 
 
 class ChatService:
-
     @staticmethod
     def visible_rooms(user):
-        membership = (
-            RoomMembership.objects.filter(
-                room_id=OuterRef("pk"),
-                user=user,
-            )
+        membership = RoomMembership.objects.filter(
+            room_id=OuterRef("pk"),
+            user=user,
         )
 
         return (
@@ -41,9 +37,15 @@ class ChatService:
                     "members",
                     distinct=True,
                 ),
-                is_member=Exists(membership),
+                is_member=Exists(
+                    membership
+                ),
             )
             .distinct()
+            .order_by(
+                "name",
+                "pk",
+            )
         )
 
     @staticmethod
@@ -103,7 +105,8 @@ class ChatService:
                 {
                     "room": (
                         "Room admin cannot leave "
-                        "before assigning another admin."
+                        "before assigning another "
+                        "admin."
                     )
                 }
             )
@@ -112,14 +115,14 @@ class ChatService:
 
     @staticmethod
     def ensure_member(room, user):
-        exists = (
+        is_member = (
             RoomMembership.objects.filter(
                 room=room,
                 user=user,
             ).exists()
         )
 
-        if not exists:
+        if not is_member:
             raise PermissionDenied(
                 "You must join this room first."
             )
@@ -127,11 +130,17 @@ class ChatService:
     @staticmethod
     def room_messages(room):
         return (
-            Message.objects.filter(room=room)
+            Message.objects.filter(
+                room=room
+            )
             .select_related(
                 "sender",
                 "reply_to",
                 "reply_to__sender",
+            )
+            .order_by(
+                "-created_at",
+                "-pk",
             )
         )
 
@@ -180,15 +189,20 @@ class ChatService:
 
         is_staff_role = (
             user.is_superuser
-            or user.role in [
+            or user.role
+            in [
                 User.Role.EMPLOYEE,
                 User.Role.ADMIN,
                 User.Role.SUPER_ADMIN,
             ]
         )
 
+        is_sender = (
+            message.sender_id == user.id
+        )
+
         if (
-            message.sender_id != user.id
+            not is_sender
             and not can_moderate
             and not is_staff_role
         ):

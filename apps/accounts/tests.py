@@ -2,14 +2,93 @@ from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
 
-from .models import User
-
-
+from apps.accounts.models import User
+from django.core.cache import cache
 class AccountsAPITests(APITestCase):
+    def test_login_is_rate_limited(self):
+        login_url = "/api/token/"
+
+        for _ in range(5):
+            response = self.client.post(
+                login_url,
+                {
+                    "username": self.user.username,
+                    "password": "WrongPassword!",
+                },
+                format="json",
+                REMOTE_ADDR="10.10.10.10",
+            )
+
+            self.assertEqual(
+                response.status_code,
+                status.HTTP_401_UNAUTHORIZED,
+            )
+
+        blocked_response = self.client.post(
+            login_url,
+            {
+                "username": self.user.username,
+                "password": "WrongPassword!",
+            },
+            format="json",
+            REMOTE_ADDR="10.10.10.10",
+        )
+
+        self.assertEqual(
+            blocked_response.status_code,
+            status.HTTP_429_TOO_MANY_REQUESTS,
+        )
+        self.assertFalse(
+            blocked_response.data["success"]
+        )
+    def test_register_is_rate_limited(self):
+        register_url = reverse("register")
+
+        for index in range(3):
+            response = self.client.post(
+                register_url,
+                {
+                    "username": (
+                        f"rate_user_{index}"
+                    ),
+                    "email": (
+                        f"rate_{index}@example.com"
+                    ),
+                    "password": self.password,
+                },
+                format="json",
+                REMOTE_ADDR="20.20.20.20",
+            )
+
+            self.assertEqual(
+                response.status_code,
+                status.HTTP_201_CREATED,
+            )
+
+        blocked_response = self.client.post(
+            register_url,
+            {
+                "username": "blocked_user",
+                "email": "blocked@example.com",
+                "password": self.password,
+            },
+            format="json",
+            REMOTE_ADDR="20.20.20.20",
+        )
+
+        self.assertEqual(
+            blocked_response.status_code,
+            status.HTTP_429_TOO_MANY_REQUESTS,
+        )
+        self.assertFalse(
+            blocked_response.data["success"]
+        )
 
     password = "StrongPass123!"
 
     def setUp(self):
+        cache.clear()
+
         self.user = User.objects.create_user(
             username="customer",
             email="customer@example.com",
@@ -325,4 +404,81 @@ class AccountsAPITests(APITestCase):
         self.assertEqual(
             status_response.status_code,
             status.HTTP_400_BAD_REQUEST,
+        )
+    def test_logout_requires_authentication(self):
+        response = self.client.post(
+            reverse("logout"),
+            {
+                "refresh": "invalid-token",
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_401_UNAUTHORIZED,
+        )
+
+    def test_logout_blacklists_refresh_token(self):
+        login_response = self.authenticate(
+            self.user
+        )
+
+        refresh_token = (
+            login_response.data["refresh"]
+        )
+
+        logout_response = self.client.post(
+            reverse("logout"),
+            {
+                "refresh": refresh_token,
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            logout_response.status_code,
+            status.HTTP_200_OK,
+        )
+        self.assertEqual(
+            logout_response.data["message"],
+            "Logged out successfully.",
+        )
+
+        self.client.credentials()
+
+        refresh_response = self.client.post(
+            "/api/token/refresh/",
+            {
+                "refresh": refresh_token,
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            refresh_response.status_code,
+            status.HTTP_401_UNAUTHORIZED,
+        )
+
+    def test_logout_rejects_invalid_refresh_token(self):
+        self.authenticate(self.user)
+
+        response = self.client.post(
+            reverse("logout"),
+            {
+                "refresh": "invalid-refresh-token",
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_400_BAD_REQUEST,
+        )
+        self.assertFalse(
+            response.data["success"]
+        )
+        self.assertIn(
+            "refresh",
+            response.data["errors"],
         )

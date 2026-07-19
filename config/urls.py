@@ -16,14 +16,18 @@ from apps.accounts.views import (
     CustomTokenObtainPairView,
 )
 
-from .views import home
-
+from .views import (
+    health_check,
+    home,
+)
 
 urlpatterns = [
+    path("", home),
+
     path(
-        "",
-        home,
-        name="home",
+        "api/health/",
+        health_check,
+        name="health-check",
     ),
 
     path(

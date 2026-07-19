@@ -2,6 +2,10 @@ from rest_framework import serializers
 
 from .models import ChatRoom, Message
 
+from common.validators import (
+    validate_attachment_upload,
+    validate_image_upload,
+)
 
 class ChatRoomSerializer(
     serializers.ModelSerializer
@@ -58,13 +62,11 @@ class ChatRoomWriteSerializer(
         )
 
     def validate_image(self, value):
-        if value and value.size > 5 * 1024 * 1024:
-            raise serializers.ValidationError(
-                "Room image size cannot exceed 5 MB."
-            )
-
-        return value
-
+        return validate_image_upload(
+            value,
+            max_size_mb=5,
+            file_label="Room image",
+        )
 
 class MessageSerializer(
     serializers.ModelSerializer
@@ -118,9 +120,8 @@ class MessageSerializer(
         return attrs
 
     def validate_attachment(self, value):
-        if value and value.size > 20 * 1024 * 1024:
-            raise serializers.ValidationError(
-                "Attachment size cannot exceed 20 MB."
-            )
-
-        return value
+        return validate_attachment_upload(
+            value,
+            max_size_mb=20,
+            file_label="Chat attachment",
+        )

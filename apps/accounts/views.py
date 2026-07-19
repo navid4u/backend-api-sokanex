@@ -1,6 +1,5 @@
 from django.contrib.auth import get_user_model
 from django.shortcuts import get_object_or_404
-
 from django_filters.rest_framework import (
     DjangoFilterBackend,
 )
@@ -8,25 +7,41 @@ from drf_spectacular.utils import (
     extend_schema,
     inline_serializer,
 )
-from rest_framework import generics, serializers
+from common.throttles import (
+    LoginRateThrottle,
+    RegisterRateThrottle,
+)
+from rest_framework import (
+    generics,
+    serializers,
+    status,
+)
 from rest_framework.filters import SearchFilter
 from rest_framework.parsers import (
     FormParser,
     JSONParser,
     MultiPartParser,
 )
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import (
+    AllowAny,
+    IsAuthenticated,
+)
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.views import (
     TokenObtainPairView,
 )
 
-from common.permissions import IsSuperAdmin
+from common.permissions import (
+    IsAdmin,
+    IsSuperAdmin,
+    IsTrader,
+)
 
 from .filters import UserFilter
 from .serializers import (
     CustomTokenObtainPairSerializer,
+    LogoutSerializer,
     ProfileUpdateSerializer,
     RegisterSerializer,
     UserListSerializer,
@@ -42,15 +57,20 @@ User = get_user_model()
 class CustomTokenObtainPairView(
     TokenObtainPairView
 ):
-
+    permission_classes = [
+        AllowAny,
+    ]
     serializer_class = (
         CustomTokenObtainPairSerializer
     )
-
+    throttle_classes = [
+        LoginRateThrottle,
+    ]
 
 class ProfileView(APIView):
-
-    permission_classes = [IsAuthenticated]
+    permission_classes = [
+        IsAuthenticated,
+    ]
 
     parser_classes = [
         JSONParser,
@@ -59,15 +79,19 @@ class ProfileView(APIView):
     ]
 
     @extend_schema(
-        responses=UserSerializer,
+        responses=UserSerializer
     )
     def get(self, request):
         serializer = UserSerializer(
             request.user,
-            context={"request": request},
+            context={
+                "request": request,
+            },
         )
 
-        return Response(serializer.data)
+        return Response(
+            serializer.data
+        )
 
     @extend_schema(
         request=ProfileUpdateSerializer,
@@ -91,31 +115,69 @@ class ProfileView(APIView):
         serializer.is_valid(
             raise_exception=True
         )
-
         serializer.save()
 
         response_serializer = UserSerializer(
             request.user,
-            context={"request": request},
+            context={
+                "request": request,
+            },
         )
 
         return Response(
             {
                 "message": (
-                    "Profile updated successfully."
+                    "Profile updated "
+                    "successfully."
                 ),
-                "user": response_serializer.data,
+                "user": (
+                    response_serializer.data
+                ),
             }
         )
 
 
-class RegisterView(generics.CreateAPIView):
-
+class RegisterView(
+    generics.CreateAPIView
+):
+    permission_classes = [
+        AllowAny,
+    ]
     serializer_class = RegisterSerializer
+    throttle_classes = [
+        RegisterRateThrottle,
+    ]
+class LogoutView(
+    generics.GenericAPIView
+):
+    permission_classes = [
+        IsAuthenticated,
+    ]
+    serializer_class = LogoutSerializer
+
+    def post(self, request):
+        serializer = self.get_serializer(
+            data=request.data,
+        )
+
+        serializer.is_valid(
+            raise_exception=True
+        )
+        serializer.save()
+
+        return Response(
+            {
+                "message": (
+                    "Logged out successfully."
+                )
+            },
+            status=status.HTTP_200_OK,
+        )
 
 
-class UserListView(generics.ListAPIView):
-
+class UserListView(
+    generics.ListAPIView
+):
     permission_classes = [
         IsAuthenticated,
         IsSuperAdmin,
@@ -142,7 +204,6 @@ class UserListView(generics.ListAPIView):
 
 
 class ToggleUserStatusView(APIView):
-
     permission_classes = [
         IsAuthenticated,
         IsSuperAdmin,
@@ -176,15 +237,14 @@ class ToggleUserStatusView(APIView):
                 "message": (
                     "User status updated."
                 ),
-                "user": (
-                    UserListSerializer(user).data
-                ),
+                "user": UserListSerializer(
+                    user
+                ).data,
             }
         )
 
 
 class UpdateUserRoleView(APIView):
-
     permission_classes = [
         IsAuthenticated,
         IsSuperAdmin,
@@ -208,8 +268,10 @@ class UpdateUserRoleView(APIView):
             pk=pk,
         )
 
-        serializer = UserRoleUpdateSerializer(
-            data=request.data,
+        serializer = (
+            UserRoleUpdateSerializer(
+                data=request.data,
+            )
         )
 
         serializer.is_valid(
@@ -218,7 +280,9 @@ class UpdateUserRoleView(APIView):
 
         UserService.update_role(
             user,
-            serializer.validated_data["role"],
+            serializer.validated_data[
+                "role"
+            ],
             request.user,
         )
 
@@ -227,8 +291,8 @@ class UpdateUserRoleView(APIView):
                 "message": (
                     "User role updated."
                 ),
-                "user": (
-                    UserListSerializer(user).data
-                ),
+                "user": UserListSerializer(
+                    user
+                ).data,
             }
         )

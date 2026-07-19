@@ -1,7 +1,9 @@
 from rest_framework import serializers
 
 from .models import Article, Category
-
+from common.validators import (
+    validate_image_upload,
+)
 
 class CategorySerializer(serializers.ModelSerializer):
 
@@ -93,9 +95,8 @@ class ArticleWriteSerializer(
         )
 
     def validate_cover_image(self, value):
-        if value and value.size > 8 * 1024 * 1024:
-            raise serializers.ValidationError(
-                "Cover image size cannot exceed 8 MB."
-            )
-
-        return value
+        return validate_image_upload(
+            value,
+            max_size_mb=8,
+            file_label="Cover image",
+        )

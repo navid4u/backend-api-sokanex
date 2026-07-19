@@ -1,7 +1,10 @@
 from rest_framework import serializers
 
 from .models import Video, VideoCategory
-
+from common.validators import (
+    validate_image_upload,
+    validate_video_upload,
+)
 
 class VideoCategorySerializer(
     serializers.ModelSerializer
@@ -196,17 +199,15 @@ class VideoWriteSerializer(
         return attrs
 
     def validate_thumbnail(self, value):
-        if value and value.size > 8 * 1024 * 1024:
-            raise serializers.ValidationError(
-                "Thumbnail size cannot exceed 8 MB."
-            )
-
-        return value
+        return validate_image_upload(
+            value,
+            max_size_mb=8,
+            file_label="Video thumbnail",
+        )
 
     def validate_video_file(self, value):
-        if value and value.size > 500 * 1024 * 1024:
-            raise serializers.ValidationError(
-                "Video file size cannot exceed 500 MB."
-            )
-
-        return value
+        return validate_video_upload(
+            value,
+            max_size_mb=500,
+            file_label="Video file",
+        )

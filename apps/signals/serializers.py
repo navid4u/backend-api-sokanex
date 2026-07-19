@@ -1,8 +1,12 @@
 from rest_framework import serializers
-
+from common.validators import (
+    validate_image_upload,
+)
 from .models import Signal
 
-
+from common.validators import (
+    validate_image_upload,
+)
 class SignalListSerializer(serializers.ModelSerializer):
 
     trader = serializers.CharField(
@@ -30,6 +34,12 @@ class SignalListSerializer(serializers.ModelSerializer):
 
 
 class SignalCreateSerializer(serializers.ModelSerializer):
+    def validate_image(self, value):
+        return validate_image_upload(
+            value,
+            max_size_mb=8,
+            file_label="Signal image",
+        )
 
     trader = serializers.CharField(
         source="created_by.username",
@@ -60,6 +70,13 @@ class SignalCreateSerializer(serializers.ModelSerializer):
             "status",
             "trader",
             "created_at",
+        )
+
+    def validate_image(self, value):
+        return validate_image_upload(
+            value,
+            max_size_mb=8,
+            file_label="Signal image",
         )
 
     def validate(self, attrs):

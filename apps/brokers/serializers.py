@@ -2,6 +2,9 @@ from rest_framework import serializers
 
 from .models import Broker
 
+from common.validators import (
+    validate_image_upload,
+)
 
 class BrokerListSerializer(
     serializers.ModelSerializer
@@ -80,12 +83,11 @@ class BrokerWriteSerializer(
         )
 
     def validate_logo(self, value):
-        if value and value.size > 5 * 1024 * 1024:
-            raise serializers.ValidationError(
-                "Broker logo size cannot exceed 5 MB."
-            )
-
-        return value
+        return validate_image_upload(
+            value,
+            max_size_mb=5,
+            file_label="Broker logo",
+        )
 
     def validate_features(self, value):
         if not isinstance(value, list):
