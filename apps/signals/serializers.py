@@ -1,10 +1,15 @@
 from rest_framework import serializers
+
 from common.validators import (
     validate_image_upload,
 )
-from .models import Signal
 
- 
+from .models import (
+    Direction,
+    Signal,
+)
+
+
 class SignalListSerializer(serializers.ModelSerializer):
 
     trader = serializers.CharField(
@@ -32,17 +37,6 @@ class SignalListSerializer(serializers.ModelSerializer):
 
 
 class SignalCreateSerializer(serializers.ModelSerializer):
-    def validate_image(self, value):
-        return validate_image_upload(
-            value,
-            max_size_mb=8,
-            file_label="Signal image",
-        )
-
-    trader = serializers.CharField(
-        source="created_by.username",
-        read_only=True,
-    )
 
     class Meta:
         model = Signal
@@ -58,16 +52,10 @@ class SignalCreateSerializer(serializers.ModelSerializer):
             "take_profit",
             "description",
             "image",
-            "status",
-            "trader",
-            "created_at",
         )
 
         read_only_fields = (
             "id",
-            "status",
-            "trader",
-            "created_at",
         )
 
     def validate_image(self, value):
@@ -84,44 +72,56 @@ class SignalCreateSerializer(serializers.ModelSerializer):
             "direction",
             getattr(instance, "direction", None),
         )
+
         entry_price = attrs.get(
             "entry_price",
             getattr(instance, "entry_price", None),
         )
+
         stop_loss = attrs.get(
             "stop_loss",
             getattr(instance, "stop_loss", None),
         )
+
         take_profit = attrs.get(
             "take_profit",
             getattr(instance, "take_profit", None),
         )
 
-        if direction == "buy" and not (
-            stop_loss < entry_price < take_profit
-        ):
-            raise serializers.ValidationError(
-                {
-                    "prices": (
-                        "For a buy signal, stop loss must be below "
-                        "entry price and take profit must be above it."
-                    )
-                }
-            )
+        if direction == Direction.BUY:
+            if not (
+                stop_loss
+                < entry_price
+                < take_profit
+            ):
+                raise serializers.ValidationError(
+                    {
+                        "prices": (
+                            "For a buy signal, stop loss "
+                            "must be below entry price and "
+                            "take profit must be above it."
+                        ),
+                    }
+                )
 
-        if direction == "sell" and not (
-            take_profit < entry_price < stop_loss
-        ):
-            raise serializers.ValidationError(
-                {
-                    "prices": (
-                        "For a sell signal, take profit must be below "
-                        "entry price and stop loss must be above it."
-                    )
-                }
-            )
+        elif direction == Direction.SELL:
+            if not (
+                take_profit
+                < entry_price
+                < stop_loss
+            ):
+                raise serializers.ValidationError(
+                    {
+                        "prices": (
+                            "For a sell signal, take profit "
+                            "must be below entry price and "
+                            "stop loss must be above it."
+                        ),
+                    }
+                )
 
         return attrs
+
 
 class SignalDetailSerializer(serializers.ModelSerializer):
 

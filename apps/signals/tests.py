@@ -387,3 +387,203 @@ class SignalAPITests(APITestCase):
             response.status_code,
             status.HTTP_404_NOT_FOUND,
         )
+    def test_trader_can_update_own_signal(self):
+        self.authenticate(self.trader)
+
+        response = self.client.patch(
+            reverse(
+                "signal-detail",
+                kwargs={
+                    "pk": self.pending_signal.pk,
+                },
+            ),
+            {
+                "title": "Updated ETH signal",
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK,
+        )
+
+        self.pending_signal.refresh_from_db()
+
+        self.assertEqual(
+            self.pending_signal.title,
+            "Updated ETH signal",
+        )
+
+
+    def test_trader_cannot_update_another_signal(
+        self
+    ):
+        self.authenticate(self.trader)
+
+        response = self.client.patch(
+            reverse(
+                "signal-detail",
+                kwargs={
+                    "pk": self.approved_signal.pk,
+                },
+            ),
+            {
+                "title": "Unauthorized update",
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_403_FORBIDDEN,
+        )
+
+
+    def test_user_cannot_update_signal(self):
+        self.authenticate(self.user)
+
+        response = self.client.patch(
+            reverse(
+                "signal-detail",
+                kwargs={
+                    "pk": self.approved_signal.pk,
+                },
+            ),
+            {
+                "title": "Unauthorized update",
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_403_FORBIDDEN,
+        )
+
+
+    def test_employee_can_update_signal(self):
+        self.authenticate(self.employee)
+
+        response = self.client.patch(
+            reverse(
+                "signal-detail",
+                kwargs={
+                    "pk": self.pending_signal.pk,
+                },
+            ),
+            {
+                "title": "Employee updated signal",
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK,
+        )
+
+        self.pending_signal.refresh_from_db()
+
+        self.assertEqual(
+            self.pending_signal.title,
+            "Employee updated signal",
+        )
+
+
+    def test_trader_can_delete_own_signal(self):
+        self.authenticate(self.trader)
+
+        response = self.client.delete(
+            reverse(
+                "signal-detail",
+                kwargs={
+                    "pk": self.pending_signal.pk,
+                },
+            )
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_204_NO_CONTENT,
+        )
+
+        self.assertFalse(
+            Signal.objects.filter(
+                pk=self.pending_signal.pk,
+            ).exists()
+        )
+
+
+    def test_trader_cannot_delete_another_signal(
+        self
+    ):
+        self.authenticate(self.trader)
+
+        response = self.client.delete(
+            reverse(
+                "signal-detail",
+                kwargs={
+                    "pk": self.approved_signal.pk,
+                },
+            )
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_403_FORBIDDEN,
+        )
+
+        self.assertTrue(
+            Signal.objects.filter(
+                pk=self.approved_signal.pk,
+            ).exists()
+        )
+
+
+    def test_user_cannot_delete_signal(self):
+        self.authenticate(self.user)
+
+        response = self.client.delete(
+            reverse(
+                "signal-detail",
+                kwargs={
+                    "pk": self.approved_signal.pk,
+                },
+            )
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_403_FORBIDDEN,
+        )
+
+        self.assertTrue(
+            Signal.objects.filter(
+                pk=self.approved_signal.pk,
+            ).exists()
+        )
+
+
+    def test_employee_can_delete_signal(self):
+        self.authenticate(self.employee)
+
+        response = self.client.delete(
+            reverse(
+                "signal-detail",
+                kwargs={
+                    "pk": self.pending_signal.pk,
+                },
+            )
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_204_NO_CONTENT,
+        )
+
+        self.assertFalse(
+            Signal.objects.filter(
+                pk=self.pending_signal.pk,
+            ).exists()
+        )
