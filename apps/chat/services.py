@@ -175,7 +175,6 @@ class ChatService:
         )
 
     @staticmethod
-    @staticmethod
     def delete_message(message, user):
         if not ChatService.can_delete_message(
             message,

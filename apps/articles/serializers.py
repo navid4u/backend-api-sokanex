@@ -70,7 +70,10 @@ class ArticleDetailSerializer(
 
 
 class ArticleWriteSerializer(
+    
     serializers.ModelSerializer
+    
+    
 ):
 
     category = serializers.PrimaryKeyRelatedField(
@@ -95,6 +98,7 @@ class ArticleWriteSerializer(
             "created_at",
             "updated_at",
         )
+        
 
         read_only_fields = (
             "id",
@@ -111,6 +115,7 @@ class ArticleWriteSerializer(
             },
         }
 
+    
     def validate_cover_image(self, value):
         if value is None:
             return value
@@ -120,3 +125,15 @@ class ArticleWriteSerializer(
             max_size_mb=8,
             file_label="Article cover image",
         )
+    def to_internal_value(self, data):
+        if "category_id" in data:
+            raise serializers.ValidationError(
+                {
+                    "category_id": (
+                        "This field is not accepted. "
+                        "Use 'category' instead."
+                    ),
+                }
+            )
+
+        return super().to_internal_value(data)
