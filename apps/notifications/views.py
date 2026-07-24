@@ -83,6 +83,33 @@ class NotificationListCreateView(
         )
 
 
+class NotificationUnreadCountView(APIView):
+
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        responses=inline_serializer(
+            name="NotificationUnreadCountResponse",
+            fields={
+                "unread_count": (
+                    serializers.IntegerField()
+                ),
+            },
+        ),
+    )
+    def get(self, request):
+        count = NotificationService.unread_count(
+            request.user
+        )
+
+        return Response(
+            {
+                "unread_count": count,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
 class NotificationDetailView(
     generics.RetrieveAPIView
 ):

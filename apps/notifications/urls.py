@@ -5,6 +5,7 @@ from .views import (
     MarkNotificationReadView,
     NotificationDetailView,
     NotificationListCreateView,
+    NotificationUnreadCountView,
 )
 
 
@@ -13,6 +14,12 @@ urlpatterns = [
         "",
         NotificationListCreateView.as_view(),
         name="notification-list-create",
+    ),
+
+    path(
+        "unread-count/",
+        NotificationUnreadCountView.as_view(),
+        name="notification-unread-count",
     ),
 
     path(

@@ -71,6 +71,17 @@ class NotificationAPITests(APITestCase):
         self.read_all_url = reverse(
             "notification-read-all"
         )
+        self.list_url = reverse(
+            "notification-list-create"
+        )
+
+        self.read_all_url = reverse(
+            "notification-read-all"
+        )
+
+        self.unread_count_url = reverse(
+            "notification-unread-count"
+        )
 
     def authenticate(self, user):
         self.client.force_authenticate(user=user)
@@ -409,4 +420,97 @@ class NotificationAPITests(APITestCase):
         self.assertIn(
             self.global_notification.title,
             unread_titles,
+        )
+        
+    def test_unread_count_requires_authentication(
+        self
+    ):
+        response = self.client.get(
+            self.unread_count_url
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_401_UNAUTHORIZED,
+        )
+
+    def test_customer_receives_visible_unread_count(
+        self
+    ):
+        self.authenticate(self.customer)
+
+        response = self.client.get(
+            self.unread_count_url
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK,
+        )
+
+        self.assertEqual(
+            response.data["unread_count"],
+            2,
+        )
+    def test_unread_count_decreases_after_mark_as_read(
+        self
+    ):
+        self.authenticate(self.customer)
+
+        read_url = reverse(
+            "notification-read",
+            kwargs={
+                "pk": self.personal_notification.pk,
+            },
+        )
+
+        read_response = self.client.post(
+            read_url
+        )
+
+        self.assertEqual(
+            read_response.status_code,
+            status.HTTP_200_OK,
+        )
+
+        count_response = self.client.get(
+            self.unread_count_url
+        )
+
+        self.assertEqual(
+            count_response.status_code,
+            status.HTTP_200_OK,
+        )
+
+        self.assertEqual(
+            count_response.data["unread_count"],
+            1,
+        )
+
+    def test_unread_count_becomes_zero_after_read_all(
+        self
+    ):
+        self.authenticate(self.customer)
+
+        read_all_response = self.client.post(
+            self.read_all_url
+        )
+
+        self.assertEqual(
+            read_all_response.status_code,
+            status.HTTP_200_OK,
+        )
+
+        count_response = self.client.get(
+            self.unread_count_url
+        )
+
+        self.assertEqual(
+            count_response.status_code,
+            status.HTTP_200_OK,
+        )
+
+        self.assertEqual(
+            count_response.data["unread_count"],
+            0,
         )
