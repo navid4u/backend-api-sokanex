@@ -1,11 +1,13 @@
 from rest_framework import serializers
 
-from .models import Article, Category
-from common.validators import (
-    validate_image_upload,
-)
+from common.validators import validate_image_upload
 
-class CategorySerializer(serializers.ModelSerializer):
+from .models import Article, Category
+
+
+class CategorySerializer(
+    serializers.ModelSerializer
+):
 
     class Meta:
         model = Category
@@ -22,7 +24,9 @@ class CategorySerializer(serializers.ModelSerializer):
         )
 
 
-class ArticleListSerializer(serializers.ModelSerializer):
+class ArticleListSerializer(
+    serializers.ModelSerializer
+):
 
     author = serializers.CharField(
         source="author.username",
@@ -69,6 +73,12 @@ class ArticleWriteSerializer(
     serializers.ModelSerializer
 ):
 
+    category = serializers.PrimaryKeyRelatedField(
+        queryset=Category.objects.all(),
+        required=False,
+        allow_null=True,
+    )
+
     class Meta:
         model = Article
 
@@ -94,9 +104,19 @@ class ArticleWriteSerializer(
             "updated_at",
         )
 
+        extra_kwargs = {
+            "cover_image": {
+                "required": False,
+                "allow_null": True,
+            },
+        }
+
     def validate_cover_image(self, value):
+        if value is None:
+            return value
+
         return validate_image_upload(
             value,
             max_size_mb=8,
-            file_label="Cover image",
+            file_label="Article cover image",
         )

@@ -1,17 +1,93 @@
+import base64
+import tempfile
 from datetime import timedelta
 
+from django.core.files.uploadedfile import (
+    SimpleUploadedFile,
+)
+from django.test import override_settings
 from django.urls import reverse
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
 
 from apps.accounts.models import User
-from apps.articles.models import Article, Category
-
+from apps.articles.models import (
+    Article,
+    Category,
+)
 
 class ArticleAPITests(APITestCase):
+    def cover_image(self, name="cover.png"):
+        image_content = base64.b64decode(
+            (
+                "iVBORw0KGgoAAAANSUhEUgAAAAEAAAAB"
+                "CAQAAAC1HAwCAAAAC0lEQVR42mNk"
+                "YAAAAAYAAjCB0C8AAAAASUVORK5CYII="
+            )
+        )
 
+        return SimpleUploadedFile(
+            name=name,
+            content=image_content,
+            content_type="image/png",
+        )
+    def test_employee_can_create_article_with_cover(
+        self
+    ):
+        self.authenticate(self.employee)
+
+        response = self.client.post(
+            reverse("article-list-create"),
+            {
+                "title": "Article with image",
+                "summary": "Article summary",
+                "content": "Article content",
+                "category": self.category.pk,
+                "status": Article.Status.DRAFT,
+                "cover_image": self.cover_image(),
+            },
+            format="multipart",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_201_CREATED,
+            response.data,
+        )
+
+        article = Article.objects.get(
+            pk=response.data["id"]
+        )
+
+        self.assertTrue(
+            article.cover_image.name.startswith(
+                "articles/"
+            )
+        )
+
+        self.assertEqual(
+            article.category,
+            self.category,
+        )
     def setUp(self):
+        self.media_directory = (
+            tempfile.TemporaryDirectory()
+        )
+
+        self.media_override = override_settings(
+            MEDIA_ROOT=self.media_directory.name
+        )
+
+        self.media_override.enable()
+
+        self.addCleanup(
+            self.media_override.disable
+        )
+
+        self.addCleanup(
+            self.media_directory.cleanup
+        )
         password = "StrongPass123!"
 
         self.user = User.objects.create_user(

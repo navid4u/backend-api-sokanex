@@ -1848,16 +1848,6 @@ paths:
         schema:
           type: string
       - in: query
-        name: source_type
-        schema:
-          type: string
-          enum:
-          - EXTERNAL
-          - UPLOAD
-        description: |-
-          * `UPLOAD` - Uploaded file
-          * `EXTERNAL` - External URL
-      - in: query
         name: status
         schema:
           type: string
@@ -2183,16 +2173,6 @@ paths:
         description: A search term.
         schema:
           type: string
-      - in: query
-        name: source_type
-        schema:
-          type: string
-          enum:
-          - EXTERNAL
-          - UPLOAD
-        description: |-
-          * `UPLOAD` - Uploaded file
-          * `EXTERNAL` - External URL
       - in: query
         name: status
         schema:
@@ -3824,19 +3804,11 @@ components:
           maxLength: 250
         summary:
           type: string
-        source_type:
-          $ref: '#/components/schemas/SourceTypeEnum'
-        video_file:
-          type: string
-          format: binary
-          nullable: true
         external_url:
-          oneOf:
-          - type: string
-            format: uri
-            maxLength: 500
-          - type: string
-            maxLength: 0
+          type: string
+          format: uri
+          minLength: 1
+          maxLength: 500
         thumbnail:
           type: string
           format: binary
@@ -4172,14 +4144,6 @@ components:
         * `pending` - Pending
         * `approved` - Approved
         * `rejected` - Rejected
-    SourceTypeEnum:
-      enum:
-      - UPLOAD
-      - EXTERNAL
-      type: string
-      description: |-
-        * `UPLOAD` - Uploaded file
-        * `EXTERNAL` - External URL
     TokenRefresh:
       type: object
       properties:
@@ -4408,15 +4372,10 @@ components:
             maxLength: 0
         summary:
           type: string
-        source_type:
-          $ref: '#/components/schemas/SourceTypeEnum'
         external_url:
-          oneOf:
-          - type: string
-            format: uri
-            maxLength: 500
-          - type: string
-            maxLength: 0
+          type: string
+          format: uri
+          maxLength: 500
         thumbnail:
           type: string
           format: uri
@@ -4444,10 +4403,6 @@ components:
           type: string
           format: date-time
           readOnly: true
-        video_file:
-          type: string
-          format: uri
-          nullable: true
         updated_at:
           type: string
           format: date-time
@@ -4456,8 +4411,8 @@ components:
       - author
       - category
       - created_at
+      - external_url
       - id
-      - source_type
       - title
       - updated_at
     VideoList:
@@ -4478,15 +4433,10 @@ components:
             maxLength: 0
         summary:
           type: string
-        source_type:
-          $ref: '#/components/schemas/SourceTypeEnum'
         external_url:
-          oneOf:
-          - type: string
-            format: uri
-            maxLength: 500
-          - type: string
-            maxLength: 0
+          type: string
+          format: uri
+          maxLength: 500
         thumbnail:
           type: string
           format: uri
@@ -4518,8 +4468,8 @@ components:
       - author
       - category
       - created_at
+      - external_url
       - id
-      - source_type
       - title
     VideoWrite:
       type: object
@@ -4536,19 +4486,10 @@ components:
           pattern: ^[-\w]+$
         summary:
           type: string
-        source_type:
-          $ref: '#/components/schemas/SourceTypeEnum'
-        video_file:
+        external_url:
           type: string
           format: uri
-          nullable: true
-        external_url:
-          oneOf:
-          - type: string
-            format: uri
-            maxLength: 500
-          - type: string
-            maxLength: 0
+          maxLength: 500
         thumbnail:
           type: string
           format: uri
@@ -4579,10 +4520,10 @@ components:
           readOnly: true
       required:
       - created_at
+      - external_url
       - id
       - published_at
       - slug
-      - source_type
       - title
       - updated_at
     VideoWriteRequest:
@@ -4594,19 +4535,11 @@ components:
           maxLength: 250
         summary:
           type: string
-        source_type:
-          $ref: '#/components/schemas/SourceTypeEnum'
-        video_file:
-          type: string
-          format: binary
-          nullable: true
         external_url:
-          oneOf:
-          - type: string
-            format: uri
-            maxLength: 500
-          - type: string
-            maxLength: 0
+          type: string
+          format: uri
+          minLength: 1
+          maxLength: 500
         thumbnail:
           type: string
           format: binary
@@ -4623,7 +4556,7 @@ components:
         status:
           $ref: '#/components/schemas/ContentStatusEnum'
       required:
-      - source_type
+      - external_url
       - title
     Wallet:
       type: object
