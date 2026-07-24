@@ -198,6 +198,10 @@ class DashboardAPITests(APITestCase):
             data["stats"]["upcoming_live_events"],
             1,
         )
+        self.assertEqual(
+            data["stats"]["unread_notifications"],
+            1,
+        )
 
     def test_customer_has_only_public_capabilities(self):
         self.authenticate(self.customer)

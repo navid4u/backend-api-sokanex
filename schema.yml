@@ -3020,11 +3020,9 @@ components:
         user:
           $ref: '#/components/schemas/User'
         stats:
-          type: object
-          additionalProperties: {}
+          $ref: '#/components/schemas/DashboardStats'
         capabilities:
-          type: object
-          additionalProperties: {}
+          $ref: '#/components/schemas/DashboardCapabilities'
         recent_signals:
           type: array
           items:
@@ -3064,6 +3062,22 @@ components:
       - stats
       - upcoming_live_events
       - user
+    DashboardCapabilities:
+      type: object
+      properties:
+        can_submit_signals:
+          type: boolean
+        can_review_signals:
+          type: boolean
+        can_manage_content:
+          type: boolean
+        can_manage_users:
+          type: boolean
+      required:
+      - can_manage_content
+      - can_manage_users
+      - can_review_signals
+      - can_submit_signals
     DashboardResponse:
       type: object
       properties:
@@ -3077,6 +3091,59 @@ components:
       - data
       - message
       - success
+    DashboardStats:
+      type: object
+      properties:
+        wallet_balance:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,8})?$
+        wallet_currency:
+          type: string
+          maxLength: 10
+        signals:
+          type: integer
+          minimum: 0
+        my_signals:
+          type: integer
+          minimum: 0
+        pending_signals:
+          type: integer
+          minimum: 0
+        articles:
+          type: integer
+          minimum: 0
+        videos:
+          type: integer
+          minimum: 0
+        notifications:
+          type: integer
+          minimum: 0
+        unread_notifications:
+          type: integer
+          minimum: 0
+        chat_rooms:
+          type: integer
+          minimum: 0
+        live_events:
+          type: integer
+          minimum: 0
+        upcoming_live_events:
+          type: integer
+          minimum: 0
+      required:
+      - articles
+      - chat_rooms
+      - live_events
+      - my_signals
+      - notifications
+      - pending_signals
+      - signals
+      - unread_notifications
+      - upcoming_live_events
+      - videos
+      - wallet_balance
+      - wallet_currency
     JoinChatRoomResponse:
       type: object
       properties:
