@@ -26,10 +26,7 @@ from common.permissions import (
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from common.permissions import (
-    IsEmployee,
-    IsTrader,
-)
+
 
 from .filters import SignalFilter
 from .models import Signal
