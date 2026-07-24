@@ -4,9 +4,7 @@ from common.validators import (
 )
 from .models import Signal
 
-from common.validators import (
-    validate_image_upload,
-)
+ 
 class SignalListSerializer(serializers.ModelSerializer):
 
     trader = serializers.CharField(
@@ -80,10 +78,24 @@ class SignalCreateSerializer(serializers.ModelSerializer):
         )
 
     def validate(self, attrs):
-        direction = attrs.get("direction")
-        entry_price = attrs.get("entry_price")
-        stop_loss = attrs.get("stop_loss")
-        take_profit = attrs.get("take_profit")
+        instance = self.instance
+
+        direction = attrs.get(
+            "direction",
+            getattr(instance, "direction", None),
+        )
+        entry_price = attrs.get(
+            "entry_price",
+            getattr(instance, "entry_price", None),
+        )
+        stop_loss = attrs.get(
+            "stop_loss",
+            getattr(instance, "stop_loss", None),
+        )
+        take_profit = attrs.get(
+            "take_profit",
+            getattr(instance, "take_profit", None),
+        )
 
         if direction == "buy" and not (
             stop_loss < entry_price < take_profit
@@ -110,7 +122,6 @@ class SignalCreateSerializer(serializers.ModelSerializer):
             )
 
         return attrs
-
 
 class SignalDetailSerializer(serializers.ModelSerializer):
 
