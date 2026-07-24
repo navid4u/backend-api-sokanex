@@ -51,10 +51,6 @@ class VideoCategory(models.Model):
 
 class Video(models.Model):
 
-    class SourceType(models.TextChoices):
-        UPLOAD = "UPLOAD", "Uploaded file"
-        EXTERNAL = "EXTERNAL", "External URL"
-
     class Status(models.TextChoices):
         DRAFT = "DRAFT", "Draft"
         PUBLISHED = "PUBLISHED", "Published"
@@ -74,20 +70,8 @@ class Video(models.Model):
         blank=True,
     )
 
-    source_type = models.CharField(
-        max_length=10,
-        choices=SourceType.choices,
-    )
-
-    video_file = models.FileField(
-        upload_to="videos/",
-        null=True,
-        blank=True,
-    )
-
     external_url = models.URLField(
         max_length=500,
-        blank=True,
     )
 
     thumbnail = models.ImageField(

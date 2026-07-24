@@ -1,34 +1,20 @@
-import tempfile
 from datetime import timedelta
 
-from django.core.files.uploadedfile import SimpleUploadedFile
-from django.test import override_settings
 from django.urls import reverse
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
 
 from apps.accounts.models import User
-from apps.videos.models import Video, VideoCategory
+from apps.videos.models import (
+    Video,
+    VideoCategory,
+)
 
 
 class VideoAPITests(APITestCase):
 
     def setUp(self):
-        self.media_directory = (
-            tempfile.TemporaryDirectory()
-        )
-
-        self.media_override = override_settings(
-            MEDIA_ROOT=self.media_directory.name
-        )
-
-        self.media_override.enable()
-        self.addCleanup(self.media_override.disable)
-        self.addCleanup(
-            self.media_directory.cleanup
-        )
-
         password = "StrongPass123!"
 
         self.user = User.objects.create_user(
@@ -51,7 +37,7 @@ class VideoAPITests(APITestCase):
 
         self.category = (
             VideoCategory.objects.create(
-                name="Trading videos"
+                name="Trading videos",
             )
         )
 
@@ -59,9 +45,6 @@ class VideoAPITests(APITestCase):
             Video.objects.create(
                 title="Published video",
                 summary="Published summary",
-                source_type=(
-                    Video.SourceType.EXTERNAL
-                ),
                 external_url=(
                     "https://example.com/"
                     "published-video"
@@ -76,46 +59,45 @@ class VideoAPITests(APITestCase):
         self.draft_video = Video.objects.create(
             title="Draft video",
             summary="Draft summary",
-            source_type=Video.SourceType.EXTERNAL,
             external_url=(
-                "https://example.com/draft-video"
+                "https://example.com/"
+                "draft-video"
             ),
             category=self.category,
             author=self.employee,
             status=Video.Status.DRAFT,
         )
 
-        self.future_video = Video.objects.create(
-            title="Future video",
-            summary="Future summary",
-            source_type=Video.SourceType.EXTERNAL,
-            external_url=(
-                "https://example.com/future-video"
-            ),
-            category=self.category,
-            author=self.employee,
-            status=Video.Status.PUBLISHED,
-            published_at=(
-                timezone.now()
-                + timedelta(days=1)
-            ),
+        self.future_video = (
+            Video.objects.create(
+                title="Future video",
+                summary="Future summary",
+                external_url=(
+                    "https://example.com/"
+                    "future-video"
+                ),
+                category=self.category,
+                author=self.employee,
+                status=Video.Status.PUBLISHED,
+                published_at=(
+                    timezone.now()
+                    + timedelta(days=1)
+                ),
+            )
         )
 
     def authenticate(self, user):
         self.client.force_authenticate(
-            user=user
+            user=user,
         )
 
-    def external_payload(
+    def video_payload(
         self,
         status_value=Video.Status.DRAFT,
     ):
         return {
             "title": "External course",
             "summary": "Course summary",
-            "source_type": (
-                Video.SourceType.EXTERNAL
-            ),
             "external_url": (
                 "https://example.com/course"
             ),
@@ -124,14 +106,9 @@ class VideoAPITests(APITestCase):
             "status": status_value,
         }
 
-    def uploaded_file(self):
-        return SimpleUploadedFile(
-            "lesson.mp4",
-            b"fake video content",
-            content_type="video/mp4",
-        )
-
-    def test_list_requires_authentication(self):
+    def test_list_requires_authentication(
+        self
+    ):
         response = self.client.get(
             reverse("video-list-create")
         )
@@ -175,6 +152,44 @@ class VideoAPITests(APITestCase):
             returned_ids,
         )
 
+    def test_video_list_returns_external_url(
+        self
+    ):
+        self.authenticate(self.user)
+
+        response = self.client.get(
+            reverse("video-list-create")
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK,
+        )
+
+        returned_video = next(
+            item
+            for item in response.data["results"]
+            if (
+                item["id"]
+                == self.published_video.id
+            )
+        )
+
+        self.assertEqual(
+            returned_video["external_url"],
+            self.published_video.external_url,
+        )
+
+        self.assertNotIn(
+            "video_file",
+            returned_video,
+        )
+
+        self.assertNotIn(
+            "source_type",
+            returned_video,
+        )
+
     def test_user_cannot_open_draft(self):
         self.authenticate(self.user)
 
@@ -182,7 +197,7 @@ class VideoAPITests(APITestCase):
             reverse(
                 "video-detail",
                 kwargs={
-                    "slug": self.draft_video.slug
+                    "slug": self.draft_video.slug,
                 },
             )
         )
@@ -203,7 +218,7 @@ class VideoAPITests(APITestCase):
 
             response = self.client.post(
                 reverse("video-list-create"),
-                self.external_payload(),
+                self.video_payload(),
                 format="json",
             )
 
@@ -212,14 +227,14 @@ class VideoAPITests(APITestCase):
                 status.HTTP_403_FORBIDDEN,
             )
 
-    def test_employee_can_create_external_video(
+    def test_employee_can_create_video(
         self
     ):
         self.authenticate(self.employee)
 
         response = self.client.post(
             reverse("video-list-create"),
-            self.external_payload(
+            self.video_payload(
                 Video.Status.PUBLISHED
             ),
             format="json",
@@ -248,10 +263,17 @@ class VideoAPITests(APITestCase):
             video.published_at
         )
 
-    def test_external_video_requires_url(self):
+        self.assertEqual(
+            video.external_url,
+            "https://example.com/course",
+        )
+
+    def test_video_requires_external_url(
+        self
+    ):
         self.authenticate(self.employee)
 
-        payload = self.external_payload()
+        payload = self.video_payload()
         payload["external_url"] = ""
 
         response = self.client.post(
@@ -268,68 +290,6 @@ class VideoAPITests(APITestCase):
         self.assertIn(
             "external_url",
             response.data["errors"],
-        )
-
-    def test_uploaded_video_requires_file(self):
-        self.authenticate(self.employee)
-
-        payload = self.external_payload()
-        payload["source_type"] = (
-            Video.SourceType.UPLOAD
-        )
-        payload["external_url"] = ""
-
-        response = self.client.post(
-            reverse("video-list-create"),
-            payload,
-            format="json",
-        )
-
-        self.assertEqual(
-            response.status_code,
-            status.HTTP_400_BAD_REQUEST,
-        )
-
-        self.assertIn(
-            "video_file",
-            response.data["errors"],
-        )
-
-    def test_employee_can_upload_video(self):
-        self.authenticate(self.employee)
-
-        response = self.client.post(
-            reverse("video-list-create"),
-            {
-                "title": "Uploaded lesson",
-                "summary": "Uploaded summary",
-                "source_type": (
-                    Video.SourceType.UPLOAD
-                ),
-                "video_file": self.uploaded_file(),
-                "external_url": "",
-                "category": self.category.pk,
-                "status": Video.Status.DRAFT,
-            },
-            format="multipart",
-        )
-
-        self.assertEqual(
-            response.status_code,
-            status.HTTP_201_CREATED,
-        )
-
-        video = Video.objects.get(
-            pk=response.data["id"]
-        )
-
-        self.assertEqual(
-            video.source_type,
-            Video.SourceType.UPLOAD,
-        )
-
-        self.assertTrue(
-            bool(video.video_file)
         )
 
     def test_management_list_includes_drafts(
@@ -361,14 +321,21 @@ class VideoAPITests(APITestCase):
             returned_ids,
         )
 
-    def test_employee_can_publish_draft(self):
+        self.assertIn(
+            self.future_video.id,
+            returned_ids,
+        )
+
+    def test_employee_can_publish_draft(
+        self
+    ):
         self.authenticate(self.employee)
 
         response = self.client.patch(
             reverse(
                 "video-detail",
                 kwargs={
-                    "slug": self.draft_video.slug
+                    "slug": self.draft_video.slug,
                 },
             ),
             {
@@ -428,11 +395,17 @@ class VideoAPITests(APITestCase):
             status.HTTP_201_CREATED,
         )
 
+        self.assertTrue(
+            VideoCategory.objects.filter(
+                name="Market analysis"
+            ).exists()
+        )
+
     def test_delete_permissions(self):
         detail_url = reverse(
             "video-detail",
             kwargs={
-                "slug": self.published_video.slug
+                "slug": self.published_video.slug,
             },
         )
 
@@ -445,6 +418,12 @@ class VideoAPITests(APITestCase):
         self.assertEqual(
             response.status_code,
             status.HTTP_403_FORBIDDEN,
+        )
+
+        self.assertTrue(
+            Video.objects.filter(
+                pk=self.published_video.pk
+            ).exists()
         )
 
         self.authenticate(self.employee)
@@ -463,10 +442,10 @@ class VideoAPITests(APITestCase):
                 pk=self.published_video.pk
             ).exists()
         )
-        
+
     def test_user_cannot_update_video_category(
         self
-     ):
+    ):
         self.authenticate(self.user)
 
         response = self.client.patch(
@@ -552,13 +531,15 @@ class VideoAPITests(APITestCase):
     def test_employee_can_delete_video_category(
         self
     ):
+        category_id = self.category.pk
+
         self.authenticate(self.employee)
 
         response = self.client.delete(
             reverse(
                 "video-category-detail",
                 kwargs={
-                    "pk": self.category.pk,
+                    "pk": category_id,
                 },
             )
         )
@@ -570,12 +551,17 @@ class VideoAPITests(APITestCase):
 
         self.assertFalse(
             VideoCategory.objects.filter(
-                pk=self.category.pk
+                pk=category_id
             ).exists()
         )
 
         self.published_video.refresh_from_db()
+        self.draft_video.refresh_from_db()
 
         self.assertIsNone(
             self.published_video.category
+        )
+
+        self.assertIsNone(
+            self.draft_video.category
         )

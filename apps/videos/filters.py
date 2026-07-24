@@ -15,6 +15,5 @@ class VideoFilter(django_filters.FilterSet):
         fields = (
             "category",
             "status",
-            "source_type",
             "author",
         )
