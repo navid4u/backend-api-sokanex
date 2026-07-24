@@ -12,7 +12,6 @@ from apps.articles.models import Article, Category
 class ArticleAPITests(APITestCase):
 
     def setUp(self):
- 
         password = "StrongPass123!"
 
         self.user = User.objects.create_user(
@@ -69,6 +68,113 @@ class ArticleAPITests(APITestCase):
             ),
         )
 
+    def test_user_cannot_update_category(self):
+        self.authenticate(self.user)
+
+        response = self.client.patch(
+            reverse(
+                "category-detail",
+                kwargs={
+                    "pk": self.category.pk,
+                },
+            ),
+            {
+                "name": "Updated category",
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_403_FORBIDDEN,
+        )
+
+        self.category.refresh_from_db()
+
+        self.assertEqual(
+            self.category.name,
+            "Trading basics",
+        )
+
+    def test_employee_can_update_category(self):
+        self.authenticate(self.employee)
+
+        response = self.client.patch(
+            reverse(
+                "category-detail",
+                kwargs={
+                    "pk": self.category.pk,
+                },
+            ),
+            {
+                "name": "Updated category",
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK,
+        )
+
+        self.category.refresh_from_db()
+
+        self.assertEqual(
+            self.category.name,
+            "Updated category",
+        )
+
+    def test_user_cannot_delete_category(self):
+        self.authenticate(self.user)
+
+        response = self.client.delete(
+            reverse(
+                "category-detail",
+                kwargs={
+                    "pk": self.category.pk,
+                },
+            )
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_403_FORBIDDEN,
+        )
+
+        self.assertTrue(
+            Category.objects.filter(
+                pk=self.category.pk
+            ).exists()
+        )
+
+    def test_employee_can_delete_category(self):
+        self.authenticate(self.employee)
+
+        response = self.client.delete(
+            reverse(
+                "category-detail",
+                kwargs={
+                    "pk": self.category.pk,
+                },
+            )
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_204_NO_CONTENT,
+        )
+
+        self.assertFalse(
+            Category.objects.filter(
+                pk=self.category.pk
+            ).exists()
+        )
+
+        self.published_article.refresh_from_db()
+
+        self.assertIsNone(
+            self.published_article.category
+        )
     def authenticate(self, user):
         self.client.force_authenticate(
             user=user

@@ -4,6 +4,7 @@ from .views import (
     ArticleDetailView,
     ArticleListCreateView,
     ArticleManagementListView,
+    CategoryDetailView,
     CategoryListCreateView,
 )
 
@@ -31,5 +32,10 @@ urlpatterns = [
         "<str:slug>/",
         ArticleDetailView.as_view(),
         name="article-detail",
+    ),
+    path(
+        "categories/<int:pk>/",
+        CategoryDetailView.as_view(),
+        name="category-detail",
     ),
 ]

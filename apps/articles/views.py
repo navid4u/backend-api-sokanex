@@ -1,15 +1,15 @@
 from django_filters.rest_framework import (
     DjangoFilterBackend,
 )
-
+from .models import Category
+from .serializers import CategorySerializer
 from rest_framework import generics
 from rest_framework.filters import (
     OrderingFilter,
     SearchFilter,
 )
-from rest_framework.permissions import (
-    IsAuthenticated,
-)
+from rest_framework.permissions import IsAuthenticated
+
 
 from apps.accounts.models import User
 from common.permissions import IsEmployee
@@ -43,7 +43,27 @@ class CategoryListCreateView(
             )
 
         return permissions
+class CategoryDetailView(
+    generics.RetrieveUpdateDestroyAPIView
+):
+    queryset = Category.objects.all()
+    serializer_class = CategorySerializer
 
+    def get_permissions(self):
+        permissions = [
+            IsAuthenticated(),
+        ]
+
+        if self.request.method in [
+            "PUT",
+            "PATCH",
+            "DELETE",
+        ]:
+            permissions.append(
+                IsEmployee()
+            )
+
+        return permissions
 
 class ArticleListCreateView(
     generics.ListCreateAPIView
@@ -183,3 +203,25 @@ class ArticleDetailView(
         ArticleService.update_article(
             serializer
         )
+    class CategoryDetailView(
+    generics.RetrieveUpdateDestroyAPIView
+):
+
+        queryset = Category.objects.all()
+        serializer_class = CategorySerializer
+
+    def get_permissions(self):
+        permissions = [
+            IsAuthenticated(),
+        ]
+
+        if self.request.method in [
+            "PUT",
+            "PATCH",
+            "DELETE",
+        ]:
+            permissions.append(
+                IsEmployee()
+            )
+
+        return permissions
