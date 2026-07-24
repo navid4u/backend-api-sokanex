@@ -3077,14 +3077,6 @@ components:
       - data
       - message
       - success
-    DirectionEnum:
-      enum:
-      - buy
-      - sell
-      type: string
-      description: |-
-        * `buy` - Buy
-        * `sell` - Sell
     JoinChatRoomResponse:
       type: object
       properties:
@@ -3356,20 +3348,6 @@ components:
           type: string
       required:
       - message
-    MarketEnum:
-      enum:
-      - forex
-      - crypto
-      - gold
-      - stock
-      - index
-      type: string
-      description: |-
-        * `forex` - Forex
-        * `crypto` - Crypto
-        * `gold` - Gold
-        * `stock` - Stock
-        * `index` - Index
     Message:
       type: object
       properties:
@@ -3961,9 +3939,9 @@ components:
           minLength: 1
           maxLength: 50
         market:
-          $ref: '#/components/schemas/MarketEnum'
+          $ref: '#/components/schemas/SignalMarketEnum'
         direction:
-          $ref: '#/components/schemas/DirectionEnum'
+          $ref: '#/components/schemas/SignalDirectionEnum'
         entry_price:
           type: string
           format: decimal
@@ -3986,7 +3964,7 @@ components:
       type: object
       properties:
         role:
-          $ref: '#/components/schemas/RoleEnum'
+          $ref: '#/components/schemas/UserRoleEnum'
     PatchedVideoCategoryRequest:
       type: object
       properties:
@@ -4101,20 +4079,6 @@ components:
           type: string
       required:
       - message
-    RoleEnum:
-      enum:
-      - SUPER_ADMIN
-      - ADMIN
-      - TRADER
-      - EMPLOYEE
-      - USER
-      type: string
-      description: |-
-        * `SUPER_ADMIN` - Super Admin
-        * `ADMIN` - Admin
-        * `TRADER` - Trader
-        * `EMPLOYEE` - Employee
-        * `USER` - User
     SignalCreate:
       type: object
       properties:
@@ -4128,9 +4092,9 @@ components:
           type: string
           maxLength: 50
         market:
-          $ref: '#/components/schemas/MarketEnum'
+          $ref: '#/components/schemas/SignalMarketEnum'
         direction:
-          $ref: '#/components/schemas/DirectionEnum'
+          $ref: '#/components/schemas/SignalDirectionEnum'
         entry_price:
           type: string
           format: decimal
@@ -4170,9 +4134,9 @@ components:
           minLength: 1
           maxLength: 50
         market:
-          $ref: '#/components/schemas/MarketEnum'
+          $ref: '#/components/schemas/SignalMarketEnum'
         direction:
-          $ref: '#/components/schemas/DirectionEnum'
+          $ref: '#/components/schemas/SignalDirectionEnum'
         entry_price:
           type: string
           format: decimal
@@ -4212,9 +4176,9 @@ components:
           type: string
           maxLength: 50
         market:
-          $ref: '#/components/schemas/MarketEnum'
+          $ref: '#/components/schemas/SignalMarketEnum'
         direction:
-          $ref: '#/components/schemas/DirectionEnum'
+          $ref: '#/components/schemas/SignalDirectionEnum'
         entry_price:
           type: string
           format: decimal
@@ -4265,6 +4229,14 @@ components:
       - title
       - trader
       - updated_at
+    SignalDirectionEnum:
+      enum:
+      - buy
+      - sell
+      type: string
+      description: |-
+        * `buy` - Buy
+        * `sell` - Sell
     SignalList:
       type: object
       properties:
@@ -4278,9 +4250,9 @@ components:
           type: string
           maxLength: 50
         market:
-          $ref: '#/components/schemas/MarketEnum'
+          $ref: '#/components/schemas/SignalMarketEnum'
         direction:
-          $ref: '#/components/schemas/DirectionEnum'
+          $ref: '#/components/schemas/SignalDirectionEnum'
         entry_price:
           type: string
           format: decimal
@@ -4317,6 +4289,20 @@ components:
       - take_profit
       - title
       - trader
+    SignalMarketEnum:
+      enum:
+      - forex
+      - crypto
+      - gold
+      - stock
+      - index
+      type: string
+      description: |-
+        * `forex` - Forex
+        * `crypto` - Crypto
+        * `gold` - Gold
+        * `stock` - Stock
+        * `index` - Index
     SignalStatusEnum:
       enum:
       - draft
@@ -4441,7 +4427,7 @@ components:
           nullable: true
         role:
           allOf:
-          - $ref: '#/components/schemas/RoleEnum'
+          - $ref: '#/components/schemas/UserRoleEnum'
           readOnly: true
         is_verified:
           type: boolean
@@ -4484,7 +4470,7 @@ components:
           - type: string
             maxLength: 0
         role:
-          $ref: '#/components/schemas/RoleEnum'
+          $ref: '#/components/schemas/UserRoleEnum'
         is_active:
           type: boolean
           title: Active
@@ -4493,6 +4479,20 @@ components:
       required:
       - id
       - username
+    UserRoleEnum:
+      enum:
+      - SUPER_ADMIN
+      - ADMIN
+      - TRADER
+      - EMPLOYEE
+      - USER
+      type: string
+      description: |-
+        * `SUPER_ADMIN` - Super Admin
+        * `ADMIN` - Admin
+        * `TRADER` - Trader
+        * `EMPLOYEE` - Employee
+        * `USER` - User
     UserRoleUpdateResponse:
       type: object
       properties:

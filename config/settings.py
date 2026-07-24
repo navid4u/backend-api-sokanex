@@ -508,70 +508,56 @@ SPECTACULAR_SETTINGS = {
         "displayRequestDuration": True,
     },
 
-    "ENUM_NAME_OVERRIDES": {
-        "ContentStatusEnum": [
-            (
-                "DRAFT",
-                "Draft",
-            ),
-            (
-                "PUBLISHED",
-                "Published",
-            ),
-        ],
+        "ENUM_NAME_OVERRIDES": {
+        "UserRoleEnum": (
+            "apps.accounts.models."
+            "User.Role"
+        ),
 
-        "SignalStatusEnum": [
-            (
-                "draft",
-                "Draft",
-            ),
-            (
-                "pending",
-                "Pending",
-            ),
-            (
-                "approved",
-                "Approved",
-            ),
-            (
-                "rejected",
-                "Rejected",
-            ),
-        ],
+        "ContentStatusEnum": (
+            "apps.articles.models."
+            "Article.Status"
+        ),
 
-        "LiveEventStatusEnum": [
-            (
-                "SCHEDULED",
-                "Scheduled",
-            ),
-            (
-                "LIVE",
-                "Live",
-            ),
-            (
-                "ENDED",
-                "Ended",
-            ),
-            (
-                "CANCELLED",
-                "Cancelled",
-            ),
-        ],
+        "SignalStatusEnum": (
+            "apps.signals.models."
+            "SignalStatus"
+        ),
 
-        "TransactionStatusEnum": [
-            (
-                "PENDING",
-                "Pending",
-            ),
-            (
-                "COMPLETED",
-                "Completed",
-            ),
-            (
-                "FAILED",
-                "Failed",
-            ),
-        ],
+        "SignalMarketEnum": (
+            "apps.signals.models."
+            "MarketType"
+        ),
+
+        "SignalDirectionEnum": (
+            "apps.signals.models."
+            "Direction"
+        ),
+
+        "LiveEventStatusEnum": (
+            "apps.livestream.models."
+            "LiveEvent.Status"
+        ),
+
+        "NotificationTypeEnum": (
+            "apps.notifications.models."
+            "Notification.Type"
+        ),
+
+        "ChatMembershipRoleEnum": (
+            "apps.chat.models."
+            "RoomMembership.Role"
+        ),
+
+        "TransactionTypeEnum": (
+            "apps.wallet.models."
+            "Transaction.Type"
+        ),
+
+        "TransactionStatusEnum": (
+            "apps.wallet.models."
+            "Transaction.Status"
+        ),
     },
 }
 
