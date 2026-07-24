@@ -7,6 +7,8 @@ from drf_spectacular.utils import (
     extend_schema,
     inline_serializer,
 )
+from rest_framework.permissions import IsAuthenticated
+
 from rest_framework import (
     generics,
     serializers,
@@ -16,7 +18,11 @@ from rest_framework.filters import (
     OrderingFilter,
     SearchFilter,
 )
-from rest_framework.permissions import IsAuthenticated
+from common.permissions import (
+    IsEmployee,
+    IsSignalOwnerOrEmployee,
+    IsTrader,
+)
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -84,12 +90,33 @@ class SignalListCreateView(
 
 
 class SignalDetailView(
-    generics.RetrieveAPIView
+    generics.RetrieveUpdateDestroyAPIView
 ):
 
-    permission_classes = [IsAuthenticated]
-
     serializer_class = SignalDetailSerializer
+
+    def get_permissions(self):
+        permissions = [IsAuthenticated()]
+
+        if self.request.method in [
+            "PUT",
+            "PATCH",
+            "DELETE",
+        ]:
+            permissions.append(
+                IsSignalOwnerOrEmployee()
+            )
+
+        return permissions
+
+    def get_serializer_class(self):
+        if self.request.method in [
+            "PUT",
+            "PATCH",
+        ]:
+            return SignalCreateSerializer
+
+        return SignalDetailSerializer
 
     def get_queryset(self):
         if getattr(
@@ -102,8 +129,6 @@ class SignalDetailView(
         return SignalService.accessible_signals(
             self.request.user
         )
-
-
 class PendingSignalListView(
     generics.ListAPIView
 ):

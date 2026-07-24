@@ -49,7 +49,8 @@ class IsSuperAdmin(BasePermission):
             request.user.is_authenticated
             and (
                 request.user.is_superuser
-                or request.user.role == User.Role.SUPER_ADMIN
+                or request.user.role
+                == User.Role.SUPER_ADMIN
             )
         )
 
@@ -69,5 +70,36 @@ class IsEmployee(BasePermission):
                     User.Role.ADMIN,
                     User.Role.SUPER_ADMIN,
                 ]
+            )
+        )
+
+
+class IsSignalOwnerOrEmployee(BasePermission):
+    """
+    Allows the signal owner or authorized employees
+    to update and delete a signal.
+    """
+
+    def has_object_permission(
+        self,
+        request,
+        view,
+        obj,
+    ):
+        user = request.user
+
+        return (
+            user.is_authenticated
+            and (
+                user.is_superuser
+                or user.role in [
+                    User.Role.EMPLOYEE,
+                    User.Role.ADMIN,
+                    User.Role.SUPER_ADMIN,
+                ]
+                or (
+                    user.role == User.Role.TRADER
+                    and obj.created_by_id == user.id
+                )
             )
         )
