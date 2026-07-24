@@ -983,6 +983,24 @@ paths:
     get:
       operationId: chat_messages_list
       parameters:
+      - in: query
+        name: created_after
+        schema:
+          type: string
+          format: date-time
+      - in: query
+        name: created_before
+        schema:
+          type: string
+          format: date-time
+      - in: query
+        name: has_attachment
+        schema:
+          type: boolean
+      - in: query
+        name: is_deleted
+        schema:
+          type: boolean
       - name: ordering
         required: false
         in: query
@@ -999,6 +1017,14 @@ paths:
         required: false
         in: query
         description: A search term.
+        schema:
+          type: string
+      - in: query
+        name: sender
+        schema:
+          type: number
+      - in: query
+        name: sender_username
         schema:
           type: string
       - in: path
@@ -2212,6 +2238,24 @@ paths:
     get:
       operationId: wallet_transactions_list
       parameters:
+      - in: query
+        name: created_after
+        schema:
+          type: string
+          format: date-time
+      - in: query
+        name: created_before
+        schema:
+          type: string
+          format: date-time
+      - in: query
+        name: max_amount
+        schema:
+          type: number
+      - in: query
+        name: min_amount
+        schema:
+          type: number
       - name: ordering
         required: false
         in: query
@@ -2230,6 +2274,28 @@ paths:
         description: A search term.
         schema:
           type: string
+      - in: query
+        name: status
+        schema:
+          type: string
+          enum:
+          - COMPLETED
+          - FAILED
+          - PENDING
+        description: |-
+          * `PENDING` - Pending
+          * `COMPLETED` - Completed
+          * `FAILED` - Failed
+      - in: query
+        name: transaction_type
+        schema:
+          type: string
+          enum:
+          - CREDIT
+          - DEBIT
+        description: |-
+          * `CREDIT` - Credit
+          * `DEBIT` - Debit
       tags:
       - wallet
       security:

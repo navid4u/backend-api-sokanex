@@ -659,3 +659,154 @@ class ChatAPITests(APITestCase):
         self.assertFalse(
             returned_message["can_delete"]
         )
+    def test_member_can_search_room_messages(
+        self
+    ):
+        RoomMembership.objects.create(
+            room=self.public_room,
+            user=self.customer,
+        )
+
+        Message.objects.create(
+            room=self.public_room,
+            sender=self.customer,
+            text="Bitcoin market analysis",
+        )
+
+        Message.objects.create(
+            room=self.public_room,
+            sender=self.customer,
+            text="Ethereum news",
+        )
+
+        self.authenticate(self.customer)
+
+        response = self.client.get(
+            reverse(
+                "chat-room-messages",
+                kwargs={
+                    "slug": self.public_room.slug,
+                },
+            ),
+            {
+                "search": "Bitcoin",
+            },
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK,
+        )
+
+        self.assertEqual(
+            response.data["count"],
+            1,
+        )
+
+        self.assertEqual(
+            response.data["results"][0]["text"],
+            "Bitcoin market analysis",
+        )
+
+    def test_member_can_filter_deleted_messages(
+        self
+    ):
+        RoomMembership.objects.create(
+            room=self.public_room,
+            user=self.customer,
+        )
+
+        Message.objects.create(
+            room=self.public_room,
+            sender=self.customer,
+            text="Active message",
+            is_deleted=False,
+        )
+
+        Message.objects.create(
+            room=self.public_room,
+            sender=self.customer,
+            text="",
+            is_deleted=True,
+        )
+
+        self.authenticate(self.customer)
+
+        response = self.client.get(
+            reverse(
+                "chat-room-messages",
+                kwargs={
+                    "slug": self.public_room.slug,
+                },
+            ),
+            {
+                "is_deleted": "false",
+            },
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK,
+        )
+
+        self.assertEqual(
+            response.data["count"],
+            1,
+        )
+
+        self.assertEqual(
+            response.data["results"][0]["text"],
+            "Active message",
+        )
+
+    def test_member_can_order_room_messages(
+        self
+    ):
+        RoomMembership.objects.create(
+            room=self.public_room,
+            user=self.customer,
+        )
+
+        older_message = Message.objects.create(
+            room=self.public_room,
+            sender=self.customer,
+            text="Older message",
+        )
+
+        newer_message = Message.objects.create(
+            room=self.public_room,
+            sender=self.customer,
+            text="Newer message",
+        )
+
+        self.authenticate(self.customer)
+
+        response = self.client.get(
+            reverse(
+                "chat-room-messages",
+                kwargs={
+                    "slug": self.public_room.slug,
+                },
+            ),
+            {
+                "ordering": "created_at",
+            },
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK,
+        )
+
+        returned_ids = [
+            item["id"]
+            for item in response.data["results"]
+        ]
+
+        self.assertEqual(
+            returned_ids,
+            [
+                older_message.id,
+                newer_message.id,
+            ],
+        )

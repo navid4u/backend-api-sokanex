@@ -4,6 +4,10 @@ from drf_spectacular.utils import (
     extend_schema,
     inline_serializer,
 )
+from django_filters.rest_framework import (
+    DjangoFilterBackend,
+)
+from .filters import MessageFilter
 from rest_framework import (
     generics,
     serializers,
@@ -193,6 +197,72 @@ class LeaveChatRoomView(APIView):
 class RoomMessageListCreateView(
     generics.ListCreateAPIView
 ):
+
+    permission_classes = [IsAuthenticated]
+
+    serializer_class = MessageSerializer
+
+    filterset_class = MessageFilter
+
+    filter_backends = [
+        DjangoFilterBackend,
+        SearchFilter,
+        OrderingFilter,
+    ]
+
+    search_fields = [
+        "text",
+        "sender__username",
+        "reply_to__text",
+    ]
+
+    ordering_fields = [
+        "created_at",
+        "updated_at",
+        "sender__username",
+    ]
+
+    ordering = [
+        "-created_at",
+    ]
+
+    def get_room(self):
+        return get_object_or_404(
+            ChatRoom,
+            slug=self.kwargs["slug"],
+            is_active=True,
+        )
+
+    def get_queryset(self):
+        if getattr(
+            self,
+            "swagger_fake_view",
+            False,
+        ):
+            return Message.objects.none()
+
+        room = self.get_room()
+
+        ChatService.ensure_member(
+            room,
+            self.request.user,
+        )
+
+        return ChatService.room_messages(room)
+
+    def perform_create(self, serializer):
+        room = self.get_room()
+
+        ChatService.ensure_member(
+            room,
+            self.request.user,
+        )
+
+        ChatService.create_message(
+            serializer,
+            room,
+            self.request.user,
+        )
 
     permission_classes = [IsAuthenticated]
 
