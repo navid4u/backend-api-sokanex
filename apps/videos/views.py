@@ -30,10 +30,7 @@ class VideoCategoryListCreateView(
 ):
 
     queryset = VideoCategory.objects.all()
-
-    serializer_class = (
-        VideoCategorySerializer
-    )
+    serializer_class = VideoCategorySerializer
 
     def get_permissions(self):
         permissions = [
@@ -41,6 +38,30 @@ class VideoCategoryListCreateView(
         ]
 
         if self.request.method == "POST":
+            permissions.append(
+                IsEmployee()
+            )
+
+        return permissions
+
+
+class VideoCategoryDetailView(
+    generics.RetrieveUpdateDestroyAPIView
+):
+
+    queryset = VideoCategory.objects.all()
+    serializer_class = VideoCategorySerializer
+
+    def get_permissions(self):
+        permissions = [
+            IsAuthenticated(),
+        ]
+
+        if self.request.method in [
+            "PUT",
+            "PATCH",
+            "DELETE",
+        ]:
             permissions.append(
                 IsEmployee()
             )

@@ -1,6 +1,7 @@
 from django.urls import path
 
 from .views import (
+    VideoCategoryDetailView,
     VideoCategoryListCreateView,
     VideoDetailView,
     VideoListCreateView,
@@ -13,6 +14,12 @@ urlpatterns = [
         "categories/",
         VideoCategoryListCreateView.as_view(),
         name="video-category-list-create",
+    ),
+
+    path(
+        "categories/<int:pk>/",
+        VideoCategoryDetailView.as_view(),
+        name="video-category-detail",
     ),
 
     path(

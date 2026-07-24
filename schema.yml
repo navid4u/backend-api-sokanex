@@ -419,6 +419,102 @@ paths:
               schema:
                 $ref: '#/components/schemas/Category'
           description: ''
+  /api/articles/categories/{id}/:
+    get:
+      operationId: articles_categories_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - articles
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Category'
+          description: ''
+    put:
+      operationId: articles_categories_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - articles
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CategoryRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CategoryRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CategoryRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Category'
+          description: ''
+    patch:
+      operationId: articles_categories_partial_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - articles
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedCategoryRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedCategoryRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedCategoryRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Category'
+          description: ''
+    delete:
+      operationId: articles_categories_destroy
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - articles
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
   /api/articles/manage/:
     get:
       operationId: articles_manage_list
@@ -1476,6 +1572,82 @@ paths:
               schema:
                 $ref: '#/components/schemas/SignalDetail'
           description: ''
+    put:
+      operationId: signals_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - signals
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SignalCreateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/SignalCreateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/SignalCreateRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SignalCreate'
+          description: ''
+    patch:
+      operationId: signals_partial_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - signals
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedSignalCreateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedSignalCreateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedSignalCreateRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SignalCreate'
+          description: ''
+    delete:
+      operationId: signals_destroy
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - signals
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
   /api/signals/{id}/approve/:
     post:
       operationId: signals_approve_create
@@ -1885,6 +2057,102 @@ paths:
               schema:
                 $ref: '#/components/schemas/VideoCategory'
           description: ''
+  /api/videos/categories/{id}/:
+    get:
+      operationId: videos_categories_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - videos
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VideoCategory'
+          description: ''
+    put:
+      operationId: videos_categories_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - videos
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VideoCategoryRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/VideoCategoryRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/VideoCategoryRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VideoCategory'
+          description: ''
+    patch:
+      operationId: videos_categories_partial_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - videos
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedVideoCategoryRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedVideoCategoryRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedVideoCategoryRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VideoCategory'
+          description: ''
+    delete:
+      operationId: videos_categories_destroy
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - videos
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
   /api/videos/manage/:
     get:
       operationId: videos_manage_list
@@ -3420,6 +3688,13 @@ components:
           maximum: 9223372036854775807
           minimum: 0
           format: int64
+    PatchedCategoryRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
     PatchedChatRoomWriteRequest:
       type: object
       properties:
@@ -3495,11 +3770,51 @@ components:
           type: string
           format: binary
           nullable: true
+    PatchedSignalCreateRequest:
+      type: object
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 200
+        symbol:
+          type: string
+          minLength: 1
+          maxLength: 50
+        market:
+          $ref: '#/components/schemas/MarketEnum'
+        direction:
+          $ref: '#/components/schemas/DirectionEnum'
+        entry_price:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,8})?$
+        stop_loss:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,8})?$
+        take_profit:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,8})?$
+        description:
+          type: string
+        image:
+          type: string
+          format: binary
+          nullable: true
     PatchedUserRoleUpdateRequest:
       type: object
       properties:
         role:
           $ref: '#/components/schemas/RoleEnum'
+    PatchedVideoCategoryRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
     PatchedVideoWriteRequest:
       type: object
       properties:

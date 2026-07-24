@@ -463,3 +463,119 @@ class VideoAPITests(APITestCase):
                 pk=self.published_video.pk
             ).exists()
         )
+        
+    def test_user_cannot_update_video_category(
+        self
+     ):
+        self.authenticate(self.user)
+
+        response = self.client.patch(
+            reverse(
+                "video-category-detail",
+                kwargs={
+                    "pk": self.category.pk,
+                },
+            ),
+            {
+                "name": "Updated category",
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_403_FORBIDDEN,
+        )
+
+        self.category.refresh_from_db()
+
+        self.assertEqual(
+            self.category.name,
+            "Trading videos",
+        )
+
+    def test_employee_can_update_video_category(
+        self
+    ):
+        self.authenticate(self.employee)
+
+        response = self.client.patch(
+            reverse(
+                "video-category-detail",
+                kwargs={
+                    "pk": self.category.pk,
+                },
+            ),
+            {
+                "name": "Updated category",
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK,
+        )
+
+        self.category.refresh_from_db()
+
+        self.assertEqual(
+            self.category.name,
+            "Updated category",
+        )
+
+    def test_user_cannot_delete_video_category(
+        self
+    ):
+        self.authenticate(self.user)
+
+        response = self.client.delete(
+            reverse(
+                "video-category-detail",
+                kwargs={
+                    "pk": self.category.pk,
+                },
+            )
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_403_FORBIDDEN,
+        )
+
+        self.assertTrue(
+            VideoCategory.objects.filter(
+                pk=self.category.pk
+            ).exists()
+        )
+
+    def test_employee_can_delete_video_category(
+        self
+    ):
+        self.authenticate(self.employee)
+
+        response = self.client.delete(
+            reverse(
+                "video-category-detail",
+                kwargs={
+                    "pk": self.category.pk,
+                },
+            )
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_204_NO_CONTENT,
+        )
+
+        self.assertFalse(
+            VideoCategory.objects.filter(
+                pk=self.category.pk
+            ).exists()
+        )
+
+        self.published_video.refresh_from_db()
+
+        self.assertIsNone(
+            self.published_video.category
+        )
