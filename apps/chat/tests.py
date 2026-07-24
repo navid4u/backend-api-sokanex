@@ -810,3 +810,102 @@ class ChatAPITests(APITestCase):
                 newer_message.id,
             ],
         )
+    def test_member_can_control_message_page_size(
+        self
+    ):
+        RoomMembership.objects.create(
+            room=self.public_room,
+            user=self.customer,
+        )
+
+        for index in range(5):
+            Message.objects.create(
+                room=self.public_room,
+                sender=self.customer,
+                text=f"Message {index}",
+            )
+
+        self.authenticate(self.customer)
+
+        response = self.client.get(
+            reverse(
+                "chat-room-messages",
+                kwargs={
+                    "slug": self.public_room.slug,
+                },
+            ),
+            {
+                "page_size": "2",
+            },
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK,
+        )
+
+        self.assertEqual(
+            response.data["count"],
+            5,
+        )
+
+        self.assertEqual(
+            len(response.data["results"]),
+            2,
+        )
+
+        self.assertIsNotNone(
+            response.data["next"]
+        )
+
+    def test_message_page_size_is_limited_to_100(
+        self
+    ):
+        RoomMembership.objects.create(
+            room=self.public_room,
+            user=self.customer,
+        )
+
+        Message.objects.bulk_create(
+            [
+                Message(
+                    room=self.public_room,
+                    sender=self.customer,
+                    text=f"Message {index}",
+                )
+                for index in range(105)
+            ]
+        )
+
+        self.authenticate(self.customer)
+
+        response = self.client.get(
+            reverse(
+                "chat-room-messages",
+                kwargs={
+                    "slug": self.public_room.slug,
+                },
+            ),
+            {
+                "page_size": "500",
+            },
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK,
+        )
+
+        self.assertEqual(
+            response.data["count"],
+            105,
+        )
+
+        self.assertEqual(
+            len(response.data["results"]),
+            100,
+        )
+
+        self.assertIsNotNone(
+            response.data["next"]
+        )

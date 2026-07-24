@@ -298,11 +298,8 @@ REST_FRAMEWORK = {
     ),
 
     "DEFAULT_PAGINATION_CLASS": (
-        "rest_framework.pagination."
-        "PageNumberPagination"
+        "common.pagination.DefaultPagination"
     ),
-
-    "PAGE_SIZE": 20,
 
     "DEFAULT_FILTER_BACKENDS": [
         (
