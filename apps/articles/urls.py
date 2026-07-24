@@ -17,6 +17,12 @@ urlpatterns = [
     ),
 
     path(
+        "categories/<int:pk>/",
+        CategoryDetailView.as_view(),
+        name="category-detail",
+    ),
+
+    path(
         "manage/",
         ArticleManagementListView.as_view(),
         name="article-management-list",
@@ -32,10 +38,5 @@ urlpatterns = [
         "<str:slug>/",
         ArticleDetailView.as_view(),
         name="article-detail",
-    ),
-    path(
-        "categories/<int:pk>/",
-        CategoryDetailView.as_view(),
-        name="category-detail",
     ),
 ]

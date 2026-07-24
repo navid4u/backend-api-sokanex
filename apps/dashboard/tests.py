@@ -89,9 +89,7 @@ class DashboardAPITests(APITestCase):
         )
         self.video = Video.objects.create(
             title="Published dashboard video",
-            external_url=(
-                "https://video.example.com/watch"
-            ),
+            external_url="https://video.example.com/watch",
             author=self.employee,
             status=Video.Status.PUBLISHED,
             published_at=timezone.now(),
