@@ -6,6 +6,7 @@ from common.validators import (
 )
 
 from .models import ChatRoom, Message
+from .services import ChatService
 
 
 class ChatRoomSerializer(
@@ -86,6 +87,8 @@ class MessageSerializer(
         allow_null=True,
     )
 
+    can_delete = serializers.SerializerMethodField()
+
     class Meta:
         model = Message
 
@@ -97,6 +100,7 @@ class MessageSerializer(
             "reply_to",
             "reply_to_text",
             "is_deleted",
+            "can_delete",
             "created_at",
             "updated_at",
         )
@@ -105,8 +109,24 @@ class MessageSerializer(
             "id",
             "sender",
             "is_deleted",
+            "can_delete",
             "created_at",
             "updated_at",
+        )
+
+    def get_can_delete(self, obj):
+        request = self.context.get("request")
+
+        if (
+            request is None
+            or not request.user.is_authenticated
+            or obj.is_deleted
+        ):
+            return False
+
+        return ChatService.can_delete_message(
+            obj,
+            request.user,
         )
 
     def validate(self, attrs):

@@ -492,3 +492,170 @@ class ChatAPITests(APITestCase):
                 pk=self.public_room.pk,
             ).exists()
         )
+    def test_sender_sees_can_delete_true(
+        self
+    ):
+        RoomMembership.objects.create(
+            room=self.public_room,
+            user=self.customer,
+        )
+
+        Message.objects.create(
+            room=self.public_room,
+            sender=self.customer,
+            text="My own message",
+        )
+
+        self.authenticate(self.customer)
+
+        response = self.client.get(
+            reverse(
+                "chat-room-messages",
+                kwargs={
+                    "slug": self.public_room.slug,
+                },
+            )
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK,
+        )
+
+        returned_message = (
+            response.data["results"][0]
+        )
+
+        self.assertTrue(
+            returned_message["can_delete"]
+        )
+
+    def test_other_member_sees_can_delete_false(
+        self
+    ):
+        RoomMembership.objects.create(
+            room=self.public_room,
+            user=self.customer,
+        )
+
+        RoomMembership.objects.create(
+            room=self.public_room,
+            user=self.other_customer,
+        )
+
+        Message.objects.create(
+            room=self.public_room,
+            sender=self.customer,
+            text="Protected message",
+        )
+
+        self.authenticate(self.other_customer)
+
+        response = self.client.get(
+            reverse(
+                "chat-room-messages",
+                kwargs={
+                    "slug": self.public_room.slug,
+                },
+            )
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK,
+        )
+
+        returned_message = (
+            response.data["results"][0]
+        )
+
+        self.assertFalse(
+            returned_message["can_delete"]
+        )
+
+    def test_room_moderator_sees_can_delete_true(
+        self
+    ):
+        RoomMembership.objects.create(
+            room=self.public_room,
+            user=self.customer,
+        )
+
+        RoomMembership.objects.create(
+            room=self.public_room,
+            user=self.other_customer,
+            role=RoomMembership.Role.MODERATOR,
+        )
+
+        Message.objects.create(
+            room=self.public_room,
+            sender=self.customer,
+            text="Moderated message",
+        )
+
+        self.authenticate(self.other_customer)
+
+        response = self.client.get(
+            reverse(
+                "chat-room-messages",
+                kwargs={
+                    "slug": self.public_room.slug,
+                },
+            )
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK,
+        )
+
+        returned_message = (
+            response.data["results"][0]
+        )
+
+        self.assertTrue(
+            returned_message["can_delete"]
+        )
+
+    def test_deleted_message_has_can_delete_false(
+        self
+    ):
+        RoomMembership.objects.create(
+            room=self.public_room,
+            user=self.customer,
+        )
+
+        Message.objects.create(
+            room=self.public_room,
+            sender=self.customer,
+            text="",
+            is_deleted=True,
+        )
+
+        self.authenticate(self.customer)
+
+        response = self.client.get(
+            reverse(
+                "chat-room-messages",
+                kwargs={
+                    "slug": self.public_room.slug,
+                },
+            )
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK,
+        )
+
+        returned_message = (
+            response.data["results"][0]
+        )
+
+        self.assertTrue(
+            returned_message["is_deleted"]
+        )
+
+        self.assertFalse(
+            returned_message["can_delete"]
+        )

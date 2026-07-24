@@ -3208,6 +3208,9 @@ components:
         is_deleted:
           type: boolean
           readOnly: true
+        can_delete:
+          type: string
+          readOnly: true
         created_at:
           type: string
           format: date-time
@@ -3217,6 +3220,7 @@ components:
           format: date-time
           readOnly: true
       required:
+      - can_delete
       - created_at
       - id
       - is_deleted

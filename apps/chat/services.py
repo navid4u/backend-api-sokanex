@@ -175,36 +175,11 @@ class ChatService:
         )
 
     @staticmethod
+    @staticmethod
     def delete_message(message, user):
-        can_moderate = (
-            RoomMembership.objects.filter(
-                room=message.room,
-                user=user,
-                role__in=[
-                    RoomMembership.Role.ADMIN,
-                    RoomMembership.Role.MODERATOR,
-                ],
-            ).exists()
-        )
-
-        is_staff_role = (
-            user.is_superuser
-            or user.role
-            in [
-                User.Role.EMPLOYEE,
-                User.Role.ADMIN,
-                User.Role.SUPER_ADMIN,
-            ]
-        )
-
-        is_sender = (
-            message.sender_id == user.id
-        )
-
-        if (
-            not is_sender
-            and not can_moderate
-            and not is_staff_role
+        if not ChatService.can_delete_message(
+            message,
+            user,
         ):
             raise PermissionDenied(
                 "You cannot delete this message."
@@ -227,3 +202,39 @@ class ChatService:
                 "updated_at",
             ]
         )
+    @staticmethod
+    def can_delete_message(message, user):
+        if (
+            not user
+            or not user.is_authenticated
+        ):
+            return False
+
+        is_sender = (
+            message.sender_id == user.id
+        )
+
+        if is_sender:
+            return True
+
+        is_staff_role = (
+            user.is_superuser
+            or user.role
+            in [
+                User.Role.EMPLOYEE,
+                User.Role.ADMIN,
+                User.Role.SUPER_ADMIN,
+            ]
+        )
+
+        if is_staff_role:
+            return True
+
+        return RoomMembership.objects.filter(
+            room_id=message.room_id,
+            user=user,
+            role__in=[
+                RoomMembership.Role.ADMIN,
+                RoomMembership.Role.MODERATOR,
+            ],
+        ).exists()
