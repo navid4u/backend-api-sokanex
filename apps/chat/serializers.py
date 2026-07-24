@@ -1,11 +1,12 @@
 from rest_framework import serializers
 
-from .models import ChatRoom, Message
-
 from common.validators import (
     validate_attachment_upload,
     validate_image_upload,
 )
+
+from .models import ChatRoom, Message
+
 
 class ChatRoomSerializer(
     serializers.ModelSerializer
@@ -67,6 +68,7 @@ class ChatRoomWriteSerializer(
             max_size_mb=5,
             file_label="Room image",
         )
+
 
 class MessageSerializer(
     serializers.ModelSerializer
