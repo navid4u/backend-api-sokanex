@@ -1,19 +1,23 @@
 from django.utils import timezone
 
 from .models import Article
+from common.content_access import restrict_queryset_for_user
 
 
 class ArticleService:
 
     @staticmethod
-    def published_articles():
-        return Article.objects.filter(
+    def published_articles(user=None):
+        queryset = Article.objects.filter(
             status=Article.Status.PUBLISHED,
             published_at__lte=timezone.now(),
         ).select_related(
             "author",
             "category",
         )
+        if user is not None:
+            queryset = restrict_queryset_for_user(queryset, user)
+        return queryset
 
     @staticmethod
     def all_articles():

@@ -1,6 +1,7 @@
 from rest_framework import serializers
 
 from common.validators import validate_image_upload
+from common.content_access import AllowedLevelsSerializerMixin
 
 from .models import Video, VideoCategory
 
@@ -25,6 +26,7 @@ class VideoCategorySerializer(
 
 
 class VideoListSerializer(
+    AllowedLevelsSerializerMixin,
     serializers.ModelSerializer
 ):
 
@@ -51,6 +53,7 @@ class VideoListSerializer(
             "category",
             "author",
             "status",
+            "allowed_levels",
             "published_at",
             "created_at",
         )
@@ -71,6 +74,7 @@ class VideoDetailSerializer(
 
 
 class VideoWriteSerializer(
+    AllowedLevelsSerializerMixin,
     serializers.ModelSerializer
 ):
 
@@ -87,6 +91,7 @@ class VideoWriteSerializer(
             "duration_seconds",
             "category",
             "status",
+            "allowed_levels",
             "published_at",
             "created_at",
             "updated_at",

@@ -44,6 +44,11 @@ class VideoAdmin(admin.ModelAdmin):
         "status",
         "category",
         "published_at",
+        "allowed_level_1",
+        "allowed_level_2",
+        "allowed_level_3",
+        "allowed_level_4",
+        "allowed_level_5",
     )
 
     search_fields = (

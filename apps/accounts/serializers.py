@@ -3,6 +3,7 @@ from django.contrib.auth.password_validation import (
     validate_password,
 )
 from rest_framework import serializers
+from django.db import IntegrityError, transaction
 from rest_framework_simplejwt.exceptions import (
     TokenError,
 )
@@ -19,6 +20,8 @@ from common.validators import (
 from common.validators import (
     validate_image_upload,
 )
+from .models import UpgradeRequest
+
 User = get_user_model()
 
 
@@ -34,6 +37,7 @@ class UserSerializer(serializers.ModelSerializer):
             "phone",
             "avatar",
             "role",
+            "access_level",
             "is_verified",
             "created_at",
         )
@@ -42,6 +46,7 @@ class UserSerializer(serializers.ModelSerializer):
             "username",
             "email",
             "role",
+            "access_level",
             "is_verified",
             "created_at",
         )
@@ -56,6 +61,7 @@ class CustomTokenObtainPairSerializer(
 
         token["username"] = user.username
         token["role"] = user.role
+        token["access_level"] = user.access_level
 
         return token
 
@@ -134,6 +140,7 @@ class UserListSerializer(
             "last_name",
             "email",
             "role",
+            "access_level",
             "is_active",
         )
 
@@ -143,6 +150,107 @@ class UserRoleUpdateSerializer(
 ):
     role = serializers.ChoiceField(
         choices=User.Role.choices,
+    )
+
+
+class UserAccessLevelUpdateSerializer(serializers.Serializer):
+    access_level = serializers.ChoiceField(
+        choices=User.AccessLevel.choices,
+    )
+
+
+class UpgradeRequestSerializer(serializers.ModelSerializer):
+    reviewed_by = serializers.CharField(
+        source="reviewed_by.username",
+        read_only=True,
+        allow_null=True,
+    )
+
+    class Meta:
+        model = UpgradeRequest
+        fields = (
+            "id",
+            "request_type",
+            "requested_level",
+            "message",
+            "status",
+            "admin_note",
+            "reviewed_by",
+            "reviewed_at",
+            "created_at",
+            "updated_at",
+        )
+        read_only_fields = (
+            "id",
+            "status",
+            "admin_note",
+            "reviewed_by",
+            "reviewed_at",
+            "created_at",
+            "updated_at",
+        )
+
+    def validate(self, attrs):
+        user = self.context["request"].user
+        request_type = attrs.get(
+            "request_type",
+            UpgradeRequest.Type.UPGRADE,
+        )
+        requested_level = attrs["requested_level"]
+
+        if (
+            request_type == UpgradeRequest.Type.PREMIUM
+            and requested_level != 5
+        ):
+            raise serializers.ValidationError(
+                {"requested_level": "Premium subscription must request level 5."}
+            )
+
+        if requested_level <= user.access_level:
+            raise serializers.ValidationError(
+                {"requested_level": "Requested level must be above your current level."}
+            )
+
+        if UpgradeRequest.objects.filter(
+            user=user,
+            status=UpgradeRequest.Status.PENDING,
+        ).exists():
+            raise serializers.ValidationError(
+                "You already have a pending request."
+            )
+
+        return attrs
+
+    def create(self, validated_data):
+        try:
+            with transaction.atomic():
+                return UpgradeRequest.objects.create(
+                    user=self.context["request"].user,
+                    **validated_data,
+                )
+        except IntegrityError:
+            raise serializers.ValidationError(
+                "You already have a pending request."
+            )
+
+
+class AdminUpgradeRequestSerializer(UpgradeRequestSerializer):
+    user = UserListSerializer(read_only=True)
+
+    class Meta(UpgradeRequestSerializer.Meta):
+        fields = ("user",) + UpgradeRequestSerializer.Meta.fields
+
+
+class UpgradeRequestReviewSerializer(serializers.Serializer):
+    status = serializers.ChoiceField(
+        choices=(
+            UpgradeRequest.Status.APPROVED,
+            UpgradeRequest.Status.REJECTED,
+        )
+    )
+    admin_note = serializers.CharField(
+        required=False,
+        allow_blank=True,
     )
 
 

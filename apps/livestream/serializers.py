@@ -7,9 +7,11 @@ from .models import LiveEvent
 from common.validators import (
     validate_image_upload,
 )
+from common.content_access import AllowedLevelsSerializerMixin
 
 
 class LiveEventListSerializer(
+    AllowedLevelsSerializerMixin,
     serializers.ModelSerializer
 ):
 
@@ -34,6 +36,7 @@ class LiveEventListSerializer(
             "starts_at",
             "ends_at",
             "status",
+            "allowed_levels",
             "host",
             "is_live_now",
         )
@@ -72,6 +75,7 @@ class LiveEventDetailSerializer(
 
 
 class LiveEventWriteSerializer(
+    AllowedLevelsSerializerMixin,
     serializers.ModelSerializer
 ):
 
@@ -91,6 +95,7 @@ class LiveEventWriteSerializer(
             "status",
             "host",
             "is_active",
+            "allowed_levels",
             "created_at",
             "updated_at",
         )

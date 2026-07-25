@@ -3,6 +3,7 @@ from rest_framework import serializers
 from common.validators import (
     validate_image_upload,
 )
+from common.content_access import AllowedLevelsSerializerMixin
 
 from .models import (
     Direction,
@@ -10,7 +11,10 @@ from .models import (
 )
 
 
-class SignalListSerializer(serializers.ModelSerializer):
+class SignalListSerializer(
+    AllowedLevelsSerializerMixin,
+    serializers.ModelSerializer,
+):
 
     trader = serializers.CharField(
         source="created_by.username",
@@ -31,12 +35,16 @@ class SignalListSerializer(serializers.ModelSerializer):
             "stop_loss",
             "image",
             "status",
+            "allowed_levels",
             "trader",
             "created_at",
         )
 
 
-class SignalCreateSerializer(serializers.ModelSerializer):
+class SignalCreateSerializer(
+    AllowedLevelsSerializerMixin,
+    serializers.ModelSerializer,
+):
 
     class Meta:
         model = Signal
@@ -52,6 +60,7 @@ class SignalCreateSerializer(serializers.ModelSerializer):
             "take_profit",
             "description",
             "image",
+            "allowed_levels",
         )
 
         read_only_fields = (
@@ -123,7 +132,10 @@ class SignalCreateSerializer(serializers.ModelSerializer):
         return attrs
 
 
-class SignalDetailSerializer(serializers.ModelSerializer):
+class SignalDetailSerializer(
+    AllowedLevelsSerializerMixin,
+    serializers.ModelSerializer,
+):
 
     trader = serializers.CharField(
         source="created_by.username",
@@ -152,6 +164,7 @@ class SignalDetailSerializer(serializers.ModelSerializer):
             "image",
             "status",
             "rejection_reason",
+            "allowed_levels",
             "trader",
             "reviewed_by",
             "created_at",

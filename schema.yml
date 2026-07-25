@@ -4,6 +4,106 @@ info:
   version: 1.0.0
   description: REST API for the Trading Platform React dashboard.
 paths:
+  /api/accounts/admin/upgrade-requests/:
+    get:
+      operationId: accounts_admin_upgrade_requests_list
+      parameters:
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - in: query
+        name: request_type
+        schema:
+          type: string
+          enum:
+          - PREMIUM
+          - UPGRADE
+        description: |-
+          * `UPGRADE` - Level upgrade
+          * `PREMIUM` - Premium subscription
+      - in: query
+        name: requested_level
+        schema:
+          type: integer
+          enum:
+          - 2
+          - 3
+          - 4
+          - 5
+        description: |-
+          * `2` - Level 2
+          * `3` - Level 3
+          * `4` - Level 4
+          * `5` - Level 5
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      - in: query
+        name: status
+        schema:
+          type: string
+          enum:
+          - APPROVED
+          - PENDING
+          - REJECTED
+        description: |-
+          * `PENDING` - Pending
+          * `APPROVED` - Approved
+          * `REJECTED` - Rejected
+      tags:
+      - accounts
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedAdminUpgradeRequestList'
+          description: ''
+  /api/accounts/admin/upgrade-requests/{id}/review/:
+    patch:
+      operationId: accounts_admin_upgrade_requests_review_partial_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - accounts
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedUpgradeRequestReviewRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedUpgradeRequestReviewRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedUpgradeRequestReviewRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminUpgradeRequest'
+          description: ''
   /api/accounts/logout/:
     post:
       operationId: accounts_logout_create
@@ -91,6 +191,70 @@ paths:
               schema:
                 $ref: '#/components/schemas/Register'
           description: ''
+  /api/accounts/upgrade-requests/:
+    get:
+      operationId: accounts_upgrade_requests_list
+      parameters:
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      tags:
+      - accounts
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedUpgradeRequestList'
+          description: ''
+    post:
+      operationId: accounts_upgrade_requests_create
+      tags:
+      - accounts
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpgradeRequestRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/UpgradeRequestRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/UpgradeRequestRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UpgradeRequest'
+          description: ''
   /api/accounts/users/:
     get:
       operationId: accounts_users_list
@@ -143,6 +307,37 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/PaginatedUserListList'
+          description: ''
+  /api/accounts/users/{id}/access-level/:
+    patch:
+      operationId: accounts_users_access_level_partial_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - accounts
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedUserAccessLevelUpdateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedUserAccessLevelUpdateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedUserAccessLevelUpdateRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserList'
           description: ''
   /api/accounts/users/{id}/role/:
     patch:
@@ -2431,6 +2626,59 @@ paths:
           description: ''
 components:
   schemas:
+    AdminUpgradeRequest:
+      type: object
+      properties:
+        user:
+          allOf:
+          - $ref: '#/components/schemas/UserList'
+          readOnly: true
+        id:
+          type: integer
+          readOnly: true
+        request_type:
+          $ref: '#/components/schemas/UpgradeRequestTypeEnum'
+        requested_level:
+          allOf:
+          - $ref: '#/components/schemas/RequestedLevelEnum'
+          minimum: 0
+          maximum: 9223372036854775807
+        message:
+          type: string
+        status:
+          allOf:
+          - $ref: '#/components/schemas/UpgradeRequestStatusEnum'
+          readOnly: true
+        admin_note:
+          type: string
+          readOnly: true
+        reviewed_by:
+          type: string
+          readOnly: true
+          nullable: true
+        reviewed_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - admin_note
+      - created_at
+      - id
+      - requested_level
+      - reviewed_at
+      - reviewed_by
+      - status
+      - updated_at
+      - user
     ApproveSignalResponse:
       type: object
       properties:
@@ -2469,6 +2717,12 @@ components:
           readOnly: true
         status:
           $ref: '#/components/schemas/ContentStatusEnum'
+        allowed_levels:
+          type: array
+          items:
+            type: integer
+            maximum: 5
+            minimum: 1
         published_at:
           type: string
           format: date-time
@@ -2522,6 +2776,12 @@ components:
           readOnly: true
         status:
           $ref: '#/components/schemas/ContentStatusEnum'
+        allowed_levels:
+          type: array
+          items:
+            type: integer
+            maximum: 5
+            minimum: 1
         published_at:
           type: string
           format: date-time
@@ -2562,6 +2822,12 @@ components:
           nullable: true
         status:
           $ref: '#/components/schemas/ContentStatusEnum'
+        allowed_levels:
+          type: array
+          items:
+            type: integer
+            maximum: 5
+            minimum: 1
         published_at:
           type: string
           format: date-time
@@ -2604,6 +2870,12 @@ components:
           nullable: true
         status:
           $ref: '#/components/schemas/ContentStatusEnum'
+        allowed_levels:
+          type: array
+          items:
+            type: integer
+            maximum: 5
+            minimum: 1
       required:
       - content
       - title
@@ -3190,6 +3462,12 @@ components:
           nullable: true
         status:
           $ref: '#/components/schemas/LiveEventStatusEnum'
+        allowed_levels:
+          type: array
+          items:
+            type: integer
+            maximum: 5
+            minimum: 1
         host:
           type: string
           readOnly: true
@@ -3258,6 +3536,12 @@ components:
           nullable: true
         status:
           $ref: '#/components/schemas/LiveEventStatusEnum'
+        allowed_levels:
+          type: array
+          items:
+            type: integer
+            maximum: 5
+            minimum: 1
         host:
           type: string
           readOnly: true
@@ -3330,6 +3614,12 @@ components:
           nullable: true
         is_active:
           type: boolean
+        allowed_levels:
+          type: array
+          items:
+            type: integer
+            maximum: 5
+            minimum: 1
         created_at:
           type: string
           format: date-time
@@ -3386,6 +3676,12 @@ components:
           nullable: true
         is_active:
           type: boolean
+        allowed_levels:
+          type: array
+          items:
+            type: integer
+            maximum: 5
+            minimum: 1
       required:
       - starts_at
       - title
@@ -3557,6 +3853,29 @@ components:
           type: integer
       required:
       - unread_count
+    PaginatedAdminUpgradeRequestList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/AdminUpgradeRequest'
     PaginatedArticleListList:
       type: object
       required:
@@ -3764,6 +4083,29 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Transaction'
+    PaginatedUpgradeRequestList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/UpgradeRequest'
     PaginatedUserListList:
       type: object
       required:
@@ -3854,6 +4196,12 @@ components:
           nullable: true
         status:
           $ref: '#/components/schemas/ContentStatusEnum'
+        allowed_levels:
+          type: array
+          items:
+            type: integer
+            maximum: 5
+            minimum: 1
     PatchedBrokerWriteRequest:
       type: object
       properties:
@@ -3977,6 +4325,12 @@ components:
           nullable: true
         is_active:
           type: boolean
+        allowed_levels:
+          type: array
+          items:
+            type: integer
+            maximum: 5
+            minimum: 1
     PatchedProfileUpdateRequest:
       type: object
       properties:
@@ -4027,6 +4381,24 @@ components:
           type: string
           format: binary
           nullable: true
+        allowed_levels:
+          type: array
+          items:
+            type: integer
+            maximum: 5
+            minimum: 1
+    PatchedUpgradeRequestReviewRequest:
+      type: object
+      properties:
+        status:
+          $ref: '#/components/schemas/UpgradeRequestReviewStatusEnum'
+        admin_note:
+          type: string
+    PatchedUserAccessLevelUpdateRequest:
+      type: object
+      properties:
+        access_level:
+          $ref: '#/components/schemas/UserAccessLevelEnum'
     PatchedUserRoleUpdateRequest:
       type: object
       properties:
@@ -4068,6 +4440,12 @@ components:
           nullable: true
         status:
           $ref: '#/components/schemas/ContentStatusEnum'
+        allowed_levels:
+          type: array
+          items:
+            type: integer
+            maximum: 5
+            minimum: 1
     ProfileUpdateResponse:
       type: object
       properties:
@@ -4146,6 +4524,18 @@ components:
           type: string
       required:
       - message
+    RequestedLevelEnum:
+      enum:
+      - 2
+      - 3
+      - 4
+      - 5
+      type: integer
+      description: |-
+        * `2` - Level 2
+        * `3` - Level 3
+        * `4` - Level 4
+        * `5` - Level 5
     SignalCreate:
       type: object
       properties:
@@ -4180,6 +4570,12 @@ components:
           type: string
           format: uri
           nullable: true
+        allowed_levels:
+          type: array
+          items:
+            type: integer
+            maximum: 5
+            minimum: 1
       required:
       - direction
       - entry_price
@@ -4222,6 +4618,12 @@ components:
           type: string
           format: binary
           nullable: true
+        allowed_levels:
+          type: array
+          items:
+            type: integer
+            maximum: 5
+            minimum: 1
       required:
       - direction
       - entry_price
@@ -4268,6 +4670,12 @@ components:
           $ref: '#/components/schemas/SignalStatusEnum'
         rejection_reason:
           type: string
+        allowed_levels:
+          type: array
+          items:
+            type: integer
+            maximum: 5
+            minimum: 1
         trader:
           type: string
           readOnly: true
@@ -4338,6 +4746,12 @@ components:
           nullable: true
         status:
           $ref: '#/components/schemas/SignalStatusEnum'
+        allowed_levels:
+          type: array
+          items:
+            type: integer
+            maximum: 5
+            minimum: 1
         trader:
           type: string
           readOnly: true
@@ -4462,6 +4876,94 @@ components:
       description: |-
         * `CREDIT` - Credit
         * `DEBIT` - Debit
+    UpgradeRequest:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        request_type:
+          $ref: '#/components/schemas/UpgradeRequestTypeEnum'
+        requested_level:
+          allOf:
+          - $ref: '#/components/schemas/RequestedLevelEnum'
+          minimum: 0
+          maximum: 9223372036854775807
+        message:
+          type: string
+        status:
+          allOf:
+          - $ref: '#/components/schemas/UpgradeRequestStatusEnum'
+          readOnly: true
+        admin_note:
+          type: string
+          readOnly: true
+        reviewed_by:
+          type: string
+          readOnly: true
+          nullable: true
+        reviewed_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - admin_note
+      - created_at
+      - id
+      - requested_level
+      - reviewed_at
+      - reviewed_by
+      - status
+      - updated_at
+    UpgradeRequestRequest:
+      type: object
+      properties:
+        request_type:
+          $ref: '#/components/schemas/UpgradeRequestTypeEnum'
+        requested_level:
+          allOf:
+          - $ref: '#/components/schemas/RequestedLevelEnum'
+          minimum: 0
+          maximum: 9223372036854775807
+        message:
+          type: string
+      required:
+      - requested_level
+    UpgradeRequestReviewStatusEnum:
+      enum:
+      - APPROVED
+      - REJECTED
+      type: string
+      description: |-
+        * `APPROVED` - APPROVED
+        * `REJECTED` - REJECTED
+    UpgradeRequestStatusEnum:
+      enum:
+      - PENDING
+      - APPROVED
+      - REJECTED
+      type: string
+      description: |-
+        * `PENDING` - Pending
+        * `APPROVED` - Approved
+        * `REJECTED` - Rejected
+    UpgradeRequestTypeEnum:
+      enum:
+      - UPGRADE
+      - PREMIUM
+      type: string
+      description: |-
+        * `UPGRADE` - Level upgrade
+        * `PREMIUM` - Premium subscription
     User:
       type: object
       properties:
@@ -4496,6 +4998,10 @@ components:
           allOf:
           - $ref: '#/components/schemas/UserRoleEnum'
           readOnly: true
+        access_level:
+          allOf:
+          - $ref: '#/components/schemas/UserAccessLevelEnum'
+          readOnly: true
         is_verified:
           type: boolean
           readOnly: true
@@ -4504,12 +5010,27 @@ components:
           format: date-time
           readOnly: true
       required:
+      - access_level
       - created_at
       - email
       - id
       - is_verified
       - role
       - username
+    UserAccessLevelEnum:
+      enum:
+      - 1
+      - 2
+      - 3
+      - 4
+      - 5
+      type: integer
+      description: |-
+        * `1` - Level 1
+        * `2` - Level 2
+        * `3` - Level 3
+        * `4` - Level 4
+        * `5` - Level 5
     UserList:
       type: object
       properties:
@@ -4538,6 +5059,11 @@ components:
             maxLength: 0
         role:
           $ref: '#/components/schemas/UserRoleEnum'
+        access_level:
+          allOf:
+          - $ref: '#/components/schemas/UserAccessLevelEnum'
+          minimum: 0
+          maximum: 9223372036854775807
         is_active:
           type: boolean
           title: Active
@@ -4647,6 +5173,12 @@ components:
           readOnly: true
         status:
           $ref: '#/components/schemas/ContentStatusEnum'
+        allowed_levels:
+          type: array
+          items:
+            type: integer
+            maximum: 5
+            minimum: 1
         published_at:
           type: string
           format: date-time
@@ -4708,6 +5240,12 @@ components:
           readOnly: true
         status:
           $ref: '#/components/schemas/ContentStatusEnum'
+        allowed_levels:
+          type: array
+          items:
+            type: integer
+            maximum: 5
+            minimum: 1
         published_at:
           type: string
           format: date-time
@@ -4757,6 +5295,12 @@ components:
           nullable: true
         status:
           $ref: '#/components/schemas/ContentStatusEnum'
+        allowed_levels:
+          type: array
+          items:
+            type: integer
+            maximum: 5
+            minimum: 1
         published_at:
           type: string
           format: date-time
@@ -4807,6 +5351,12 @@ components:
           nullable: true
         status:
           $ref: '#/components/schemas/ContentStatusEnum'
+        allowed_levels:
+          type: array
+          items:
+            type: integer
+            maximum: 5
+            minimum: 1
       required:
       - external_url
       - title

@@ -6,6 +6,10 @@ from .views import (
     RegisterView,
     ToggleUserStatusView,
     UpdateUserRoleView,
+    UpdateUserAccessLevelView,
+    MyUpgradeRequestListCreateView,
+    UpgradeRequestManagementListView,
+    UpgradeRequestReviewView,
     UserListView,
 )
 
@@ -40,5 +44,25 @@ urlpatterns = [
         "users/<int:pk>/role/",
         UpdateUserRoleView.as_view(),
         name="user-role-update",
+    ),
+    path(
+        "users/<int:pk>/access-level/",
+        UpdateUserAccessLevelView.as_view(),
+        name="user-access-level-update",
+    ),
+    path(
+        "upgrade-requests/",
+        MyUpgradeRequestListCreateView.as_view(),
+        name="my-upgrade-requests",
+    ),
+    path(
+        "admin/upgrade-requests/",
+        UpgradeRequestManagementListView.as_view(),
+        name="upgrade-request-management",
+    ),
+    path(
+        "admin/upgrade-requests/<int:pk>/review/",
+        UpgradeRequestReviewView.as_view(),
+        name="upgrade-request-review",
     ),
 ]

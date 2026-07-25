@@ -40,14 +40,19 @@ from common.permissions import (
 
 from .filters import UserFilter
 from .serializers import (
+    AdminUpgradeRequestSerializer,
     CustomTokenObtainPairSerializer,
     LogoutSerializer,
     ProfileUpdateSerializer,
     RegisterSerializer,
     UserListSerializer,
     UserRoleUpdateSerializer,
+    UserAccessLevelUpdateSerializer,
     UserSerializer,
+    UpgradeRequestReviewSerializer,
+    UpgradeRequestSerializer,
 )
+from .models import UpgradeRequest
 from .services import UserService
 
 
@@ -180,7 +185,7 @@ class UserListView(
 ):
     permission_classes = [
         IsAuthenticated,
-        IsSuperAdmin,
+        IsAdmin,
     ]
 
     serializer_class = UserListSerializer
@@ -294,5 +299,82 @@ class UpdateUserRoleView(APIView):
                 "user": UserListSerializer(
                     user
                 ).data,
+            }
+        )
+
+
+class UpdateUserAccessLevelView(APIView):
+    permission_classes = [IsAuthenticated, IsAdmin]
+
+    @extend_schema(
+        request=UserAccessLevelUpdateSerializer,
+        responses=UserListSerializer,
+    )
+    def patch(self, request, pk):
+        user = get_object_or_404(User, pk=pk)
+        serializer = UserAccessLevelUpdateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        UserService.update_access_level(
+            user,
+            serializer.validated_data["access_level"],
+        )
+        return Response(
+            {
+                "message": "User access level updated.",
+                "user": UserListSerializer(user).data,
+            }
+        )
+
+
+class MyUpgradeRequestListCreateView(generics.ListCreateAPIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = UpgradeRequestSerializer
+
+    def get_queryset(self):
+        if getattr(self, "swagger_fake_view", False):
+            return UpgradeRequest.objects.none()
+        return UpgradeRequest.objects.filter(
+            user=self.request.user
+        ).select_related("reviewed_by")
+
+
+class UpgradeRequestManagementListView(generics.ListAPIView):
+    permission_classes = [IsAuthenticated, IsAdmin]
+    serializer_class = AdminUpgradeRequestSerializer
+    filter_backends = [DjangoFilterBackend, SearchFilter]
+    filterset_fields = ["status", "request_type", "requested_level"]
+    search_fields = [
+        "user__username",
+        "user__email",
+        "message",
+    ]
+
+    def get_queryset(self):
+        return UpgradeRequest.objects.select_related(
+            "user",
+            "reviewed_by",
+        )
+
+
+class UpgradeRequestReviewView(APIView):
+    permission_classes = [IsAuthenticated, IsAdmin]
+
+    @extend_schema(
+        request=UpgradeRequestReviewSerializer,
+        responses=AdminUpgradeRequestSerializer,
+    )
+    def patch(self, request, pk):
+        upgrade_request = get_object_or_404(UpgradeRequest, pk=pk)
+        serializer = UpgradeRequestReviewSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        reviewed = UserService.review_upgrade_request(
+            upgrade_request,
+            reviewed_by=request.user,
+            **serializer.validated_data,
+        )
+        return Response(
+            {
+                "message": "Upgrade request reviewed.",
+                "request": AdminUpgradeRequestSerializer(reviewed).data,
             }
         )

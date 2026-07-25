@@ -21,6 +21,7 @@ from .serializers import (
     LiveEventWriteSerializer,
 )
 from .services import LiveEventService
+from .models import LiveEvent
 
 
 class LiveEventListCreateView(
@@ -66,7 +67,11 @@ class LiveEventListCreateView(
         return LiveEventListSerializer
 
     def get_queryset(self):
-        return LiveEventService.public_events()
+        if getattr(self, "swagger_fake_view", False):
+            return LiveEvent.objects.none()
+        return LiveEventService.public_events(
+            self.request.user
+        )
 
     def perform_create(self, serializer):
         serializer.save(
@@ -154,4 +159,4 @@ class LiveEventDetailView(
         ):
             return LiveEventService.all_events()
 
-        return LiveEventService.public_events()
+        return LiveEventService.public_events(user)

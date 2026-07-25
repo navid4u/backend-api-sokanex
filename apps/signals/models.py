@@ -1,5 +1,6 @@
 from django.db import models
 from django.conf import settings
+from common.content_access import LevelRestrictedContent
 
 
 class SignalStatus(models.TextChoices):
@@ -22,7 +23,7 @@ class Direction(models.TextChoices):
     SELL = "sell", "Sell"
 
 
-class Signal(models.Model):
+class Signal(LevelRestrictedContent):
 
     title = models.CharField(max_length=200)
 

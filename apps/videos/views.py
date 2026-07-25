@@ -112,7 +112,11 @@ class VideoListCreateView(
         return VideoListSerializer
 
     def get_queryset(self):
-        return VideoService.published_videos()
+        if getattr(self, "swagger_fake_view", False):
+            return VideoService.all_videos().none()
+        return VideoService.published_videos(
+            self.request.user
+        )
 
     def perform_create(self, serializer):
         VideoService.create_video(
@@ -200,7 +204,7 @@ class VideoDetailView(
         ):
             return VideoService.all_videos()
 
-        return VideoService.published_videos()
+        return VideoService.published_videos(user)
 
     def perform_update(self, serializer):
         VideoService.update_video(

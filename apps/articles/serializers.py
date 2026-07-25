@@ -1,6 +1,7 @@
 from rest_framework import serializers
 
 from common.validators import validate_image_upload
+from common.content_access import AllowedLevelsSerializerMixin
 
 from .models import Article, Category
 
@@ -25,6 +26,7 @@ class CategorySerializer(
 
 
 class ArticleListSerializer(
+    AllowedLevelsSerializerMixin,
     serializers.ModelSerializer
 ):
 
@@ -49,6 +51,7 @@ class ArticleListSerializer(
             "category",
             "author",
             "status",
+            "allowed_levels",
             "published_at",
             "created_at",
         )
@@ -70,10 +73,8 @@ class ArticleDetailSerializer(
 
 
 class ArticleWriteSerializer(
-    
+    AllowedLevelsSerializerMixin,
     serializers.ModelSerializer
-    
-    
 ):
 
     category = serializers.PrimaryKeyRelatedField(
@@ -94,6 +95,7 @@ class ArticleWriteSerializer(
             "cover_image",
             "category",
             "status",
+            "allowed_levels",
             "published_at",
             "created_at",
             "updated_at",

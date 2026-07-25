@@ -513,6 +513,18 @@ SPECTACULAR_SETTINGS = {
             "apps.accounts.models."
             "User.Role"
         ),
+        "UserAccessLevelEnum": (
+            "apps.accounts.models."
+            "User.AccessLevel"
+        ),
+        "UpgradeRequestTypeEnum": (
+            "apps.accounts.models."
+            "UpgradeRequest.Type"
+        ),
+        "UpgradeRequestStatusEnum": (
+            "apps.accounts.models."
+            "UpgradeRequest.Status"
+        ),
 
         "ContentStatusEnum": (
             "apps.articles.models."

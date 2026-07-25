@@ -111,7 +111,11 @@ class ArticleListCreateView(
         return ArticleListSerializer
 
     def get_queryset(self):
-        return ArticleService.published_articles()
+        if getattr(self, "swagger_fake_view", False):
+            return ArticleService.all_articles().none()
+        return ArticleService.published_articles(
+            self.request.user
+        )
 
     def perform_create(self, serializer):
         ArticleService.create_article(
@@ -200,7 +204,7 @@ class ArticleDetailView(
         ):
             return ArticleService.all_articles()
 
-        return ArticleService.published_articles()
+        return ArticleService.published_articles(user)
 
     def perform_update(self, serializer):
         ArticleService.update_article(

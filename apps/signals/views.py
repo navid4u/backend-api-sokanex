@@ -77,7 +77,11 @@ class SignalListCreateView(
         return SignalListSerializer
 
     def get_queryset(self):
-        return SignalService.list_signals()
+        if getattr(self, "swagger_fake_view", False):
+            return Signal.objects.none()
+        return SignalService.list_signals(
+            self.request.user
+        )
 
     def perform_create(self, serializer):
         SignalService.create_signal(

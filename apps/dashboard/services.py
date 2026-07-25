@@ -1,5 +1,6 @@
 from apps.accounts.models import User
 from apps.signals.models import Signal, SignalStatus
+from apps.signals.services import SignalService
 from apps.wallet.services import WalletService
 from apps.articles.services import ArticleService
 from apps.videos.services import VideoService
@@ -31,9 +32,7 @@ class DashboardService:
             ]
         )
 
-        approved_signals = Signal.objects.filter(
-            status=SignalStatus.APPROVED
-        )
+        approved_signals = SignalService.list_signals(user)
 
         recent_signals = approved_signals.select_related(
             "created_by"
@@ -42,11 +41,11 @@ class DashboardService:
         wallet = WalletService.get_wallet(user)
 
         published_articles = (
-            ArticleService.published_articles()
+            ArticleService.published_articles(user)
         )
 
         published_videos = (
-            VideoService.published_videos()
+            VideoService.published_videos(user)
         )
 
         visible_notifications = (
@@ -57,10 +56,10 @@ class DashboardService:
             ChatService.visible_rooms(user)
         )
 
-        live_events = LiveEventService.live_now()
+        live_events = LiveEventService.live_now(user)
 
         upcoming_live_events = (
-            LiveEventService.upcoming()
+            LiveEventService.upcoming(user)
         )
 
         return {

@@ -1,6 +1,7 @@
 from django.conf import settings
 from django.db import models
 from django.utils.text import slugify
+from common.content_access import LevelRestrictedContent
 
 
 class Category(models.Model):
@@ -49,7 +50,7 @@ class Category(models.Model):
         return self.name
 
 
-class Article(models.Model):
+class Article(LevelRestrictedContent):
 
     class Status(models.TextChoices):
         DRAFT = "DRAFT", "Draft"

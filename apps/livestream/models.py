@@ -1,9 +1,10 @@
 from django.conf import settings
 from django.db import models
 from django.utils.text import slugify
+from common.content_access import LevelRestrictedContent
 
 
-class LiveEvent(models.Model):
+class LiveEvent(LevelRestrictedContent):
 
     class Status(models.TextChoices):
         SCHEDULED = "SCHEDULED", "Scheduled"

@@ -5,6 +5,7 @@ from rest_framework.exceptions import ValidationError
 from apps.accounts.models import User
 
 from .models import Signal, SignalStatus
+from common.content_access import restrict_queryset_for_user
 
 
 class SignalService:
@@ -75,13 +76,16 @@ class SignalService:
         return signal
 
     @staticmethod
-    def list_signals():
-        return (
+    def list_signals(user=None):
+        queryset = (
             Signal.objects.filter(
                 status=SignalStatus.APPROVED
             )
             .select_related("created_by")
         )
+        if user is not None:
+            queryset = restrict_queryset_for_user(queryset, user)
+        return queryset
 
     @staticmethod
     def accessible_signals(user):
@@ -101,14 +105,20 @@ class SignalService:
             return queryset
 
         if user.role == User.Role.TRADER:
-            return queryset.filter(
-                Q(status=SignalStatus.APPROVED)
-                | Q(created_by=user)
+            approved = restrict_queryset_for_user(
+                queryset.filter(
+                    status=SignalStatus.APPROVED
+                ),
+                user,
             )
+            return (
+                approved | queryset.filter(created_by=user)
+            ).distinct()
 
-        return queryset.filter(
+        queryset = queryset.filter(
             status=SignalStatus.APPROVED
         )
+        return restrict_queryset_for_user(queryset, user)
 
     @staticmethod
     def create_signal(user, serializer):
