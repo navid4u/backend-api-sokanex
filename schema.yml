@@ -558,6 +558,44 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProfileUpdateResponse'
           description: ''
+  /api/accounts/profile/details/:
+    get:
+      operationId: accounts_profile_details_retrieve
+      tags:
+      - accounts
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserProfileDetails'
+          description: ''
+    patch:
+      operationId: accounts_profile_details_partial_update
+      tags:
+      - accounts
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedUserProfileDetailsRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedUserProfileDetailsRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedUserProfileDetailsRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserProfileDetails'
+          description: ''
   /api/accounts/register/:
     post:
       operationId: accounts_register_create
@@ -943,6 +981,26 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/UserList'
+          description: ''
+  /api/accounts/users/{id}/profile-details/:
+    get:
+      operationId: accounts_users_profile_details_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - accounts
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserProfileDetails'
           description: ''
   /api/accounts/users/{id}/role/:
     patch:
@@ -3484,6 +3542,9 @@ components:
       required:
       - content
       - title
+    BlankEnum:
+      enum:
+      - ''
     BrokerDetail:
       type: object
       properties:
@@ -4222,6 +4283,34 @@ components:
       - videos
       - wallet_balance
       - wallet_currency
+    EducationLevelEnum:
+      enum:
+      - HIGH_SCHOOL
+      - ASSOCIATE
+      - BACHELOR
+      - MASTER
+      - DOCTORATE
+      - OTHER
+      type: string
+      description: |-
+        * `HIGH_SCHOOL` - High school
+        * `ASSOCIATE` - Associate
+        * `BACHELOR` - Bachelor
+        * `MASTER` - Master
+        * `DOCTORATE` - Doctorate
+        * `OTHER` - Other
+    GenderEnum:
+      enum:
+      - MALE
+      - FEMALE
+      - OTHER
+      - PREFER_NOT_TO_SAY
+      type: string
+      description: |-
+        * `MALE` - Male
+        * `FEMALE` - Female
+        * `OTHER` - Other
+        * `PREFER_NOT_TO_SAY` - Prefer not to say
     JoinChatRoomResponse:
       type: object
       properties:
@@ -4500,6 +4589,20 @@ components:
           minLength: 1
       required:
       - refresh
+    MaritalStatusEnum:
+      enum:
+      - SINGLE
+      - MARRIED
+      - DIVORCED
+      - WIDOWED
+      - PREFER_NOT_TO_SAY
+      type: string
+      description: |-
+        * `SINGLE` - Single
+        * `MARRIED` - Married
+        * `DIVORCED` - Divorced
+        * `WIDOWED` - Widowed
+        * `PREFER_NOT_TO_SAY` - Prefer not to say
     MarkAllNotificationsReadResponse:
       type: object
       properties:
@@ -4574,6 +4677,26 @@ components:
         reply_to:
           type: integer
           nullable: true
+    MonthlyIncomeRangeEnum:
+      enum:
+      - NO_INCOME
+      - UNDER_500
+      - '500_1000'
+      - '1000_3000'
+      - '3000_5000'
+      - '5000_10000'
+      - OVER_10000
+      - PREFER_NOT_TO_SAY
+      type: string
+      description: |-
+        * `NO_INCOME` - No income
+        * `UNDER_500` - Under 500
+        * `500_1000` - 500 to 1,000
+        * `1000_3000` - 1,000 to 3,000
+        * `3000_5000` - 3,000 to 5,000
+        * `5000_10000` - 5,000 to 10,000
+        * `OVER_10000` - Over 10,000
+        * `PREFER_NOT_TO_SAY` - Prefer not to say
     Notification:
       type: object
       properties:
@@ -5343,6 +5466,107 @@ components:
         custom_role_id:
           type: integer
           nullable: true
+    PatchedUserProfileDetailsRequest:
+      type: object
+      properties:
+        bio:
+          type: string
+        birth_date:
+          type: string
+          format: date
+          nullable: true
+        gender:
+          oneOf:
+          - $ref: '#/components/schemas/GenderEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        country:
+          type: string
+          maxLength: 100
+        city:
+          type: string
+          maxLength: 100
+        address:
+          type: string
+          maxLength: 500
+        postal_code:
+          type: string
+          maxLength: 30
+        marital_status:
+          oneOf:
+          - $ref: '#/components/schemas/MaritalStatusEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        education_level:
+          oneOf:
+          - $ref: '#/components/schemas/EducationLevelEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        occupation:
+          type: string
+          maxLength: 150
+        job_title:
+          type: string
+          maxLength: 150
+        company_name:
+          type: string
+          maxLength: 150
+        monthly_income_range:
+          oneOf:
+          - $ref: '#/components/schemas/MonthlyIncomeRangeEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        income_currency:
+          type: string
+          maxLength: 10
+        income_sources: {}
+        financial_dependents:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+          nullable: true
+        trading_experience_years:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,1})?$
+          nullable: true
+        risk_tolerance:
+          oneOf:
+          - $ref: '#/components/schemas/RiskToleranceEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        investment_goal:
+          type: string
+        preferred_markets: {}
+        trading_frequency:
+          oneOf:
+          - $ref: '#/components/schemas/TradingFrequencyEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        daily_free_time_minutes:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+          nullable: true
+        learning_hours_weekly:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,1})?$
+          nullable: true
+        preferred_learning_time:
+          oneOf:
+          - $ref: '#/components/schemas/PreferredLearningTimeEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        exercise_days_per_week:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+          nullable: true
+        sleep_hours_average:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,2}(?:\.\d{0,1})?$
+          nullable: true
+        interests: {}
+        habits: {}
+        onboarding_answers: {}
     PatchedUserRoleUpdateRequest:
       type: object
       properties:
@@ -5481,6 +5705,20 @@ components:
       required:
       - id
       - name
+    PreferredLearningTimeEnum:
+      enum:
+      - MORNING
+      - AFTERNOON
+      - EVENING
+      - NIGHT
+      - FLEXIBLE
+      type: string
+      description: |-
+        * `MORNING` - Morning
+        * `AFTERNOON` - Afternoon
+        * `EVENING` - Evening
+        * `NIGHT` - Night
+        * `FLEXIBLE` - Flexible
     ProfileUpdateResponse:
       type: object
       properties:
@@ -5585,6 +5823,16 @@ components:
         * `3` - Level 3
         * `4` - Level 4
         * `5` - Level 5
+    RiskToleranceEnum:
+      enum:
+      - LOW
+      - MEDIUM
+      - HIGH
+      type: string
+      description: |-
+        * `LOW` - Low
+        * `MEDIUM` - Medium
+        * `HIGH` - High
     SignalCreate:
       type: object
       properties:
@@ -5862,6 +6110,20 @@ components:
           minLength: 1
       required:
       - refresh
+    TradingFrequencyEnum:
+      enum:
+      - NEVER
+      - RARELY
+      - WEEKLY
+      - DAILY
+      - MULTIPLE_DAILY
+      type: string
+      description: |-
+        * `NEVER` - Never
+        * `RARELY` - Rarely
+        * `WEEKLY` - Weekly
+        * `DAILY` - Daily
+        * `MULTIPLE_DAILY` - Multiple times daily
     Transaction:
       type: object
       properties:
@@ -6132,6 +6394,135 @@ components:
       required:
       - custom_role
       - id
+      - username
+    UserProfileDetails:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        username:
+          type: string
+          readOnly: true
+        email:
+          type: string
+          format: email
+          readOnly: true
+        bio:
+          type: string
+        birth_date:
+          type: string
+          format: date
+          nullable: true
+        gender:
+          oneOf:
+          - $ref: '#/components/schemas/GenderEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        country:
+          type: string
+          maxLength: 100
+        city:
+          type: string
+          maxLength: 100
+        address:
+          type: string
+          maxLength: 500
+        postal_code:
+          type: string
+          maxLength: 30
+        marital_status:
+          oneOf:
+          - $ref: '#/components/schemas/MaritalStatusEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        education_level:
+          oneOf:
+          - $ref: '#/components/schemas/EducationLevelEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        occupation:
+          type: string
+          maxLength: 150
+        job_title:
+          type: string
+          maxLength: 150
+        company_name:
+          type: string
+          maxLength: 150
+        monthly_income_range:
+          oneOf:
+          - $ref: '#/components/schemas/MonthlyIncomeRangeEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        income_currency:
+          type: string
+          maxLength: 10
+        income_sources: {}
+        financial_dependents:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+          nullable: true
+        trading_experience_years:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,1})?$
+          nullable: true
+        risk_tolerance:
+          oneOf:
+          - $ref: '#/components/schemas/RiskToleranceEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        investment_goal:
+          type: string
+        preferred_markets: {}
+        trading_frequency:
+          oneOf:
+          - $ref: '#/components/schemas/TradingFrequencyEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        daily_free_time_minutes:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+          nullable: true
+        learning_hours_weekly:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,1})?$
+          nullable: true
+        preferred_learning_time:
+          oneOf:
+          - $ref: '#/components/schemas/PreferredLearningTimeEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        exercise_days_per_week:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+          nullable: true
+        sleep_hours_average:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,2}(?:\.\d{0,1})?$
+          nullable: true
+        interests: {}
+        habits: {}
+        onboarding_answers: {}
+        profile_completion:
+          type: integer
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - email
+      - id
+      - profile_completion
+      - updated_at
       - username
     UserRoleEnum:
       enum:

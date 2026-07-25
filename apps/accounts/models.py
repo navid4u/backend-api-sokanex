@@ -198,3 +198,180 @@ class UpgradeRequest(models.Model):
             f"{self.user} - {self.request_type} "
             f"to level {self.requested_level}"
         )
+
+
+class UserProfile(models.Model):
+
+    class Gender(models.TextChoices):
+        MALE = "MALE", "Male"
+        FEMALE = "FEMALE", "Female"
+        OTHER = "OTHER", "Other"
+        PREFER_NOT_TO_SAY = "PREFER_NOT_TO_SAY", "Prefer not to say"
+
+    class MaritalStatus(models.TextChoices):
+        SINGLE = "SINGLE", "Single"
+        MARRIED = "MARRIED", "Married"
+        DIVORCED = "DIVORCED", "Divorced"
+        WIDOWED = "WIDOWED", "Widowed"
+        PREFER_NOT_TO_SAY = "PREFER_NOT_TO_SAY", "Prefer not to say"
+
+    class EducationLevel(models.TextChoices):
+        HIGH_SCHOOL = "HIGH_SCHOOL", "High school"
+        ASSOCIATE = "ASSOCIATE", "Associate"
+        BACHELOR = "BACHELOR", "Bachelor"
+        MASTER = "MASTER", "Master"
+        DOCTORATE = "DOCTORATE", "Doctorate"
+        OTHER = "OTHER", "Other"
+
+    class IncomeRange(models.TextChoices):
+        NO_INCOME = "NO_INCOME", "No income"
+        UNDER_500 = "UNDER_500", "Under 500"
+        FROM_500_TO_1000 = "500_1000", "500 to 1,000"
+        FROM_1000_TO_3000 = "1000_3000", "1,000 to 3,000"
+        FROM_3000_TO_5000 = "3000_5000", "3,000 to 5,000"
+        FROM_5000_TO_10000 = "5000_10000", "5,000 to 10,000"
+        OVER_10000 = "OVER_10000", "Over 10,000"
+        PREFER_NOT_TO_SAY = "PREFER_NOT_TO_SAY", "Prefer not to say"
+
+    class RiskTolerance(models.TextChoices):
+        LOW = "LOW", "Low"
+        MEDIUM = "MEDIUM", "Medium"
+        HIGH = "HIGH", "High"
+
+    class TradingFrequency(models.TextChoices):
+        NEVER = "NEVER", "Never"
+        RARELY = "RARELY", "Rarely"
+        WEEKLY = "WEEKLY", "Weekly"
+        DAILY = "DAILY", "Daily"
+        MULTIPLE_DAILY = "MULTIPLE_DAILY", "Multiple times daily"
+
+    class PreferredLearningTime(models.TextChoices):
+        MORNING = "MORNING", "Morning"
+        AFTERNOON = "AFTERNOON", "Afternoon"
+        EVENING = "EVENING", "Evening"
+        NIGHT = "NIGHT", "Night"
+        FLEXIBLE = "FLEXIBLE", "Flexible"
+
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="profile_details",
+    )
+    bio = models.TextField(blank=True)
+    birth_date = models.DateField(null=True, blank=True)
+    gender = models.CharField(
+        max_length=30,
+        choices=Gender.choices,
+        blank=True,
+    )
+    country = models.CharField(max_length=100, blank=True)
+    city = models.CharField(max_length=100, blank=True)
+    address = models.CharField(max_length=500, blank=True)
+    postal_code = models.CharField(max_length=30, blank=True)
+    marital_status = models.CharField(
+        max_length=30,
+        choices=MaritalStatus.choices,
+        blank=True,
+    )
+    education_level = models.CharField(
+        max_length=30,
+        choices=EducationLevel.choices,
+        blank=True,
+    )
+    occupation = models.CharField(max_length=150, blank=True)
+    job_title = models.CharField(max_length=150, blank=True)
+    company_name = models.CharField(max_length=150, blank=True)
+    monthly_income_range = models.CharField(
+        max_length=30,
+        choices=IncomeRange.choices,
+        blank=True,
+    )
+    income_currency = models.CharField(max_length=10, blank=True)
+    income_sources = models.JSONField(default=list, blank=True)
+    financial_dependents = models.PositiveSmallIntegerField(
+        null=True,
+        blank=True,
+    )
+    trading_experience_years = models.DecimalField(
+        max_digits=4,
+        decimal_places=1,
+        null=True,
+        blank=True,
+    )
+    risk_tolerance = models.CharField(
+        max_length=20,
+        choices=RiskTolerance.choices,
+        blank=True,
+    )
+    investment_goal = models.TextField(blank=True)
+    preferred_markets = models.JSONField(default=list, blank=True)
+    trading_frequency = models.CharField(
+        max_length=30,
+        choices=TradingFrequency.choices,
+        blank=True,
+    )
+    daily_free_time_minutes = models.PositiveSmallIntegerField(
+        null=True,
+        blank=True,
+    )
+    learning_hours_weekly = models.DecimalField(
+        max_digits=4,
+        decimal_places=1,
+        null=True,
+        blank=True,
+    )
+    preferred_learning_time = models.CharField(
+        max_length=20,
+        choices=PreferredLearningTime.choices,
+        blank=True,
+    )
+    exercise_days_per_week = models.PositiveSmallIntegerField(
+        null=True,
+        blank=True,
+    )
+    sleep_hours_average = models.DecimalField(
+        max_digits=3,
+        decimal_places=1,
+        null=True,
+        blank=True,
+    )
+    interests = models.JSONField(default=list, blank=True)
+    habits = models.JSONField(default=dict, blank=True)
+    onboarding_answers = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.CheckConstraint(
+                condition=(
+                    Q(exercise_days_per_week__isnull=True)
+                    | Q(exercise_days_per_week__lte=7)
+                ),
+                name="profile_exercise_days_max_7",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    Q(sleep_hours_average__isnull=True)
+                    | Q(sleep_hours_average__lte=24)
+                ),
+                name="profile_sleep_hours_max_24",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    Q(daily_free_time_minutes__isnull=True)
+                    | Q(daily_free_time_minutes__lte=1440)
+                ),
+                name="profile_free_time_max_1440",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    Q(learning_hours_weekly__isnull=True)
+                    | Q(learning_hours_weekly__lte=168)
+                ),
+                name="profile_learning_hours_max_168",
+            ),
+        ]
+
+    def __str__(self):
+        return f"Profile details for {self.user}"

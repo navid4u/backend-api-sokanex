@@ -20,7 +20,9 @@ from common.validators import (
 from common.validators import (
     validate_image_upload,
 )
-from .models import PlatformRole, UpgradeRequest
+from django.utils import timezone
+
+from .models import PlatformRole, UpgradeRequest, UserProfile
 
 User = get_user_model()
 
@@ -121,21 +123,24 @@ class RegisterSerializer(serializers.ModelSerializer):
         )
 
     def create(self, validated_data):
-        return User.objects.create_user(
-            username=validated_data["username"],
-            email=validated_data["email"],
-            password=validated_data["password"],
-            first_name=validated_data.get(
-                "first_name",
-                "",
-            ),
-            last_name=validated_data.get(
-                "last_name",
-                "",
-            ),
-            role=User.Role.USER,
-            access_level=User.AccessLevel.LEVEL_1,
-        )
+        with transaction.atomic():
+            user = User.objects.create_user(
+                username=validated_data["username"],
+                email=validated_data["email"],
+                password=validated_data["password"],
+                first_name=validated_data.get(
+                    "first_name",
+                    "",
+                ),
+                last_name=validated_data.get(
+                    "last_name",
+                    "",
+                ),
+                role=User.Role.USER,
+                access_level=User.AccessLevel.LEVEL_1,
+            )
+            UserProfile.objects.create(user=user)
+            return user
 
     def validate_email(self, value):
         normalized_email = (
@@ -239,6 +244,171 @@ class UserCustomRoleUpdateSerializer(serializers.Serializer):
         queryset=PlatformRole.objects.filter(is_active=True),
         allow_null=True,
     )
+
+
+class UserProfileDetailsSerializer(serializers.ModelSerializer):
+    username = serializers.CharField(
+        source="user.username",
+        read_only=True,
+    )
+    email = serializers.EmailField(
+        source="user.email",
+        read_only=True,
+    )
+    profile_completion = serializers.SerializerMethodField()
+
+    MARKET_CHOICES = {
+        "FOREX",
+        "CRYPTO",
+        "STOCKS",
+        "GOLD",
+        "INDICES",
+        "COMMODITIES",
+    }
+
+    class Meta:
+        model = UserProfile
+        fields = (
+            "id",
+            "username",
+            "email",
+            "bio",
+            "birth_date",
+            "gender",
+            "country",
+            "city",
+            "address",
+            "postal_code",
+            "marital_status",
+            "education_level",
+            "occupation",
+            "job_title",
+            "company_name",
+            "monthly_income_range",
+            "income_currency",
+            "income_sources",
+            "financial_dependents",
+            "trading_experience_years",
+            "risk_tolerance",
+            "investment_goal",
+            "preferred_markets",
+            "trading_frequency",
+            "daily_free_time_minutes",
+            "learning_hours_weekly",
+            "preferred_learning_time",
+            "exercise_days_per_week",
+            "sleep_hours_average",
+            "interests",
+            "habits",
+            "onboarding_answers",
+            "profile_completion",
+            "created_at",
+            "updated_at",
+        )
+        read_only_fields = (
+            "id",
+            "username",
+            "email",
+            "profile_completion",
+            "created_at",
+            "updated_at",
+        )
+
+    def _validate_string_list(self, value, field_name, max_items=30):
+        if not isinstance(value, list):
+            raise serializers.ValidationError("Must be a list.")
+        if len(value) > max_items:
+            raise serializers.ValidationError(
+                f"At most {max_items} items are allowed."
+            )
+        cleaned = []
+        for item in value:
+            if not isinstance(item, str) or not item.strip():
+                raise serializers.ValidationError(
+                    "Every item must be a non-empty string."
+                )
+            cleaned.append(item.strip())
+        if len(cleaned) != len(set(cleaned)):
+            raise serializers.ValidationError(
+                "Duplicate items are not allowed."
+            )
+        return cleaned
+
+    def validate_birth_date(self, value):
+        if value and value > timezone.localdate():
+            raise serializers.ValidationError(
+                "Birth date cannot be in the future."
+            )
+        return value
+
+    def validate_income_sources(self, value):
+        return self._validate_string_list(value, "income_sources")
+
+    def validate_interests(self, value):
+        return self._validate_string_list(value, "interests")
+
+    def validate_preferred_markets(self, value):
+        value = self._validate_string_list(
+            value,
+            "preferred_markets",
+            max_items=len(self.MARKET_CHOICES),
+        )
+        invalid = set(value) - self.MARKET_CHOICES
+        if invalid:
+            raise serializers.ValidationError(
+                f"Unsupported markets: {', '.join(sorted(invalid))}."
+            )
+        return value
+
+    def validate_habits(self, value):
+        if not isinstance(value, dict):
+            raise serializers.ValidationError("Must be an object.")
+        return value
+
+    def validate_onboarding_answers(self, value):
+        if not isinstance(value, dict):
+            raise serializers.ValidationError("Must be an object.")
+        return value
+
+    def _validate_maximum(self, value, maximum):
+        if value is not None and value > maximum:
+            raise serializers.ValidationError(
+                f"Must be at most {maximum}."
+            )
+        return value
+
+    def validate_exercise_days_per_week(self, value):
+        return self._validate_maximum(value, 7)
+
+    def validate_sleep_hours_average(self, value):
+        return self._validate_maximum(value, 24)
+
+    def validate_daily_free_time_minutes(self, value):
+        return self._validate_maximum(value, 1440)
+
+    def validate_learning_hours_weekly(self, value):
+        return self._validate_maximum(value, 168)
+
+    def get_profile_completion(self, obj) -> int:
+        tracked_fields = (
+            "birth_date",
+            "country",
+            "city",
+            "education_level",
+            "occupation",
+            "monthly_income_range",
+            "trading_experience_years",
+            "risk_tolerance",
+            "investment_goal",
+            "preferred_markets",
+            "trading_frequency",
+            "preferred_learning_time",
+        )
+        completed = sum(
+            bool(getattr(obj, field))
+            for field in tracked_fields
+        )
+        return round(completed * 100 / len(tracked_fields))
 
 
 class UpgradeRequestSerializer(serializers.ModelSerializer):

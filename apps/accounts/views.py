@@ -52,11 +52,12 @@ from .serializers import (
     UserRoleUpdateSerializer,
     UserAccessLevelUpdateSerializer,
     UserCustomRoleUpdateSerializer,
+    UserProfileDetailsSerializer,
     UserSerializer,
     UpgradeRequestReviewSerializer,
     UpgradeRequestSerializer,
 )
-from .models import PlatformRole, UpgradeRequest
+from .models import PlatformRole, UpgradeRequest, UserProfile
 from .services import UserService
 
 
@@ -305,6 +306,49 @@ class UpdateUserRoleView(APIView):
                 ).data,
             }
         )
+
+
+class ProfileDetailsView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get_object(self, user):
+        profile, _ = UserProfile.objects.get_or_create(user=user)
+        return profile
+
+    @extend_schema(responses=UserProfileDetailsSerializer)
+    def get(self, request):
+        serializer = UserProfileDetailsSerializer(
+            self.get_object(request.user)
+        )
+        return Response(serializer.data)
+
+    @extend_schema(
+        request=UserProfileDetailsSerializer,
+        responses=UserProfileDetailsSerializer,
+    )
+    def patch(self, request):
+        profile = self.get_object(request.user)
+        serializer = UserProfileDetailsSerializer(
+            profile,
+            data=request.data,
+            partial=True,
+        )
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data)
+
+
+class AdminUserProfileDetailsView(generics.RetrieveAPIView):
+    permission_classes = [IsAuthenticated, CanManageUsers]
+    serializer_class = UserProfileDetailsSerializer
+
+    def get_object(self):
+        user = get_object_or_404(
+            User,
+            pk=self.kwargs["pk"],
+        )
+        profile, _ = UserProfile.objects.get_or_create(user=user)
+        return profile
 
 
 class UpdateUserAccessLevelView(APIView):

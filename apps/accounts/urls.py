@@ -3,6 +3,8 @@ from django.urls import path
 from .views import (
     LogoutView,
     ProfileView,
+    ProfileDetailsView,
+    AdminUserProfileDetailsView,
     RegisterView,
     ToggleUserStatusView,
     UpdateUserRoleView,
@@ -49,6 +51,11 @@ urlpatterns = [
         name="user-role-update",
     ),
     path(
+        "profile/details/",
+        ProfileDetailsView.as_view(),
+        name="profile-details",
+    ),
+    path(
         "users/<int:pk>/access-level/",
         UpdateUserAccessLevelView.as_view(),
         name="user-access-level-update",
@@ -82,5 +89,10 @@ urlpatterns = [
         "users/<int:pk>/custom-role/",
         UpdateUserCustomRoleView.as_view(),
         name="user-custom-role-update",
+    ),
+    path(
+        "users/<int:pk>/profile-details/",
+        AdminUserProfileDetailsView.as_view(),
+        name="admin-user-profile-details",
     ),
 ]

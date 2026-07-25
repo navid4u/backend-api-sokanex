@@ -1,11 +1,19 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
 
-from .models import PlatformRole, UpgradeRequest, User
+from .models import PlatformRole, UpgradeRequest, User, UserProfile
+
+
+class UserProfileInline(admin.StackedInline):
+    model = UserProfile
+    extra = 0
+    can_delete = False
+    classes = ("collapse",)
 
 
 @admin.register(User)
 class CustomUserAdmin(UserAdmin):
+    inlines = (UserProfileInline,)
     list_display = (
         "id",
         "username",
@@ -155,4 +163,35 @@ class PlatformRoleAdmin(admin.ModelAdmin):
     list_display = ("id", "name", "slug", "is_active", "created_at")
     list_filter = ("is_active",)
     search_fields = ("name", "slug", "description")
+    readonly_fields = ("created_at", "updated_at")
+
+
+@admin.register(UserProfile)
+class UserProfileAdmin(admin.ModelAdmin):
+    list_display = (
+        "id",
+        "user",
+        "country",
+        "city",
+        "occupation",
+        "monthly_income_range",
+        "risk_tolerance",
+        "updated_at",
+    )
+    list_filter = (
+        "gender",
+        "marital_status",
+        "education_level",
+        "monthly_income_range",
+        "risk_tolerance",
+        "trading_frequency",
+    )
+    search_fields = (
+        "user__username",
+        "user__email",
+        "country",
+        "city",
+        "occupation",
+        "job_title",
+    )
     readonly_fields = ("created_at", "updated_at")
