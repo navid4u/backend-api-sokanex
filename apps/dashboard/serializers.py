@@ -101,6 +101,12 @@ class DashboardCapabilitiesSerializer(
         serializers.BooleanField()
     )
 
+    can_teach_academy = serializers.BooleanField()
+
+    can_manage_academy = serializers.BooleanField()
+
+    can_manage_roles = serializers.BooleanField()
+
 
 class DashboardSerializer(
     serializers.Serializer

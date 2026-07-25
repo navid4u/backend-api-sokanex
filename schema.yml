@@ -4,6 +4,400 @@ info:
   version: 1.0.0
   description: REST API for the Trading Platform React dashboard.
 paths:
+  /api/academy/courses/:
+    get:
+      operationId: academy_courses_list
+      parameters:
+      - in: query
+        name: instructor
+        schema:
+          type: integer
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      - in: query
+        name: status
+        schema:
+          type: string
+          enum:
+          - DRAFT
+          - PUBLISHED
+        description: |-
+          * `DRAFT` - Draft
+          * `PUBLISHED` - Published
+      tags:
+      - academy
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedCourseListList'
+          description: ''
+    post:
+      operationId: academy_courses_create
+      tags:
+      - academy
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CourseWriteRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CourseWriteRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CourseWriteRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CourseWrite'
+          description: ''
+  /api/academy/courses/{slug}/:
+    get:
+      operationId: academy_courses_retrieve
+      parameters:
+      - in: path
+        name: slug
+        schema:
+          type: string
+        required: true
+      tags:
+      - academy
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CourseList'
+          description: ''
+    put:
+      operationId: academy_courses_update
+      parameters:
+      - in: path
+        name: slug
+        schema:
+          type: string
+        required: true
+      tags:
+      - academy
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CourseWriteRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CourseWriteRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CourseWriteRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CourseWrite'
+          description: ''
+    patch:
+      operationId: academy_courses_partial_update
+      parameters:
+      - in: path
+        name: slug
+        schema:
+          type: string
+        required: true
+      tags:
+      - academy
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedCourseWriteRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedCourseWriteRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedCourseWriteRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CourseWrite'
+          description: ''
+    delete:
+      operationId: academy_courses_destroy
+      parameters:
+      - in: path
+        name: slug
+        schema:
+          type: string
+        required: true
+      tags:
+      - academy
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/academy/courses/{slug}/sessions/:
+    get:
+      operationId: academy_courses_sessions_list
+      parameters:
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      - in: path
+        name: slug
+        schema:
+          type: string
+        required: true
+      tags:
+      - academy
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedCourseSessionList'
+          description: ''
+    post:
+      operationId: academy_courses_sessions_create
+      parameters:
+      - in: path
+        name: slug
+        schema:
+          type: string
+        required: true
+      tags:
+      - academy
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CourseSessionRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CourseSessionRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CourseSessionRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CourseSession'
+          description: ''
+  /api/academy/courses/manage/:
+    get:
+      operationId: academy_courses_manage_list
+      parameters:
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      - in: query
+        name: status
+        schema:
+          type: string
+          enum:
+          - DRAFT
+          - PUBLISHED
+        description: |-
+          * `DRAFT` - Draft
+          * `PUBLISHED` - Published
+      tags:
+      - academy
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedCourseListList'
+          description: ''
+  /api/academy/sessions/{id}/:
+    get:
+      operationId: academy_sessions_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - academy
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CourseSession'
+          description: ''
+    put:
+      operationId: academy_sessions_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - academy
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CourseSessionRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CourseSessionRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CourseSessionRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CourseSession'
+          description: ''
+    patch:
+      operationId: academy_sessions_partial_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - academy
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedCourseSessionRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedCourseSessionRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedCourseSessionRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CourseSession'
+          description: ''
+    delete:
+      operationId: academy_sessions_destroy
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - academy
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
   /api/accounts/admin/upgrade-requests/:
     get:
       operationId: accounts_admin_upgrade_requests_list
@@ -191,6 +585,166 @@ paths:
               schema:
                 $ref: '#/components/schemas/Register'
           description: ''
+  /api/accounts/roles/:
+    get:
+      operationId: accounts_roles_list
+      parameters:
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      tags:
+      - accounts
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedPlatformRoleList'
+          description: ''
+    post:
+      operationId: accounts_roles_create
+      tags:
+      - accounts
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PlatformRoleRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PlatformRoleRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PlatformRoleRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlatformRole'
+          description: ''
+  /api/accounts/roles/{slug}/:
+    get:
+      operationId: accounts_roles_retrieve
+      parameters:
+      - in: path
+        name: slug
+        schema:
+          type: string
+        required: true
+      tags:
+      - accounts
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlatformRole'
+          description: ''
+    put:
+      operationId: accounts_roles_update
+      parameters:
+      - in: path
+        name: slug
+        schema:
+          type: string
+        required: true
+      tags:
+      - accounts
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PlatformRoleRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PlatformRoleRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PlatformRoleRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlatformRole'
+          description: ''
+    patch:
+      operationId: accounts_roles_partial_update
+      parameters:
+      - in: path
+        name: slug
+        schema:
+          type: string
+        required: true
+      tags:
+      - accounts
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedPlatformRoleRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedPlatformRoleRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedPlatformRoleRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlatformRole'
+          description: ''
+    delete:
+      operationId: accounts_roles_destroy
+      parameters:
+      - in: path
+        name: slug
+        schema:
+          type: string
+        required: true
+      tags:
+      - accounts
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
   /api/accounts/upgrade-requests/:
     get:
       operationId: accounts_upgrade_requests_list
@@ -259,6 +813,26 @@ paths:
     get:
       operationId: accounts_users_list
       parameters:
+      - in: query
+        name: access_level
+        schema:
+          type: integer
+          enum:
+          - 1
+          - 2
+          - 3
+          - 4
+          - 5
+        description: |-
+          * `1` - Level 1
+          * `2` - Level 2
+          * `3` - Level 3
+          * `4` - Level 4
+          * `5` - Level 5
+      - in: query
+        name: custom_role
+        schema:
+          type: integer
       - in: query
         name: is_active
         schema:
@@ -330,6 +904,37 @@ paths:
           multipart/form-data:
             schema:
               $ref: '#/components/schemas/PatchedUserAccessLevelUpdateRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserList'
+          description: ''
+  /api/accounts/users/{id}/custom-role/:
+    patch:
+      operationId: accounts_users_custom_role_partial_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - accounts
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedUserCustomRoleUpdateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedUserCustomRoleUpdateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedUserCustomRoleUpdateRequest'
       security:
       - jwtAuth: []
       responses:
@@ -3272,6 +3877,198 @@ components:
       description: |-
         * `DRAFT` - Draft
         * `PUBLISHED` - Published
+    CourseList:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        title:
+          type: string
+          maxLength: 250
+        slug:
+          oneOf:
+          - type: string
+            pattern: ^[-\w]+$
+            maxLength: 280
+          - type: string
+            maxLength: 0
+        description:
+          type: string
+        cover_image:
+          type: string
+          format: uri
+          nullable: true
+        instructor:
+          type: string
+          readOnly: true
+        status:
+          $ref: '#/components/schemas/ContentStatusEnum'
+        allowed_levels:
+          type: array
+          items:
+            type: integer
+            maximum: 5
+            minimum: 1
+        sessions_count:
+          type: integer
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - id
+      - instructor
+      - sessions_count
+      - title
+      - updated_at
+    CourseSession:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        course:
+          type: string
+          readOnly: true
+        title:
+          type: string
+          maxLength: 250
+        order:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        video_url:
+          oneOf:
+          - type: string
+            format: uri
+            maxLength: 500
+          - type: string
+            maxLength: 0
+        text:
+          type: string
+        image:
+          type: string
+          format: uri
+          nullable: true
+        is_published:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - course
+      - created_at
+      - id
+      - order
+      - title
+      - updated_at
+    CourseSessionRequest:
+      type: object
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 250
+        order:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        video_url:
+          oneOf:
+          - type: string
+            format: uri
+            maxLength: 500
+          - type: string
+            maxLength: 0
+        text:
+          type: string
+        image:
+          type: string
+          format: binary
+          nullable: true
+        is_published:
+          type: boolean
+      required:
+      - order
+      - title
+    CourseWrite:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        title:
+          type: string
+          maxLength: 250
+        slug:
+          type: string
+          readOnly: true
+          pattern: ^[-\w]+$
+        description:
+          type: string
+        cover_image:
+          type: string
+          format: uri
+          nullable: true
+        status:
+          $ref: '#/components/schemas/ContentStatusEnum'
+        allowed_levels:
+          type: array
+          items:
+            type: integer
+            maximum: 5
+            minimum: 1
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - id
+      - slug
+      - title
+      - updated_at
+    CourseWriteRequest:
+      type: object
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 250
+        description:
+          type: string
+        cover_image:
+          type: string
+          format: binary
+          nullable: true
+        status:
+          $ref: '#/components/schemas/ContentStatusEnum'
+        allowed_levels:
+          type: array
+          items:
+            type: integer
+            maximum: 5
+            minimum: 1
+      required:
+      - title
     CustomTokenObtainPairRequest:
       type: object
       properties:
@@ -3345,11 +4142,20 @@ components:
           type: boolean
         can_manage_users:
           type: boolean
+        can_teach_academy:
+          type: boolean
+        can_manage_academy:
+          type: boolean
+        can_manage_roles:
+          type: boolean
       required:
+      - can_manage_academy
       - can_manage_content
+      - can_manage_roles
       - can_manage_users
       - can_review_signals
       - can_submit_signals
+      - can_teach_academy
     DashboardResponse:
       type: object
       properties:
@@ -3968,6 +4774,52 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/ChatRoom'
+    PaginatedCourseListList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/CourseList'
+    PaginatedCourseSessionList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/CourseSession'
     PaginatedLiveEventListList:
       type: object
       required:
@@ -4037,6 +4889,29 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Notification'
+    PaginatedPlatformRoleList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/PlatformRole'
     PaginatedSignalListList:
       type: object
       required:
@@ -4284,6 +5159,54 @@ components:
           type: boolean
         is_active:
           type: boolean
+    PatchedCourseSessionRequest:
+      type: object
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 250
+        order:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        video_url:
+          oneOf:
+          - type: string
+            format: uri
+            maxLength: 500
+          - type: string
+            maxLength: 0
+        text:
+          type: string
+        image:
+          type: string
+          format: binary
+          nullable: true
+        is_published:
+          type: boolean
+    PatchedCourseWriteRequest:
+      type: object
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 250
+        description:
+          type: string
+        cover_image:
+          type: string
+          format: binary
+          nullable: true
+        status:
+          $ref: '#/components/schemas/ContentStatusEnum'
+        allowed_levels:
+          type: array
+          items:
+            type: integer
+            maximum: 5
+            minimum: 1
     PatchedLiveEventWriteRequest:
       type: object
       properties:
@@ -4331,6 +5254,21 @@ components:
             type: integer
             maximum: 5
             minimum: 1
+    PatchedPlatformRoleRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        description:
+          type: string
+        permissions:
+          type: array
+          items:
+            $ref: '#/components/schemas/PlatformPermissionEnum'
+        is_active:
+          type: boolean
     PatchedProfileUpdateRequest:
       type: object
       properties:
@@ -4399,6 +5337,12 @@ components:
       properties:
         access_level:
           $ref: '#/components/schemas/UserAccessLevelEnum'
+    PatchedUserCustomRoleUpdateRequest:
+      type: object
+      properties:
+        custom_role_id:
+          type: integer
+          nullable: true
     PatchedUserRoleUpdateRequest:
       type: object
       properties:
@@ -4446,6 +5390,97 @@ components:
             type: integer
             maximum: 5
             minimum: 1
+    PlatformPermissionEnum:
+      enum:
+      - CONTENT_MANAGE
+      - CONTENT_VIEW_ALL
+      - SIGNAL_SUBMIT
+      - SIGNAL_REVIEW
+      - ACADEMY_TEACH
+      - ACADEMY_MANAGE
+      - USER_MANAGE
+      - ROLE_MANAGE
+      type: string
+      description: |-
+        * `CONTENT_MANAGE` - Manage content
+        * `CONTENT_VIEW_ALL` - View all content levels
+        * `SIGNAL_SUBMIT` - Submit signals
+        * `SIGNAL_REVIEW` - Review signals
+        * `ACADEMY_TEACH` - Create and teach courses
+        * `ACADEMY_MANAGE` - Manage all academy courses
+        * `USER_MANAGE` - Manage users
+        * `ROLE_MANAGE` - Manage custom roles
+    PlatformRole:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        name:
+          type: string
+          maxLength: 100
+        slug:
+          type: string
+          readOnly: true
+          pattern: ^[-a-zA-Z0-9_]+$
+        description:
+          type: string
+        permissions:
+          type: array
+          items:
+            $ref: '#/components/schemas/PlatformPermissionEnum'
+        is_active:
+          type: boolean
+        users_count:
+          type: integer
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - id
+      - name
+      - permissions
+      - slug
+      - updated_at
+      - users_count
+    PlatformRoleRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        description:
+          type: string
+        permissions:
+          type: array
+          items:
+            $ref: '#/components/schemas/PlatformPermissionEnum'
+        is_active:
+          type: boolean
+      required:
+      - name
+      - permissions
+    PlatformRoleSummary:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        name:
+          type: string
+          maxLength: 100
+        permissions: {}
+      required:
+      - id
+      - name
     ProfileUpdateResponse:
       type: object
       properties:
@@ -4459,6 +5494,9 @@ components:
     Register:
       type: object
       properties:
+        id:
+          type: integer
+          readOnly: true
         username:
           type: string
           description: Required. 150 characters or fewer. Letters, digits and @/./+/-/_
@@ -4479,7 +5517,18 @@ components:
         last_name:
           type: string
           maxLength: 150
+        role:
+          allOf:
+          - $ref: '#/components/schemas/UserRoleEnum'
+          readOnly: true
+        access_level:
+          allOf:
+          - $ref: '#/components/schemas/UserAccessLevelEnum'
+          readOnly: true
       required:
+      - access_level
+      - id
+      - role
       - username
     RegisterRequest:
       type: object
@@ -5002,6 +6051,11 @@ components:
           allOf:
           - $ref: '#/components/schemas/UserAccessLevelEnum'
           readOnly: true
+        custom_role:
+          allOf:
+          - $ref: '#/components/schemas/PlatformRoleSummary'
+          readOnly: true
+          nullable: true
         is_verified:
           type: boolean
           readOnly: true
@@ -5012,6 +6066,7 @@ components:
       required:
       - access_level
       - created_at
+      - custom_role
       - email
       - id
       - is_verified
@@ -5064,12 +6119,18 @@ components:
           - $ref: '#/components/schemas/UserAccessLevelEnum'
           minimum: 0
           maximum: 9223372036854775807
+        custom_role:
+          allOf:
+          - $ref: '#/components/schemas/PlatformRoleSummary'
+          readOnly: true
+          nullable: true
         is_active:
           type: boolean
           title: Active
           description: Designates whether this user should be treated as active. Unselect
             this instead of deleting accounts.
       required:
+      - custom_role
       - id
       - username
     UserRoleEnum:

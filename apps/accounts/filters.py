@@ -12,6 +12,8 @@ class UserFilter(django_filters.FilterSet):
         fields = [
 
             "role",
+            "custom_role",
+            "access_level",
 
             "is_active",
 

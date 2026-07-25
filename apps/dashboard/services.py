@@ -20,16 +20,15 @@ class DashboardService:
         )
 
         can_submit_signals = (
-            is_super_admin
-            or user.role == User.Role.TRADER
+            user.has_platform_permission(
+                User.Permission.SIGNAL_SUBMIT
+            )
         )
 
         can_review_signals = (
-            is_super_admin
-            or user.role in [
-                User.Role.EMPLOYEE,
-                User.Role.ADMIN,
-            ]
+            user.has_platform_permission(
+                User.Permission.SIGNAL_REVIEW
+            )
         )
 
         approved_signals = SignalService.list_signals(user)
@@ -119,11 +118,36 @@ class DashboardService:
                 ),
 
                 "can_manage_content": (
-                    can_review_signals
+                    user.has_platform_permission(
+                        User.Permission.CONTENT_MANAGE
+                    )
                 ),
 
                 "can_manage_users": (
-                    is_super_admin
+                    user.has_platform_permission(
+                        User.Permission.USER_MANAGE
+                    )
+                ),
+
+                "can_teach_academy": (
+                    user.has_platform_permission(
+                        User.Permission.ACADEMY_TEACH
+                    )
+                    or user.has_platform_permission(
+                        User.Permission.ACADEMY_MANAGE
+                    )
+                ),
+
+                "can_manage_academy": (
+                    user.has_platform_permission(
+                        User.Permission.ACADEMY_MANAGE
+                    )
+                ),
+
+                "can_manage_roles": (
+                    user.has_platform_permission(
+                        User.Permission.ROLE_MANAGE
+                    )
                 ),
             },
 

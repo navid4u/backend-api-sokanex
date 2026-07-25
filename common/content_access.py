@@ -6,13 +6,6 @@ from apps.accounts.models import User
 
 
 LEVELS = (1, 2, 3, 4, 5)
-PRIVILEGED_ROLES = (
-    User.Role.EMPLOYEE,
-    User.Role.ADMIN,
-    User.Role.SUPER_ADMIN,
-)
-
-
 class LevelRestrictedContent(models.Model):
     allowed_level_1 = models.BooleanField(default=True)
     allowed_level_2 = models.BooleanField(default=True)
@@ -71,7 +64,9 @@ class AllowedLevelsSerializerMixin(serializers.Serializer):
 def restrict_queryset_for_user(queryset, user):
     if (
         user.is_superuser
-        or user.role in PRIVILEGED_ROLES
+        or user.has_platform_permission(
+            User.Permission.CONTENT_VIEW_ALL
+        )
     ):
         return queryset
 

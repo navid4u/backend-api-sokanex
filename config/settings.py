@@ -76,6 +76,7 @@ INSTALLED_APPS = [
     "apps.chat",
     "apps.livestream",
     "apps.notifications",
+    "apps.academy",
 ]
 
 
@@ -517,6 +518,10 @@ SPECTACULAR_SETTINGS = {
             "apps.accounts.models."
             "User.AccessLevel"
         ),
+        "PlatformPermissionEnum": (
+            "apps.accounts.models."
+            "User.Permission"
+        ),
         "UpgradeRequestTypeEnum": (
             "apps.accounts.models."
             "UpgradeRequest.Type"
@@ -550,7 +555,6 @@ SPECTACULAR_SETTINGS = {
             "apps.livestream.models."
             "LiveEvent.Status"
         ),
-
         "NotificationTypeEnum": (
             "apps.notifications.models."
             "Notification.Type"

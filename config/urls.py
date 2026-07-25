@@ -111,6 +111,10 @@ urlpatterns = [
         "api/chat/",
         include("apps.chat.urls"),
     ),
+    path(
+        "api/academy/",
+        include("apps.academy.urls"),
+    ),
 ]
 
 

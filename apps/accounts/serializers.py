@@ -20,12 +20,27 @@ from common.validators import (
 from common.validators import (
     validate_image_upload,
 )
-from .models import UpgradeRequest
+from .models import PlatformRole, UpgradeRequest
 
 User = get_user_model()
 
 
+class PlatformRoleSummarySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PlatformRole
+        fields = (
+            "id",
+            "name",
+            "permissions",
+        )
+
+
 class UserSerializer(serializers.ModelSerializer):
+    custom_role = PlatformRoleSummarySerializer(
+        read_only=True,
+        allow_null=True,
+    )
+
     class Meta:
         model = User
         fields = (
@@ -38,6 +53,7 @@ class UserSerializer(serializers.ModelSerializer):
             "avatar",
             "role",
             "access_level",
+            "custom_role",
             "is_verified",
             "created_at",
         )
@@ -62,6 +78,7 @@ class CustomTokenObtainPairSerializer(
         token["username"] = user.username
         token["role"] = user.role
         token["access_level"] = user.access_level
+        token["custom_role_id"] = user.custom_role_id
 
         return token
 
@@ -88,11 +105,19 @@ class RegisterSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = (
+            "id",
             "username",
             "email",
             "password",
             "first_name",
             "last_name",
+            "role",
+            "access_level",
+        )
+        read_only_fields = (
+            "id",
+            "role",
+            "access_level",
         )
 
     def create(self, validated_data):
@@ -108,6 +133,8 @@ class RegisterSerializer(serializers.ModelSerializer):
                 "last_name",
                 "",
             ),
+            role=User.Role.USER,
+            access_level=User.AccessLevel.LEVEL_1,
         )
 
     def validate_email(self, value):
@@ -131,6 +158,11 @@ class RegisterSerializer(serializers.ModelSerializer):
 class UserListSerializer(
     serializers.ModelSerializer
 ):
+    custom_role = PlatformRoleSummarySerializer(
+        read_only=True,
+        allow_null=True,
+    )
+
     class Meta:
         model = User
         fields = (
@@ -141,6 +173,7 @@ class UserListSerializer(
             "email",
             "role",
             "access_level",
+            "custom_role",
             "is_active",
         )
 
@@ -156,6 +189,55 @@ class UserRoleUpdateSerializer(
 class UserAccessLevelUpdateSerializer(serializers.Serializer):
     access_level = serializers.ChoiceField(
         choices=User.AccessLevel.choices,
+    )
+
+
+class PlatformRoleSerializer(serializers.ModelSerializer):
+    permissions = serializers.ListField(
+        child=serializers.ChoiceField(
+            choices=User.Permission.choices,
+        ),
+        allow_empty=True,
+    )
+    users_count = serializers.IntegerField(
+        source="users.count",
+        read_only=True,
+    )
+
+    class Meta:
+        model = PlatformRole
+        fields = (
+            "id",
+            "name",
+            "slug",
+            "description",
+            "permissions",
+            "is_active",
+            "users_count",
+            "created_at",
+            "updated_at",
+        )
+        read_only_fields = (
+            "id",
+            "slug",
+            "users_count",
+            "created_at",
+            "updated_at",
+        )
+
+    def validate_permissions(self, value):
+        if len(value) != len(set(value)):
+            raise serializers.ValidationError(
+                "Each permission may only be selected once."
+            )
+        return sorted(value)
+
+
+class UserCustomRoleUpdateSerializer(serializers.Serializer):
+    custom_role_id = serializers.PrimaryKeyRelatedField(
+        source="custom_role",
+        queryset=PlatformRole.objects.filter(is_active=True),
+        allow_null=True,
     )
 
 

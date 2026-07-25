@@ -1,7 +1,7 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
 
-from .models import UpgradeRequest, User
+from .models import PlatformRole, UpgradeRequest, User
 
 
 @admin.register(User)
@@ -12,6 +12,7 @@ class CustomUserAdmin(UserAdmin):
         "email",
         "role",
         "access_level",
+        "custom_role",
         "is_verified",
         "is_active",
         "is_staff",
@@ -21,6 +22,7 @@ class CustomUserAdmin(UserAdmin):
     list_filter = (
         "role",
         "access_level",
+        "custom_role",
         "is_verified",
         "is_active",
         "is_staff",
@@ -74,6 +76,7 @@ class CustomUserAdmin(UserAdmin):
                 "fields": (
                     "role",
                     "access_level",
+                    "custom_role",
                     "is_verified",
                     "is_active",
                 ),
@@ -119,6 +122,7 @@ class CustomUserAdmin(UserAdmin):
                     "phone",
                     "role",
                     "access_level",
+                    "custom_role",
                     "password1",
                     "password2",
                     "is_active",
@@ -144,3 +148,11 @@ class UpgradeRequestAdmin(admin.ModelAdmin):
     list_filter = ("status", "request_type", "requested_level")
     search_fields = ("user__username", "user__email", "message")
     readonly_fields = ("created_at", "updated_at", "reviewed_at")
+
+
+@admin.register(PlatformRole)
+class PlatformRoleAdmin(admin.ModelAdmin):
+    list_display = ("id", "name", "slug", "is_active", "created_at")
+    list_filter = ("is_active",)
+    search_fields = ("name", "slug", "description")
+    readonly_fields = ("created_at", "updated_at")

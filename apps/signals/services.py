@@ -96,11 +96,9 @@ class SignalService:
 
         if (
             user.is_superuser
-            or user.role in [
-                User.Role.EMPLOYEE,
-                User.Role.ADMIN,
-                User.Role.SUPER_ADMIN,
-            ]
+            or user.has_platform_permission(
+                User.Permission.SIGNAL_REVIEW
+            )
         ):
             return queryset
 

@@ -12,11 +12,9 @@ class IsTrader(BasePermission):
         return (
             request.user.is_authenticated
             and (
-                request.user.is_superuser
-                or request.user.role in [
-                    User.Role.TRADER,
-                    User.Role.SUPER_ADMIN,
-                ]
+                request.user.has_platform_permission(
+                    User.Permission.SIGNAL_SUBMIT
+                )
             )
         )
 
@@ -35,6 +33,51 @@ class IsAdmin(BasePermission):
                     User.Role.ADMIN,
                     User.Role.SUPER_ADMIN,
                 ]
+            )
+        )
+
+
+class CanManageUsers(BasePermission):
+    def has_permission(self, request, view):
+        return (
+            request.user.is_authenticated
+            and request.user.has_platform_permission(
+                User.Permission.USER_MANAGE
+            )
+        )
+
+
+class CanManageRoles(BasePermission):
+    def has_permission(self, request, view):
+        return (
+            request.user.is_authenticated
+            and request.user.has_platform_permission(
+                User.Permission.ROLE_MANAGE
+            )
+        )
+
+
+class CanTeachAcademy(BasePermission):
+    def has_permission(self, request, view):
+        return (
+            request.user.is_authenticated
+            and (
+                request.user.has_platform_permission(
+                    User.Permission.ACADEMY_TEACH
+                )
+                or request.user.has_platform_permission(
+                    User.Permission.ACADEMY_MANAGE
+                )
+            )
+        )
+
+
+class CanReviewSignals(BasePermission):
+    def has_permission(self, request, view):
+        return (
+            request.user.is_authenticated
+            and request.user.has_platform_permission(
+                User.Permission.SIGNAL_REVIEW
             )
         )
 
@@ -64,12 +107,9 @@ class IsEmployee(BasePermission):
         return (
             request.user.is_authenticated
             and (
-                request.user.is_superuser
-                or request.user.role in [
-                    User.Role.EMPLOYEE,
-                    User.Role.ADMIN,
-                    User.Role.SUPER_ADMIN,
-                ]
+                request.user.has_platform_permission(
+                    User.Permission.CONTENT_MANAGE
+                )
             )
         )
 
@@ -92,11 +132,9 @@ class IsSignalOwnerOrEmployee(BasePermission):
             user.is_authenticated
             and (
                 user.is_superuser
-                or user.role in [
-                    User.Role.EMPLOYEE,
-                    User.Role.ADMIN,
-                    User.Role.SUPER_ADMIN,
-                ]
+                or user.has_platform_permission(
+                    User.Permission.CONTENT_MANAGE
+                )
                 or (
                     user.role == User.Role.TRADER
                     and obj.created_by_id == user.id

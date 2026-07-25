@@ -20,6 +20,7 @@ from rest_framework.filters import (
 )
 from common.permissions import (
     IsEmployee,
+    CanReviewSignals,
     IsSignalOwnerOrEmployee,
     IsTrader,
 )
@@ -136,7 +137,7 @@ class PendingSignalListView(
 
     permission_classes = [
         IsAuthenticated,
-        IsEmployee,
+        CanReviewSignals,
     ]
 
     serializer_class = SignalListSerializer
@@ -173,7 +174,7 @@ class ApproveSignalView(APIView):
 
     permission_classes = [
         IsAuthenticated,
-        IsEmployee,
+        CanReviewSignals,
     ]
 
     @extend_schema(
@@ -208,7 +209,7 @@ class RejectSignalView(APIView):
 
     permission_classes = [
         IsAuthenticated,
-        IsEmployee,
+        CanReviewSignals,
     ]
 
     @extend_schema(

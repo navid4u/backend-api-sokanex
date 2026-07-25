@@ -9,7 +9,9 @@ class UserService:
 
     @staticmethod
     def list_users():
-        return User.objects.all().order_by("-created_at")
+        return User.objects.select_related(
+            "custom_role"
+        ).order_by("-created_at")
 
     @staticmethod
     def toggle_active(user, performed_by):
@@ -75,6 +77,12 @@ class UserService:
     def update_access_level(user, access_level):
         user.access_level = access_level
         user.save(update_fields=["access_level", "updated_at"])
+        return user
+
+    @staticmethod
+    def update_custom_role(user, custom_role):
+        user.custom_role = custom_role
+        user.save(update_fields=["custom_role", "updated_at"])
         return user
 
     @staticmethod

@@ -10,6 +10,9 @@ from .views import (
     MyUpgradeRequestListCreateView,
     UpgradeRequestManagementListView,
     UpgradeRequestReviewView,
+    PlatformRoleListCreateView,
+    PlatformRoleDetailView,
+    UpdateUserCustomRoleView,
     UserListView,
 )
 
@@ -64,5 +67,20 @@ urlpatterns = [
         "admin/upgrade-requests/<int:pk>/review/",
         UpgradeRequestReviewView.as_view(),
         name="upgrade-request-review",
+    ),
+    path(
+        "roles/",
+        PlatformRoleListCreateView.as_view(),
+        name="platform-role-list-create",
+    ),
+    path(
+        "roles/<str:slug>/",
+        PlatformRoleDetailView.as_view(),
+        name="platform-role-detail",
+    ),
+    path(
+        "users/<int:pk>/custom-role/",
+        UpdateUserCustomRoleView.as_view(),
+        name="user-custom-role-update",
     ),
 ]

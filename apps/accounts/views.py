@@ -33,6 +33,8 @@ from rest_framework_simplejwt.views import (
 )
 
 from common.permissions import (
+    CanManageRoles,
+    CanManageUsers,
     IsAdmin,
     IsSuperAdmin,
     IsTrader,
@@ -44,15 +46,17 @@ from .serializers import (
     CustomTokenObtainPairSerializer,
     LogoutSerializer,
     ProfileUpdateSerializer,
+    PlatformRoleSerializer,
     RegisterSerializer,
     UserListSerializer,
     UserRoleUpdateSerializer,
     UserAccessLevelUpdateSerializer,
+    UserCustomRoleUpdateSerializer,
     UserSerializer,
     UpgradeRequestReviewSerializer,
     UpgradeRequestSerializer,
 )
-from .models import UpgradeRequest
+from .models import PlatformRole, UpgradeRequest
 from .services import UserService
 
 
@@ -185,7 +189,7 @@ class UserListView(
 ):
     permission_classes = [
         IsAuthenticated,
-        IsAdmin,
+        CanManageUsers,
     ]
 
     serializer_class = UserListSerializer
@@ -304,7 +308,7 @@ class UpdateUserRoleView(APIView):
 
 
 class UpdateUserAccessLevelView(APIView):
-    permission_classes = [IsAuthenticated, IsAdmin]
+    permission_classes = [IsAuthenticated, CanManageUsers]
 
     @extend_schema(
         request=UserAccessLevelUpdateSerializer,
@@ -339,7 +343,7 @@ class MyUpgradeRequestListCreateView(generics.ListCreateAPIView):
 
 
 class UpgradeRequestManagementListView(generics.ListAPIView):
-    permission_classes = [IsAuthenticated, IsAdmin]
+    permission_classes = [IsAuthenticated, CanManageUsers]
     serializer_class = AdminUpgradeRequestSerializer
     filter_backends = [DjangoFilterBackend, SearchFilter]
     filterset_fields = ["status", "request_type", "requested_level"]
@@ -357,7 +361,7 @@ class UpgradeRequestManagementListView(generics.ListAPIView):
 
 
 class UpgradeRequestReviewView(APIView):
-    permission_classes = [IsAuthenticated, IsAdmin]
+    permission_classes = [IsAuthenticated, CanManageUsers]
 
     @extend_schema(
         request=UpgradeRequestReviewSerializer,
@@ -376,5 +380,44 @@ class UpgradeRequestReviewView(APIView):
             {
                 "message": "Upgrade request reviewed.",
                 "request": AdminUpgradeRequestSerializer(reviewed).data,
+            }
+        )
+
+
+class PlatformRoleListCreateView(generics.ListCreateAPIView):
+    permission_classes = [IsAuthenticated, CanManageRoles]
+    serializer_class = PlatformRoleSerializer
+    queryset = PlatformRole.objects.all()
+
+    def perform_create(self, serializer):
+        serializer.save(created_by=self.request.user)
+
+
+class PlatformRoleDetailView(generics.RetrieveUpdateDestroyAPIView):
+    permission_classes = [IsAuthenticated, CanManageRoles]
+    serializer_class = PlatformRoleSerializer
+    queryset = PlatformRole.objects.all()
+    lookup_field = "slug"
+
+
+class UpdateUserCustomRoleView(APIView):
+    permission_classes = [IsAuthenticated, CanManageUsers]
+
+    @extend_schema(
+        request=UserCustomRoleUpdateSerializer,
+        responses=UserListSerializer,
+    )
+    def patch(self, request, pk):
+        user = get_object_or_404(User, pk=pk)
+        serializer = UserCustomRoleUpdateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        UserService.update_custom_role(
+            user,
+            serializer.validated_data["custom_role"],
+        )
+        return Response(
+            {
+                "message": "User custom role updated.",
+                "user": UserListSerializer(user).data,
             }
         )
