@@ -6,6 +6,7 @@ from drf_spectacular.utils import (
 )
 from rest_framework import (
     generics,
+    mixins,
     serializers,
     status,
 )
@@ -111,19 +112,39 @@ class NotificationUnreadCountView(APIView):
 
 
 class NotificationDetailView(
-    generics.RetrieveAPIView
+    mixins.RetrieveModelMixin,
+    mixins.UpdateModelMixin,
+    generics.GenericAPIView,
 ):
-
-    permission_classes = [IsAuthenticated]
-
     serializer_class = NotificationSerializer
 
+    def get_permissions(self):
+        permissions = [IsAuthenticated()]
+        if self.request.method == "PATCH":
+            permissions.append(IsEmployee())
+        return permissions
+
     def get_queryset(self):
+        if self.request.method == "PATCH":
+            return Notification.objects.select_related(
+                "created_by",
+                "recipient",
+            )
         return (
             NotificationService
             .visible_notifications(
                 self.request.user
             )
+        )
+
+    def get(self, request, *args, **kwargs):
+        return self.retrieve(request, *args, **kwargs)
+
+    def patch(self, request, *args, **kwargs):
+        return self.partial_update(
+            request,
+            *args,
+            **kwargs,
         )
 
 

@@ -205,3 +205,22 @@ class AcademyAndCustomRoleAPITests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         course.refresh_from_db()
         self.assertEqual(course.title, "Admin edited")
+
+    def test_course_returns_instructor_real_name(self):
+        self.teacher.first_name = "Ali"
+        self.teacher.last_name = "Karimi"
+        self.teacher.save(
+            update_fields=["first_name", "last_name"]
+        )
+        Course.objects.create(
+            title="Named instructor course",
+            instructor=self.teacher,
+            status=Course.Status.PUBLISHED,
+        )
+        self.authenticate(self.level_one)
+        response = self.client.get(
+            reverse("academy-course-list-create")
+        )
+        course = response.data["results"][0]
+        self.assertEqual(course["instructor"], self.teacher.username)
+        self.assertEqual(course["instructor_name"], "Ali Karimi")

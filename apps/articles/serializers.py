@@ -33,7 +33,9 @@ class ArticleListSerializer(
     author = serializers.CharField(
         source="author.username",
         read_only=True,
+        allow_null=True,
     )
+    author_name = serializers.SerializerMethodField()
 
     category = CategorySerializer(
         read_only=True,
@@ -50,10 +52,19 @@ class ArticleListSerializer(
             "cover_image",
             "category",
             "author",
+            "author_name",
             "status",
             "allowed_levels",
             "published_at",
             "created_at",
+        )
+
+    def get_author_name(self, obj) -> str | None:
+        if not obj.author:
+            return None
+        return (
+            obj.author.get_full_name().strip()
+            or obj.author.username
         )
 
 

@@ -514,3 +514,82 @@ class NotificationAPITests(APITestCase):
             count_response.data["unread_count"],
             0,
         )
+
+    def test_employee_can_patch_any_notification(self):
+        self.authenticate(self.employee)
+        url = reverse(
+            "notification-detail",
+            kwargs={"pk": self.personal_notification.pk},
+        )
+        response = self.client.patch(
+            url,
+            {
+                "title": "Updated personal notification",
+                "message": "Updated by content manager",
+                "target_url": "/updated-target",
+                "is_active": False,
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.personal_notification.refresh_from_db()
+        self.assertEqual(
+            self.personal_notification.title,
+            "Updated personal notification",
+        )
+        self.assertFalse(self.personal_notification.is_active)
+
+    def test_customer_cannot_patch_notification(self):
+        self.authenticate(self.customer)
+        response = self.client.patch(
+            reverse(
+                "notification-detail",
+                kwargs={"pk": self.global_notification.pk},
+            ),
+            {"title": "Unauthorized update"},
+            format="json",
+        )
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_403_FORBIDDEN,
+        )
+
+    def test_patch_cannot_mix_existing_recipient_and_target_role(self):
+        self.authenticate(self.employee)
+        response = self.client.patch(
+            reverse(
+                "notification-detail",
+                kwargs={"pk": self.personal_notification.pk},
+            ),
+            {"target_role": User.Role.USER},
+            format="json",
+        )
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_400_BAD_REQUEST,
+        )
+        self.assertIn(
+            "non_field_errors",
+            response.data["errors"],
+        )
+
+    def test_patch_can_replace_recipient_with_target_role(self):
+        self.authenticate(self.employee)
+        response = self.client.patch(
+            reverse(
+                "notification-detail",
+                kwargs={"pk": self.personal_notification.pk},
+            ),
+            {
+                "recipient": None,
+                "target_role": User.Role.USER,
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.personal_notification.refresh_from_db()
+        self.assertIsNone(self.personal_notification.recipient)
+        self.assertEqual(
+            self.personal_notification.target_role,
+            User.Role.USER,
+        )

@@ -867,3 +867,21 @@ class ArticleAPITests(APITestCase):
             self.published_article.title,
             "Published article",
         )
+
+    def test_article_returns_author_real_name(self):
+        self.employee.first_name = "Sara"
+        self.employee.last_name = "Ahmadi"
+        self.employee.save(
+            update_fields=["first_name", "last_name"]
+        )
+        self.authenticate(self.user)
+        response = self.client.get(
+            reverse("article-list-create")
+        )
+        article = next(
+            item
+            for item in response.data["results"]
+            if item["id"] == self.published_article.pk
+        )
+        self.assertEqual(article["author"], self.employee.username)
+        self.assertEqual(article["author_name"], "Sara Ahmadi")

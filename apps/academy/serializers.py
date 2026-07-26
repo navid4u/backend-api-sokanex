@@ -14,6 +14,7 @@ class CourseListSerializer(
         source="instructor.username",
         read_only=True,
     )
+    instructor_name = serializers.SerializerMethodField()
     sessions_count = serializers.IntegerField(
         source="sessions.count",
         read_only=True,
@@ -28,6 +29,7 @@ class CourseListSerializer(
             "description",
             "cover_image",
             "instructor",
+            "instructor_name",
             "status",
             "allowed_levels",
             "sessions_count",
@@ -35,11 +37,23 @@ class CourseListSerializer(
             "updated_at",
         )
 
+    def get_instructor_name(self, obj) -> str:
+        return (
+            obj.instructor.get_full_name().strip()
+            or obj.instructor.username
+        )
+
 
 class CourseWriteSerializer(
     AllowedLevelsSerializerMixin,
     serializers.ModelSerializer,
 ):
+    instructor = serializers.CharField(
+        source="instructor.username",
+        read_only=True,
+    )
+    instructor_name = serializers.SerializerMethodField()
+
     class Meta:
         model = Course
         fields = (
@@ -48,6 +62,8 @@ class CourseWriteSerializer(
             "slug",
             "description",
             "cover_image",
+            "instructor",
+            "instructor_name",
             "status",
             "allowed_levels",
             "created_at",
@@ -56,8 +72,16 @@ class CourseWriteSerializer(
         read_only_fields = (
             "id",
             "slug",
+            "instructor",
+            "instructor_name",
             "created_at",
             "updated_at",
+        )
+
+    def get_instructor_name(self, obj) -> str:
+        return (
+            obj.instructor.get_full_name().strip()
+            or obj.instructor.username
         )
 
     def validate_cover_image(self, value):

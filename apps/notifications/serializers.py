@@ -30,7 +30,9 @@ class NotificationSerializer(
             "target_url",
             "created_by",
             "is_read",
+            "is_active",
             "created_at",
+            "updated_at",
         )
 
         read_only_fields = (
@@ -38,6 +40,7 @@ class NotificationSerializer(
             "created_by",
             "is_read",
             "created_at",
+            "updated_at",
         )
 
     def validate_target_role(self, value):
@@ -59,9 +62,18 @@ class NotificationSerializer(
         )
 
     def validate(self, attrs):
+        instance = self.instance
+        recipient = attrs.get(
+            "recipient",
+            getattr(instance, "recipient", None),
+        )
+        target_role = attrs.get(
+            "target_role",
+            getattr(instance, "target_role", ""),
+        )
         if (
-            attrs.get("recipient")
-            and attrs.get("target_role")
+            recipient
+            and target_role
         ):
             raise serializers.ValidationError(
                 (

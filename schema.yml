@@ -2477,6 +2477,36 @@ paths:
               schema:
                 $ref: '#/components/schemas/Notification'
           description: ''
+    patch:
+      operationId: notifications_partial_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - notifications
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedNotificationRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedNotificationRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedNotificationRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Notification'
+          description: ''
   /api/notifications/{id}/read/:
     post:
       operationId: notifications_read_create
@@ -3600,6 +3630,11 @@ components:
         author:
           type: string
           readOnly: true
+          nullable: true
+        author_name:
+          type: string
+          nullable: true
+          readOnly: true
         status:
           $ref: '#/components/schemas/ContentStatusEnum'
         allowed_levels:
@@ -3624,6 +3659,7 @@ components:
           readOnly: true
       required:
       - author
+      - author_name
       - category
       - content
       - created_at
@@ -3659,6 +3695,11 @@ components:
         author:
           type: string
           readOnly: true
+          nullable: true
+        author_name:
+          type: string
+          nullable: true
+          readOnly: true
         status:
           $ref: '#/components/schemas/ContentStatusEnum'
         allowed_levels:
@@ -3677,6 +3718,7 @@ components:
           readOnly: true
       required:
       - author
+      - author_name
       - category
       - created_at
       - id
@@ -4185,6 +4227,9 @@ components:
         instructor:
           type: string
           readOnly: true
+        instructor_name:
+          type: string
+          readOnly: true
         status:
           $ref: '#/components/schemas/ContentStatusEnum'
         allowed_levels:
@@ -4208,6 +4253,7 @@ components:
       - created_at
       - id
       - instructor
+      - instructor_name
       - sessions_count
       - title
       - updated_at
@@ -4307,6 +4353,12 @@ components:
           type: string
           format: uri
           nullable: true
+        instructor:
+          type: string
+          readOnly: true
+        instructor_name:
+          type: string
+          readOnly: true
         status:
           $ref: '#/components/schemas/ContentStatusEnum'
         allowed_levels:
@@ -4326,6 +4378,8 @@ components:
       required:
       - created_at
       - id
+      - instructor
+      - instructor_name
       - slug
       - title
       - updated_at
@@ -4948,7 +5002,13 @@ components:
         is_read:
           type: boolean
           readOnly: true
+        is_active:
+          type: boolean
         created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
           type: string
           format: date-time
           readOnly: true
@@ -4959,6 +5019,7 @@ components:
       - is_read
       - message
       - title
+      - updated_at
     NotificationRequest:
       type: object
       properties:
@@ -4980,6 +5041,8 @@ components:
         target_url:
           type: string
           maxLength: 500
+        is_active:
+          type: boolean
       required:
       - message
       - title
@@ -5648,6 +5711,29 @@ components:
             type: integer
             maximum: 5
             minimum: 1
+    PatchedNotificationRequest:
+      type: object
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 200
+        message:
+          type: string
+          minLength: 1
+        notification_type:
+          $ref: '#/components/schemas/NotificationTypeEnum'
+        recipient:
+          type: integer
+          nullable: true
+        target_role:
+          type: string
+          maxLength: 20
+        target_url:
+          type: string
+          maxLength: 500
+        is_active:
+          type: boolean
     PatchedPlatformRoleRequest:
       type: object
       properties:
