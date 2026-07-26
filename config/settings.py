@@ -36,7 +36,7 @@ DEBUG = config(
 
 ALLOWED_HOSTS = get_list_setting(
     "ALLOWED_HOSTS",
-    "127.0.0.1,localhost",
+    "127.0.0.1,localhost,api.sokanex.com",
 )
 
 
@@ -394,7 +394,10 @@ CORS_ALLOWED_ORIGINS = get_list_setting(
     "CORS_ALLOWED_ORIGINS",
     (
         "http://localhost:3000,"
-        "http://localhost:5173"
+        "http://localhost:5173,"
+        "http://127.0.0.1:5173,"
+        "https://sokanex.com,"
+        "https://www.sokanex.com"
     ),
 )
 
@@ -402,7 +405,10 @@ CSRF_TRUSTED_ORIGINS = get_list_setting(
     "CSRF_TRUSTED_ORIGINS",
     (
         "http://localhost:3000,"
-        "http://localhost:5173"
+        "http://localhost:5173,"
+        "http://127.0.0.1:5173,"
+        "https://sokanex.com,"
+        "https://www.sokanex.com"
     ),
 )
 
