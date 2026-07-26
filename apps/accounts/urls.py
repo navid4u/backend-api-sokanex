@@ -16,6 +16,7 @@ from .views import (
     PlatformRoleDetailView,
     UpdateUserCustomRoleView,
     UserListView,
+    UserDetailView,
 )
 
 
@@ -39,6 +40,11 @@ urlpatterns = [
         "users/",
         UserListView.as_view(),
         name="user-list",
+    ),
+    path(
+        "users/<int:pk>/",
+        UserDetailView.as_view(),
+        name="user-detail",
     ),
     path(
         "users/<int:pk>/toggle/",

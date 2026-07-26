@@ -176,11 +176,204 @@ class UserListSerializer(
             "first_name",
             "last_name",
             "email",
+            "phone",
             "role",
             "access_level",
             "custom_role",
             "is_active",
+            "is_verified",
+            "created_at",
         )
+
+
+class AdminUserWriteSerializer(serializers.ModelSerializer):
+    password = serializers.CharField(
+        write_only=True,
+        required=False,
+        trim_whitespace=False,
+        validators=[validate_password],
+    )
+
+    class Meta:
+        model = User
+        fields = (
+            "id", "username", "email", "first_name", "last_name",
+            "phone", "password", "role", "access_level",
+            "custom_role", "is_active", "is_verified",
+        )
+        read_only_fields = ("id",)
+
+    def validate(self, attrs):
+        actor = self.context["request"].user
+        target = self.instance
+        actor_is_super_admin = (
+            actor.is_superuser
+            or actor.role == User.Role.SUPER_ADMIN
+        )
+        actor_is_system_admin = (
+            actor_is_super_admin
+            or actor.role == User.Role.ADMIN
+        )
+
+        if target and target.pk == actor.pk:
+            protected_fields = (
+                "role",
+                "access_level",
+                "custom_role",
+                "is_active",
+                "is_verified",
+            )
+            changed_fields = [
+                field
+                for field in protected_fields
+                if field in attrs
+                and attrs[field] != getattr(target, field)
+            ]
+            if changed_fields:
+                raise serializers.ValidationError(
+                    {
+                        field: (
+                            "You cannot change this field on your "
+                            "own account through user management."
+                        )
+                        for field in changed_fields
+                    }
+                )
+
+        if (
+            target
+            and (
+                target.is_superuser
+                or target.role in (
+                    User.Role.SUPER_ADMIN,
+                    User.Role.ADMIN,
+                )
+            )
+            and target.pk != actor.pk
+            and not actor_is_super_admin
+        ):
+            raise serializers.ValidationError(
+                "Only a super admin can edit an administrator account."
+            )
+
+        requested_role = attrs.get(
+            "role",
+            getattr(target, "role", User.Role.USER),
+        )
+        if (
+            requested_role in (
+                User.Role.SUPER_ADMIN,
+                User.Role.ADMIN,
+            )
+            and not actor_is_super_admin
+        ):
+            raise serializers.ValidationError(
+                {
+                    "role": (
+                        "Only a super admin can assign an "
+                        "administrator role."
+                    )
+                }
+            )
+
+        if (
+            not actor_is_system_admin
+            and requested_role != User.Role.USER
+        ):
+            raise serializers.ValidationError(
+                {
+                    "role": (
+                        "Delegated user managers can only assign "
+                        "the USER system role."
+                    )
+                }
+            )
+
+        requested_custom_role = attrs.get(
+            "custom_role",
+            getattr(target, "custom_role", None),
+        )
+        if requested_custom_role and not actor_is_system_admin:
+            unauthorized_permissions = [
+                permission
+                for permission in requested_custom_role.permissions
+                if not actor.has_platform_permission(permission)
+            ]
+            if unauthorized_permissions:
+                raise serializers.ValidationError(
+                    {
+                        "custom_role": (
+                            "You cannot assign a role containing "
+                            "permissions you do not have."
+                        )
+                    }
+                )
+
+        if not target and not attrs.get("password"):
+            raise serializers.ValidationError(
+                {"password": "Password is required."}
+            )
+        return attrs
+
+    def validate_username(self, value):
+        queryset = User.objects.filter(username__iexact=value.strip())
+        if self.instance:
+            queryset = queryset.exclude(pk=self.instance.pk)
+        if queryset.exists():
+            raise serializers.ValidationError(
+                "A user with this username already exists."
+            )
+        return value.strip()
+
+    def validate_email(self, value):
+        normalized_email = value.strip().lower()
+        if not normalized_email:
+            return normalized_email
+        queryset = User.objects.filter(email__iexact=normalized_email)
+        if self.instance:
+            queryset = queryset.exclude(pk=self.instance.pk)
+        if queryset.exists():
+            raise serializers.ValidationError(
+                "A user with this email already exists."
+            )
+        return normalized_email
+
+    def validate_phone(self, value):
+        if value in (None, ""):
+            return None
+        normalized_phone = value.strip()
+        queryset = User.objects.filter(phone=normalized_phone)
+        if self.instance:
+            queryset = queryset.exclude(pk=self.instance.pk)
+        if queryset.exists():
+            raise serializers.ValidationError(
+                "A user with this phone number already exists."
+            )
+        return normalized_phone
+
+    def create(self, validated_data):
+        password = validated_data.pop("password")
+        with transaction.atomic():
+            user = User(**validated_data)
+            user.set_password(password)
+            user.save()
+            UserProfile.objects.create(user=user)
+            return user
+
+    def update(self, instance, validated_data):
+        password = validated_data.pop("password", None)
+        for field, value in validated_data.items():
+            setattr(instance, field, value)
+        if password:
+            instance.set_password(password)
+        instance.save()
+        return instance
+
+    def to_representation(self, instance):
+        return UserListSerializer(
+            instance,
+            context=self.context,
+        ).data
 
 
 class UserRoleUpdateSerializer(

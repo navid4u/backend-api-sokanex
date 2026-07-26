@@ -920,6 +920,127 @@ paths:
               schema:
                 $ref: '#/components/schemas/PaginatedUserListList'
           description: ''
+    post:
+      operationId: accounts_users_create
+      tags:
+      - accounts
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdminUserWriteRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/AdminUserWriteRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/AdminUserWriteRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminUserWrite'
+          description: ''
+  /api/accounts/users/{id}/:
+    get:
+      operationId: accounts_users_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - accounts
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserList'
+          description: ''
+    put:
+      operationId: accounts_users_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - accounts
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdminUserWriteRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/AdminUserWriteRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/AdminUserWriteRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminUserWrite'
+          description: ''
+    patch:
+      operationId: accounts_users_partial_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - accounts
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedAdminUserWriteRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedAdminUserWriteRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedAdminUserWriteRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminUserWrite'
+          description: ''
+    delete:
+      operationId: accounts_users_destroy
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - accounts
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
   /api/accounts/users/{id}/access-level/:
     patch:
       operationId: accounts_users_access_level_partial_update
@@ -3342,6 +3463,107 @@ components:
       - status
       - updated_at
       - user
+    AdminUserWrite:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        username:
+          type: string
+          description: Required. 150 characters or fewer. Letters, digits and @/./+/-/_
+            only.
+          pattern: ^[\w.@+-]+$
+          maxLength: 150
+        email:
+          title: Email address
+          oneOf:
+          - type: string
+            format: email
+            maxLength: 254
+          - type: string
+            maxLength: 0
+        first_name:
+          type: string
+          maxLength: 150
+        last_name:
+          type: string
+          maxLength: 150
+        phone:
+          type: string
+          nullable: true
+          maxLength: 20
+        role:
+          $ref: '#/components/schemas/UserRoleEnum'
+        access_level:
+          allOf:
+          - $ref: '#/components/schemas/UserAccessLevelEnum'
+          minimum: 0
+          maximum: 9223372036854775807
+        custom_role:
+          type: integer
+          nullable: true
+        is_active:
+          type: boolean
+          title: Active
+          description: Designates whether this user should be treated as active. Unselect
+            this instead of deleting accounts.
+        is_verified:
+          type: boolean
+      required:
+      - id
+      - username
+    AdminUserWriteRequest:
+      type: object
+      properties:
+        username:
+          type: string
+          minLength: 1
+          description: Required. 150 characters or fewer. Letters, digits and @/./+/-/_
+            only.
+          pattern: ^[\w.@+-]+$
+          maxLength: 150
+        email:
+          title: Email address
+          oneOf:
+          - type: string
+            format: email
+            maxLength: 254
+          - type: string
+            maxLength: 0
+        first_name:
+          type: string
+          maxLength: 150
+        last_name:
+          type: string
+          maxLength: 150
+        phone:
+          type: string
+          nullable: true
+          maxLength: 20
+        password:
+          type: string
+          writeOnly: true
+          minLength: 1
+        role:
+          $ref: '#/components/schemas/UserRoleEnum'
+        access_level:
+          allOf:
+          - $ref: '#/components/schemas/UserAccessLevelEnum'
+          minimum: 0
+          maximum: 9223372036854775807
+        custom_role:
+          type: integer
+          nullable: true
+        is_active:
+          type: boolean
+          title: Active
+          description: Designates whether this user should be treated as active. Unselect
+            this instead of deleting accounts.
+        is_verified:
+          type: boolean
+      required:
+      - username
     ApproveSignalResponse:
       type: object
       properties:
@@ -5173,6 +5395,55 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/VideoList'
+    PatchedAdminUserWriteRequest:
+      type: object
+      properties:
+        username:
+          type: string
+          minLength: 1
+          description: Required. 150 characters or fewer. Letters, digits and @/./+/-/_
+            only.
+          pattern: ^[\w.@+-]+$
+          maxLength: 150
+        email:
+          title: Email address
+          oneOf:
+          - type: string
+            format: email
+            maxLength: 254
+          - type: string
+            maxLength: 0
+        first_name:
+          type: string
+          maxLength: 150
+        last_name:
+          type: string
+          maxLength: 150
+        phone:
+          type: string
+          nullable: true
+          maxLength: 20
+        password:
+          type: string
+          writeOnly: true
+          minLength: 1
+        role:
+          $ref: '#/components/schemas/UserRoleEnum'
+        access_level:
+          allOf:
+          - $ref: '#/components/schemas/UserAccessLevelEnum'
+          minimum: 0
+          maximum: 9223372036854775807
+        custom_role:
+          type: integer
+          nullable: true
+        is_active:
+          type: boolean
+          title: Active
+          description: Designates whether this user should be treated as active. Unselect
+            this instead of deleting accounts.
+        is_verified:
+          type: boolean
     PatchedArticleWriteRequest:
       type: object
       properties:
@@ -6374,6 +6645,10 @@ components:
             maxLength: 254
           - type: string
             maxLength: 0
+        phone:
+          type: string
+          nullable: true
+          maxLength: 20
         role:
           $ref: '#/components/schemas/UserRoleEnum'
         access_level:
@@ -6391,7 +6666,14 @@ components:
           title: Active
           description: Designates whether this user should be treated as active. Unselect
             this instead of deleting accounts.
+        is_verified:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
       required:
+      - created_at
       - custom_role
       - id
       - username

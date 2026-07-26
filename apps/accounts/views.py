@@ -1,5 +1,6 @@
 from django.contrib.auth import get_user_model
 from django.shortcuts import get_object_or_404
+from django.db.models.deletion import ProtectedError
 from django_filters.rest_framework import (
     DjangoFilterBackend,
 )
@@ -49,6 +50,7 @@ from .serializers import (
     PlatformRoleSerializer,
     RegisterSerializer,
     UserListSerializer,
+    AdminUserWriteSerializer,
     UserRoleUpdateSerializer,
     UserAccessLevelUpdateSerializer,
     UserCustomRoleUpdateSerializer,
@@ -186,14 +188,12 @@ class LogoutView(
 
 
 class UserListView(
-    generics.ListAPIView
+    generics.ListCreateAPIView
 ):
     permission_classes = [
         IsAuthenticated,
         CanManageUsers,
     ]
-
-    serializer_class = UserListSerializer
 
     filter_backends = [
         DjangoFilterBackend,
@@ -209,8 +209,61 @@ class UserListView(
         "last_name",
     ]
 
+    def get_serializer_class(self):
+        if self.request.method == "POST":
+            return AdminUserWriteSerializer
+        return UserListSerializer
+
     def get_queryset(self):
         return UserService.list_users()
+
+
+class UserDetailView(generics.RetrieveUpdateDestroyAPIView):
+    permission_classes = [IsAuthenticated, CanManageUsers]
+    queryset = User.objects.select_related("custom_role")
+
+    def get_serializer_class(self):
+        if self.request.method in ("PUT", "PATCH"):
+            return AdminUserWriteSerializer
+        return UserListSerializer
+
+    def perform_destroy(self, instance):
+        actor = self.request.user
+        actor_is_super_admin = (
+            actor.is_superuser
+            or actor.role == User.Role.SUPER_ADMIN
+        )
+        if instance.pk == actor.pk:
+            raise serializers.ValidationError(
+                {"user": "You cannot delete your own account."}
+            )
+        if (
+            instance.is_superuser
+            or instance.role in (
+                User.Role.SUPER_ADMIN,
+                User.Role.ADMIN,
+            )
+        ) and not actor_is_super_admin:
+            raise serializers.ValidationError(
+                {
+                    "user": (
+                        "Only a super admin can delete an "
+                        "administrator account."
+                    )
+                }
+            )
+        try:
+            instance.delete()
+        except ProtectedError:
+            raise serializers.ValidationError(
+                {
+                    "user": (
+                        "This user owns protected records, such as "
+                        "academy courses. Reassign those records "
+                        "before deleting the account."
+                    )
+                }
+            )
 
 
 class ToggleUserStatusView(APIView):
