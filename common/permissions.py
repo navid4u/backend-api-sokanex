@@ -135,9 +135,6 @@ class IsSignalOwnerOrEmployee(BasePermission):
                 or user.has_platform_permission(
                     User.Permission.CONTENT_MANAGE
                 )
-                or (
-                    user.role == User.Role.TRADER
-                    and obj.created_by_id == user.id
-                )
+                or obj.created_by_id == user.id
             )
         )
