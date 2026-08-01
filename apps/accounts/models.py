@@ -28,6 +28,7 @@ class User(AbstractUser):
         SIGNAL_REVIEW = "SIGNAL_REVIEW", "Review signals"
         ACADEMY_TEACH = "ACADEMY_TEACH", "Create and teach courses"
         ACADEMY_MANAGE = "ACADEMY_MANAGE", "Manage all academy courses"
+        LANDING_MANAGE = "LANDING_MANAGE", "Manage landing page"
         USER_MANAGE = "USER_MANAGE", "Manage users"
         ROLE_MANAGE = "ROLE_MANAGE", "Manage custom roles"
 
@@ -82,6 +83,7 @@ class User(AbstractUser):
                 self.Permission.CONTENT_VIEW_ALL,
                 self.Permission.SIGNAL_REVIEW,
                 self.Permission.ACADEMY_MANAGE,
+                self.Permission.LANDING_MANAGE,
                 self.Permission.USER_MANAGE,
                 self.Permission.ROLE_MANAGE,
             },

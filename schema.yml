@@ -2130,6 +2130,243 @@ paths:
               schema:
                 $ref: '#/components/schemas/DashboardResponse'
           description: ''
+  /api/landing/:
+    get:
+      operationId: landing_retrieve
+      tags:
+      - landing
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublicLandingPage'
+          description: ''
+  /api/landing/manage/page/:
+    get:
+      operationId: landing_manage_page_retrieve
+      tags:
+      - landing
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LandingPage'
+          description: ''
+    put:
+      operationId: landing_manage_page_update
+      tags:
+      - landing
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LandingPageRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/LandingPageRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/LandingPageRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LandingPage'
+          description: ''
+    patch:
+      operationId: landing_manage_page_partial_update
+      tags:
+      - landing
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedLandingPageRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedLandingPageRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedLandingPageRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LandingPage'
+          description: ''
+  /api/landing/manage/sections/:
+    get:
+      operationId: landing_manage_sections_list
+      parameters:
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      tags:
+      - landing
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedLandingSectionList'
+          description: ''
+    post:
+      operationId: landing_manage_sections_create
+      tags:
+      - landing
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LandingSectionRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/LandingSectionRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/LandingSectionRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LandingSection'
+          description: ''
+  /api/landing/manage/sections/{id}/:
+    get:
+      operationId: landing_manage_sections_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - landing
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LandingSection'
+          description: ''
+    put:
+      operationId: landing_manage_sections_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - landing
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LandingSectionRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/LandingSectionRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/LandingSectionRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LandingSection'
+          description: ''
+    patch:
+      operationId: landing_manage_sections_partial_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - landing
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedLandingSectionRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedLandingSectionRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedLandingSectionRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LandingSection'
+          description: ''
+    delete:
+      operationId: landing_manage_sections_destroy
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - landing
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
   /api/livestream/:
     get:
       operationId: livestream_list
@@ -4485,9 +4722,12 @@ components:
           type: boolean
         can_manage_roles:
           type: boolean
+        can_manage_landing:
+          type: boolean
       required:
       - can_manage_academy
       - can_manage_content
+      - can_manage_landing
       - can_manage_roles
       - can_manage_users
       - can_review_signals
@@ -4597,6 +4837,203 @@ components:
       required:
       - membership_role
       - message
+    LandingPage:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        site_key:
+          type: string
+          readOnly: true
+          pattern: ^[-a-zA-Z0-9_]+$
+        site_name:
+          type: string
+          maxLength: 150
+        page_title:
+          type: string
+          maxLength: 250
+        meta_title:
+          type: string
+          maxLength: 250
+        meta_description:
+          type: string
+        canonical_url:
+          oneOf:
+          - type: string
+            format: uri
+            maxLength: 500
+          - type: string
+            maxLength: 0
+        logo:
+          type: string
+          format: uri
+          nullable: true
+        favicon:
+          type: string
+          format: uri
+          nullable: true
+        og_image:
+          type: string
+          format: uri
+          nullable: true
+        support_email:
+          oneOf:
+          - type: string
+            format: email
+            maxLength: 254
+          - type: string
+            maxLength: 0
+        support_phone:
+          type: string
+          maxLength: 30
+        social_links: {}
+        extra_settings: {}
+        is_active:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - id
+      - site_key
+      - updated_at
+    LandingPageRequest:
+      type: object
+      properties:
+        site_name:
+          type: string
+          maxLength: 150
+        page_title:
+          type: string
+          maxLength: 250
+        meta_title:
+          type: string
+          maxLength: 250
+        meta_description:
+          type: string
+        canonical_url:
+          oneOf:
+          - type: string
+            format: uri
+            maxLength: 500
+          - type: string
+            maxLength: 0
+        logo:
+          type: string
+          format: binary
+          nullable: true
+        favicon:
+          type: string
+          format: binary
+          nullable: true
+        og_image:
+          type: string
+          format: binary
+          nullable: true
+        support_email:
+          oneOf:
+          - type: string
+            format: email
+            maxLength: 254
+          - type: string
+            maxLength: 0
+        support_phone:
+          type: string
+          maxLength: 30
+        social_links: {}
+        extra_settings: {}
+        is_active:
+          type: boolean
+    LandingSection:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        key:
+          type: string
+          maxLength: 120
+          pattern: ^[-a-zA-Z0-9_]+$
+        section_type:
+          $ref: '#/components/schemas/SectionTypeEnum'
+        title:
+          type: string
+          maxLength: 250
+        subtitle:
+          type: string
+        content: {}
+        image:
+          type: string
+          format: uri
+          nullable: true
+        cta_label:
+          type: string
+          maxLength: 120
+        cta_url:
+          type: string
+          maxLength: 500
+        display_order:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        is_active:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - id
+      - key
+      - updated_at
+    LandingSectionRequest:
+      type: object
+      properties:
+        key:
+          type: string
+          minLength: 1
+          maxLength: 120
+          pattern: ^[-a-zA-Z0-9_]+$
+        section_type:
+          $ref: '#/components/schemas/SectionTypeEnum'
+        title:
+          type: string
+          maxLength: 250
+        subtitle:
+          type: string
+        content: {}
+        image:
+          type: string
+          format: binary
+          nullable: true
+        cta_label:
+          type: string
+          maxLength: 120
+        cta_url:
+          type: string
+          maxLength: 500
+        display_order:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        is_active:
+          type: boolean
+      required:
+      - key
     LeaveChatRoomResponse:
       type: object
       properties:
@@ -5228,6 +5665,29 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/CourseSession'
+    PaginatedLandingSectionList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/LandingSection'
     PaginatedLiveEventListList:
       type: object
       required:
@@ -5664,6 +6124,86 @@ components:
             type: integer
             maximum: 5
             minimum: 1
+    PatchedLandingPageRequest:
+      type: object
+      properties:
+        site_name:
+          type: string
+          maxLength: 150
+        page_title:
+          type: string
+          maxLength: 250
+        meta_title:
+          type: string
+          maxLength: 250
+        meta_description:
+          type: string
+        canonical_url:
+          oneOf:
+          - type: string
+            format: uri
+            maxLength: 500
+          - type: string
+            maxLength: 0
+        logo:
+          type: string
+          format: binary
+          nullable: true
+        favicon:
+          type: string
+          format: binary
+          nullable: true
+        og_image:
+          type: string
+          format: binary
+          nullable: true
+        support_email:
+          oneOf:
+          - type: string
+            format: email
+            maxLength: 254
+          - type: string
+            maxLength: 0
+        support_phone:
+          type: string
+          maxLength: 30
+        social_links: {}
+        extra_settings: {}
+        is_active:
+          type: boolean
+    PatchedLandingSectionRequest:
+      type: object
+      properties:
+        key:
+          type: string
+          minLength: 1
+          maxLength: 120
+          pattern: ^[-a-zA-Z0-9_]+$
+        section_type:
+          $ref: '#/components/schemas/SectionTypeEnum'
+        title:
+          type: string
+          maxLength: 250
+        subtitle:
+          type: string
+        content: {}
+        image:
+          type: string
+          format: binary
+          nullable: true
+        cta_label:
+          type: string
+          maxLength: 120
+        cta_url:
+          type: string
+          maxLength: 500
+        display_order:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        is_active:
+          type: boolean
     PatchedLiveEventWriteRequest:
       type: object
       properties:
@@ -5979,6 +6519,7 @@ components:
       - SIGNAL_REVIEW
       - ACADEMY_TEACH
       - ACADEMY_MANAGE
+      - LANDING_MANAGE
       - USER_MANAGE
       - ROLE_MANAGE
       type: string
@@ -5989,6 +6530,7 @@ components:
         * `SIGNAL_REVIEW` - Review signals
         * `ACADEMY_TEACH` - Create and teach courses
         * `ACADEMY_MANAGE` - Manage all academy courses
+        * `LANDING_MANAGE` - Manage landing page
         * `USER_MANAGE` - Manage users
         * `ROLE_MANAGE` - Manage custom roles
     PlatformRole:
@@ -6086,6 +6628,79 @@ components:
       required:
       - message
       - user
+    PublicLandingPage:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        site_key:
+          type: string
+          readOnly: true
+          pattern: ^[-a-zA-Z0-9_]+$
+        site_name:
+          type: string
+          maxLength: 150
+        page_title:
+          type: string
+          maxLength: 250
+        meta_title:
+          type: string
+          maxLength: 250
+        meta_description:
+          type: string
+        canonical_url:
+          oneOf:
+          - type: string
+            format: uri
+            maxLength: 500
+          - type: string
+            maxLength: 0
+        logo:
+          type: string
+          format: uri
+          nullable: true
+        favicon:
+          type: string
+          format: uri
+          nullable: true
+        og_image:
+          type: string
+          format: uri
+          nullable: true
+        support_email:
+          oneOf:
+          - type: string
+            format: email
+            maxLength: 254
+          - type: string
+            maxLength: 0
+        support_phone:
+          type: string
+          maxLength: 30
+        social_links: {}
+        extra_settings: {}
+        is_active:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+        sections:
+          type: array
+          items:
+            $ref: '#/components/schemas/LandingSection'
+          readOnly: true
+      required:
+      - created_at
+      - id
+      - sections
+      - site_key
+      - updated_at
     Register:
       type: object
       properties:
@@ -6190,6 +6805,28 @@ components:
         * `LOW` - Low
         * `MEDIUM` - Medium
         * `HIGH` - High
+    SectionTypeEnum:
+      enum:
+      - HERO
+      - FEATURES
+      - STATS
+      - ABOUT
+      - CTA
+      - FAQ
+      - TESTIMONIALS
+      - PARTNERS
+      - CUSTOM
+      type: string
+      description: |-
+        * `HERO` - Hero
+        * `FEATURES` - Features
+        * `STATS` - Statistics
+        * `ABOUT` - About
+        * `CTA` - Call to action
+        * `FAQ` - FAQ
+        * `TESTIMONIALS` - Testimonials
+        * `PARTNERS` - Partners
+        * `CUSTOM` - Custom
     SignalCreate:
       type: object
       properties:

@@ -149,6 +149,12 @@ class DashboardService:
                         User.Permission.ROLE_MANAGE
                     )
                 ),
+
+                "can_manage_landing": (
+                    user.has_platform_permission(
+                        User.Permission.LANDING_MANAGE
+                    )
+                ),
             },
 
             "recent_signals": recent_signals,

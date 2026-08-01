@@ -77,6 +77,7 @@ INSTALLED_APPS = [
     "apps.livestream",
     "apps.notifications",
     "apps.academy",
+    "landing",
 ]
 
 

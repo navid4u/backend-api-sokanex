@@ -115,6 +115,10 @@ urlpatterns = [
         "api/academy/",
         include("apps.academy.urls"),
     ),
+    path(
+        "api/landing/",
+        include("landing.urls"),
+    ),
 ]
 
 

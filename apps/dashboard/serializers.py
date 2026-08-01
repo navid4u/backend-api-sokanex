@@ -107,6 +107,8 @@ class DashboardCapabilitiesSerializer(
 
     can_manage_roles = serializers.BooleanField()
 
+    can_manage_landing = serializers.BooleanField()
+
 
 class DashboardSerializer(
     serializers.Serializer

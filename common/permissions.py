@@ -82,6 +82,16 @@ class CanReviewSignals(BasePermission):
         )
 
 
+class CanManageLanding(BasePermission):
+    def has_permission(self, request, view):
+        return (
+            request.user.is_authenticated
+            and request.user.has_platform_permission(
+                User.Permission.LANDING_MANAGE
+            )
+        )
+
+
 class IsSuperAdmin(BasePermission):
     """
     Only super admin can access.
