@@ -195,3 +195,111 @@ class Message(models.Model):
             f"Message {self.pk} "
             f"in {self.room}"
         )
+
+
+class TraderPost(models.Model):
+    class Visibility(models.TextChoices):
+        PUBLIC = "PUBLIC", "Public"
+        FOLLOWERS = "FOLLOWERS", "Followers"
+        PRIVATE = "PRIVATE", "Private"
+
+    author = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="social_posts"
+    )
+    text = models.TextField(blank=True)
+    image = models.ImageField(upload_to="social/posts/images/%Y/%m/", null=True, blank=True)
+    video = models.FileField(upload_to="social/posts/videos/%Y/%m/", null=True, blank=True)
+    visibility = models.CharField(max_length=20, choices=Visibility.choices, default=Visibility.PUBLIC)
+    is_edited = models.BooleanField(default=False)
+    is_deleted = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at", "-id"]
+        indexes = [
+            models.Index(fields=["visibility", "is_deleted", "-created_at"]),
+            models.Index(fields=["author", "-created_at"]),
+        ]
+
+
+class PostComment(models.Model):
+    post = models.ForeignKey(TraderPost, on_delete=models.CASCADE, related_name="comments")
+    author = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="social_comments"
+    )
+    parent = models.ForeignKey(
+        "self", on_delete=models.CASCADE, null=True, blank=True, related_name="replies"
+    )
+    text = models.TextField(max_length=2000)
+    is_edited = models.BooleanField(default=False)
+    is_deleted = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["created_at", "id"]
+
+
+class PostReaction(models.Model):
+    class Type(models.TextChoices):
+        LIKE = "LIKE", "Like"
+        INSIGHTFUL = "INSIGHTFUL", "Insightful"
+        SUPPORT = "SUPPORT", "Support"
+
+    post = models.ForeignKey(TraderPost, on_delete=models.CASCADE, related_name="reactions")
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="post_reactions"
+    )
+    reaction_type = models.CharField(max_length=20, choices=Type.choices, default=Type.LIKE)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["post", "user"], name="unique_user_post_reaction")
+        ]
+
+
+class UserFollow(models.Model):
+    follower = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="following_relations"
+    )
+    following = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="follower_relations"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["follower", "following"], name="unique_user_follow"),
+            models.CheckConstraint(condition=~models.Q(follower=models.F("following")), name="cannot_follow_self"),
+        ]
+
+
+class SavedPost(models.Model):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="saved_posts")
+    post = models.ForeignKey(TraderPost, on_delete=models.CASCADE, related_name="saves")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["user", "post"], name="unique_saved_post")]
+
+
+class PostReport(models.Model):
+    class Status(models.TextChoices):
+        PENDING = "PENDING", "Pending"
+        REVIEWED = "REVIEWED", "Reviewed"
+        DISMISSED = "DISMISSED", "Dismissed"
+
+    post = models.ForeignKey(TraderPost, on_delete=models.CASCADE, related_name="reports")
+    reporter = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="post_reports"
+    )
+    reason = models.CharField(max_length=500)
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["post", "reporter"], name="unique_user_post_report")
+        ]

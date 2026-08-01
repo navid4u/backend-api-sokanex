@@ -3,6 +3,7 @@ from django.db.models import (
     OuterRef,
     Q,
 )
+from django.utils import timezone
 
 from .models import (
     Notification,
@@ -33,7 +34,7 @@ class NotificationService:
                     target_role=user.role,
                 ),
                 is_active=True,
-            )
+            ).filter(Q(expires_at__isnull=True) | Q(expires_at__gt=timezone.now()))
             .select_related("created_by")
             .annotate(
                 is_read=Exists(read_record)

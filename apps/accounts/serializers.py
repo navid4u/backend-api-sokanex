@@ -22,7 +22,21 @@ from common.validators import (
 )
 from django.utils import timezone
 
-from .models import PlatformRole, UpgradeRequest, UserProfile
+from .models import (
+    Badge,
+    PlatformRole,
+    SecuritySettings,
+    UpgradeRequest,
+    UserBadge,
+    UserDevice,
+    UserProfile,
+)
+from apps.activity.models import UserActivity
+from apps.activity.services import ActivityService
+import hashlib
+import uuid
+from datetime import UTC, datetime, timedelta
+from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken, OutstandingToken
 
 User = get_user_model()
 
@@ -87,10 +101,65 @@ class CustomTokenObtainPairSerializer(
     def validate(self, attrs):
         data = super().validate(attrs)
 
+        request = self.context.get("request")
+        supplied_device_id = request.headers.get("X-Device-ID", "").strip() if request else ""
+        if supplied_device_id:
+            device_id = supplied_device_id[:64]
+        else:
+            seed = f"{uuid.uuid4()}:{getattr(request, 'META', {}).get('HTTP_USER_AGENT', '')}"
+            device_id = hashlib.sha256(seed.encode()).hexdigest()
+        refresh = RefreshToken(data["refresh"])
+        user_agent = request.META.get("HTTP_USER_AGENT", "")[:500] if request else ""
+        ip_address = ActivityService.client_ip(request) if request else None
+        device, _ = UserDevice.objects.update_or_create(
+            user=self.user,
+            device_id=device_id,
+            defaults={
+                "name": request.headers.get("X-Device-Name", "")[:150] if request else "",
+                "user_agent": user_agent,
+                "ip_address": ip_address,
+                "refresh_jti": str(refresh["jti"]),
+                "revoked_at": None,
+            },
+        )
+        settings_obj = SecuritySettings.load()
+        refresh.set_exp(lifetime=timedelta(days=settings_obj.session_lifetime_days))
+        data["refresh"] = str(refresh)
+        data["access"] = str(refresh.access_token)
+        OutstandingToken.objects.filter(jti=str(refresh["jti"])).update(
+            token=data["refresh"],
+            expires_at=datetime.fromtimestamp(refresh["exp"], tz=UTC),
+        )
+        extra_devices = list(
+            UserDevice.objects.filter(user=self.user, revoked_at__isnull=True)
+            .exclude(pk=device.pk)
+            .order_by("-last_seen_at")
+            .values_list("pk", flat=True)[max(settings_obj.max_active_devices - 1, 0) :]
+        )
+        if extra_devices:
+            old_jtis = list(
+                UserDevice.objects.filter(pk__in=extra_devices)
+                .exclude(refresh_jti="")
+                .values_list("refresh_jti", flat=True)
+            )
+            for outstanding in OutstandingToken.objects.filter(user=self.user, jti__in=old_jtis):
+                BlacklistedToken.objects.get_or_create(token=outstanding)
+            UserDevice.objects.filter(pk__in=extra_devices).update(revoked_at=timezone.now())
+        ActivityService.record(
+            self.user,
+            UserActivity.Type.LOGIN,
+            "Account login",
+            description=device.name or user_agent[:150],
+            target_type="device",
+            target_id=device.pk,
+            ip_address=ip_address,
+        )
+
         data["user"] = UserSerializer(
             self.user,
             context=self.context,
         ).data
+        data["device_id"] = device_id
 
         return data
 
@@ -140,6 +209,11 @@ class RegisterSerializer(serializers.ModelSerializer):
                 access_level=User.AccessLevel.LEVEL_1,
             )
             UserProfile.objects.create(user=user)
+            ActivityService.record(
+                user,
+                UserActivity.Type.REGISTER,
+                "Account registered",
+            )
             return user
 
     def validate_email(self, value):
@@ -358,7 +432,13 @@ class AdminUserWriteSerializer(serializers.ModelSerializer):
             user.set_password(password)
             user.save()
             UserProfile.objects.create(user=user)
+            ActivityService.record(
+                user,
+                UserActivity.Type.CREATE,
+                "User account created by administrator",
+            )
             return user
+
 
     def update(self, instance, validated_data):
         password = validated_data.pop("password", None)
@@ -804,3 +884,63 @@ class LogoutSerializer(serializers.Serializer):
 
     def save(self, **kwargs):
         self.token.blacklist()
+
+
+class BadgeSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Badge
+        fields = (
+            "id", "name", "slug", "description", "icon", "color",
+            "is_active", "created_at", "updated_at",
+        )
+        read_only_fields = ("id", "slug", "created_at", "updated_at")
+
+    def validate_icon(self, value):
+        return validate_image_upload(value, max_size_mb=4, file_label="Badge icon")
+
+
+class UserBadgeSerializer(serializers.ModelSerializer):
+    badge = BadgeSerializer(read_only=True)
+    badge_id = serializers.PrimaryKeyRelatedField(
+        source="badge", queryset=Badge.objects.filter(is_active=True), write_only=True
+    )
+    awarded_by = serializers.CharField(
+        source="awarded_by.username", read_only=True, allow_null=True
+    )
+
+    class Meta:
+        model = UserBadge
+        fields = ("id", "badge", "badge_id", "note", "awarded_by", "awarded_at")
+        read_only_fields = ("id", "awarded_by", "awarded_at")
+
+
+class UserDeviceSerializer(serializers.ModelSerializer):
+    is_active = serializers.BooleanField(read_only=True)
+
+    class Meta:
+        model = UserDevice
+        fields = (
+            "id", "device_id", "name", "user_agent", "ip_address",
+            "is_active", "last_seen_at", "created_at", "revoked_at",
+        )
+        read_only_fields = fields
+
+
+class SecuritySettingsSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = SecuritySettings
+        fields = (
+            "max_active_devices", "session_lifetime_days", "notify_new_login",
+            "require_verified_email_for_sensitive_actions", "maintenance_message", "updated_at",
+        )
+        read_only_fields = ("updated_at",)
+
+    def validate_max_active_devices(self, value):
+        if not 1 <= value <= 20:
+            raise serializers.ValidationError("Must be between 1 and 20.")
+        return value
+
+    def validate_session_lifetime_days(self, value):
+        if not 1 <= value <= 90:
+            raise serializers.ValidationError("Must be between 1 and 90.")
+        return value

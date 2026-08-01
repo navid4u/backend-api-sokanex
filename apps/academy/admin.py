@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import Course, CourseSession
+from .models import Course, CourseEnrollment, CourseSession, SessionProgress
 
 
 class CourseSessionInline(admin.TabularInline):
@@ -47,3 +47,16 @@ class CourseSessionAdmin(admin.ModelAdmin):
     list_filter = ("is_published",)
     search_fields = ("title", "text", "course__title")
     ordering = ("course", "order")
+
+
+@admin.register(CourseEnrollment)
+class CourseEnrollmentAdmin(admin.ModelAdmin):
+    list_display = ("id", "user", "course", "enrolled_at", "completed_at")
+    search_fields = ("user__username", "course__title")
+    list_filter = ("enrolled_at", "completed_at")
+
+
+@admin.register(SessionProgress)
+class SessionProgressAdmin(admin.ModelAdmin):
+    list_display = ("id", "enrollment", "session", "progress_percent", "updated_at")
+    list_filter = ("progress_percent", "completed_at")

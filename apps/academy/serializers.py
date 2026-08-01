@@ -1,9 +1,9 @@
 from rest_framework import serializers
 
 from common.content_access import AllowedLevelsSerializerMixin
-from common.validators import validate_image_upload
+from common.validators import validate_image_upload, validate_video_upload
 
-from .models import Course, CourseSession
+from .models import Course, CourseEnrollment, CourseSession, SessionProgress
 
 
 class CourseListSerializer(
@@ -27,10 +27,19 @@ class CourseListSerializer(
             "title",
             "slug",
             "description",
+            "short_description",
             "cover_image",
             "instructor",
             "instructor_name",
             "status",
+            "difficulty",
+            "trailer_url",
+            "estimated_duration_minutes",
+            "prerequisites",
+            "learning_outcomes",
+            "enrollment_open",
+            "starts_at",
+            "ends_at",
             "allowed_levels",
             "sessions_count",
             "created_at",
@@ -61,10 +70,19 @@ class CourseWriteSerializer(
             "title",
             "slug",
             "description",
+            "short_description",
             "cover_image",
             "instructor",
             "instructor_name",
             "status",
+            "difficulty",
+            "trailer_url",
+            "estimated_duration_minutes",
+            "prerequisites",
+            "learning_outcomes",
+            "enrollment_open",
+            "starts_at",
+            "ends_at",
             "allowed_levels",
             "created_at",
             "updated_at",
@@ -106,9 +124,13 @@ class CourseSessionSerializer(serializers.ModelSerializer):
             "title",
             "order",
             "video_url",
+            "video_file",
+            "duration_minutes",
             "text",
             "image",
             "is_published",
+            "is_preview",
+            "available_at",
             "created_at",
             "updated_at",
         )
@@ -126,7 +148,14 @@ class CourseSessionSerializer(serializers.ModelSerializer):
             file_label="Course session image",
         )
 
+    def validate_video_file(self, value):
+        return validate_video_upload(value, max_size_mb=500, file_label="Session video")
+
     def validate(self, attrs):
+        video_url = attrs.get("video_url", getattr(self.instance, "video_url", ""))
+        video_file = attrs.get("video_file", getattr(self.instance, "video_file", None))
+        if video_url and video_file:
+            raise serializers.ValidationError("Use either video_url or video_file, not both.")
         course = (
             self.instance.course
             if self.instance
@@ -147,3 +176,27 @@ class CourseSessionSerializer(serializers.ModelSerializer):
                 {"order": "This order is already used in this course."}
             )
         return attrs
+
+
+class CourseEnrollmentSerializer(serializers.ModelSerializer):
+    course = CourseListSerializer(read_only=True)
+
+    class Meta:
+        model = CourseEnrollment
+        fields = ("id", "course", "enrolled_at", "completed_at")
+        read_only_fields = fields
+
+
+class SessionProgressSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = SessionProgress
+        fields = (
+            "id", "session", "progress_percent", "last_position_seconds",
+            "completed_at", "updated_at",
+        )
+        read_only_fields = ("id", "completed_at", "updated_at")
+
+    def validate_progress_percent(self, value):
+        if value > 100:
+            raise serializers.ValidationError("Must be between 0 and 100.")
+        return value

@@ -1,7 +1,10 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
 
-from .models import PlatformRole, UpgradeRequest, User, UserProfile
+from .models import (
+    Badge, PlatformRole, SecuritySettings, UpgradeRequest,
+    User, UserBadge, UserDevice, UserProfile,
+)
 
 
 class UserProfileInline(admin.StackedInline):
@@ -195,3 +198,38 @@ class UserProfileAdmin(admin.ModelAdmin):
         "job_title",
     )
     readonly_fields = ("created_at", "updated_at")
+
+
+@admin.register(UserDevice)
+class UserDeviceAdmin(admin.ModelAdmin):
+    list_display = ("id", "user", "name", "ip_address", "last_seen_at", "revoked_at")
+    list_filter = ("revoked_at", "created_at")
+    search_fields = ("user__username", "device_id", "name", "ip_address")
+    readonly_fields = ("device_id", "refresh_jti", "created_at", "last_seen_at")
+
+
+@admin.register(Badge)
+class BadgeAdmin(admin.ModelAdmin):
+    list_display = ("id", "name", "slug", "is_active", "created_at")
+    list_filter = ("is_active",)
+    search_fields = ("name", "description")
+    readonly_fields = ("created_at", "updated_at")
+
+
+@admin.register(UserBadge)
+class UserBadgeAdmin(admin.ModelAdmin):
+    list_display = ("id", "user", "badge", "awarded_by", "awarded_at")
+    search_fields = ("user__username", "badge__name", "note")
+    readonly_fields = ("awarded_at",)
+
+
+@admin.register(SecuritySettings)
+class SecuritySettingsAdmin(admin.ModelAdmin):
+    list_display = ("id", "max_active_devices", "session_lifetime_days", "updated_at")
+    readonly_fields = ("updated_at",)
+
+    def has_add_permission(self, request):
+        return not SecuritySettings.objects.exists()
+
+    def has_delete_permission(self, request, obj=None):
+        return False

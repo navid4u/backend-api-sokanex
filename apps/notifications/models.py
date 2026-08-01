@@ -10,6 +10,15 @@ class Notification(models.Model):
         ARTICLE = "ARTICLE", "Article"
         VIDEO = "VIDEO", "Video"
         SYSTEM = "SYSTEM", "System"
+        SOCIAL = "SOCIAL", "Social"
+        ACADEMY = "ACADEMY", "Academy"
+        SECURITY = "SECURITY", "Security"
+
+    class Priority(models.TextChoices):
+        LOW = "LOW", "Low"
+        NORMAL = "NORMAL", "Normal"
+        HIGH = "HIGH", "High"
+        URGENT = "URGENT", "Urgent"
 
     title = models.CharField(
         max_length=200,
@@ -22,6 +31,10 @@ class Notification(models.Model):
         choices=Type.choices,
         default=Type.INFO,
     )
+    priority = models.CharField(max_length=20, choices=Priority.choices, default=Priority.NORMAL)
+    action_label = models.CharField(max_length=80, blank=True)
+    image = models.ImageField(upload_to="notifications/images/", null=True, blank=True)
+    expires_at = models.DateTimeField(null=True, blank=True)
 
     recipient = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -71,6 +84,7 @@ class Notification(models.Model):
                     "-created_at",
                 ]
             ),
+            models.Index(fields=["is_active", "expires_at", "-created_at"]),
             models.Index(
                 fields=[
                     "target_role",

@@ -3,17 +3,25 @@ from django.shortcuts import get_object_or_404
 from rest_framework import generics
 from rest_framework.filters import OrderingFilter, SearchFilter
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
+from rest_framework.views import APIView
+from drf_spectacular.utils import extend_schema
+from django.utils import timezone
 
 from apps.accounts.models import User
 from common.content_access import restrict_queryset_for_user
 from common.permissions import CanTeachAcademy
 
-from .models import Course, CourseSession
+from .models import Course, CourseEnrollment, CourseSession, SessionProgress
 from .serializers import (
     CourseListSerializer,
     CourseSessionSerializer,
     CourseWriteSerializer,
+    CourseEnrollmentSerializer,
+    SessionProgressSerializer,
 )
+from apps.activity.models import UserActivity
+from apps.activity.services import ActivityService
 
 
 def can_manage_all_academy(user):
@@ -176,3 +184,60 @@ class CourseSessionDetailView(
             course__in=visible_courses(self.request.user),
             is_published=True,
         ).select_related("course")
+
+
+class EnrollCourseView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(request=None, responses=CourseEnrollmentSerializer)
+    def post(self, request, slug):
+        course = get_object_or_404(visible_courses(request.user), slug=slug, enrollment_open=True)
+        enrollment, created = CourseEnrollment.objects.get_or_create(
+            user=request.user, course=course
+        )
+        ActivityService.record(
+            request.user,
+            UserActivity.Type.COURSE_VIEW,
+            "Course enrollment" if created else "Course opened",
+            target_type="course",
+            target_id=course.pk,
+            target_url=f"/academy/courses/{course.slug}",
+        )
+        return Response(CourseEnrollmentSerializer(enrollment, context={"request": request}).data)
+
+
+class MyEnrollmentListView(generics.ListAPIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = CourseEnrollmentSerializer
+
+    def get_queryset(self):
+        if getattr(self, "swagger_fake_view", False):
+            return CourseEnrollment.objects.none()
+        return CourseEnrollment.objects.filter(user=self.request.user).select_related("course", "course__instructor")
+
+
+class SessionProgressView(generics.RetrieveUpdateAPIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = SessionProgressSerializer
+
+    def get_object(self):
+        session = get_object_or_404(CourseSession, pk=self.kwargs["pk"])
+        enrollment = get_object_or_404(
+            CourseEnrollment, user=self.request.user, course=session.course
+        )
+        progress, _ = SessionProgress.objects.get_or_create(
+            enrollment=enrollment, session=session
+        )
+        return progress
+
+    def perform_update(self, serializer):
+        completed_at = timezone.now() if serializer.validated_data.get("progress_percent") == 100 else None
+        progress = serializer.save(completed_at=completed_at)
+        ActivityService.record(
+            self.request.user,
+            UserActivity.Type.COURSE_SESSION_VIEW,
+            "Course session progress updated",
+            target_type="course_session",
+            target_id=progress.session_id,
+            metadata={"progress_percent": progress.progress_percent},
+        )

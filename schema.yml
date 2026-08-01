@@ -178,6 +178,26 @@ paths:
       responses:
         '204':
           description: No response body
+  /api/academy/courses/{slug}/enroll/:
+    post:
+      operationId: academy_courses_enroll_create
+      parameters:
+      - in: path
+        name: slug
+        schema:
+          type: string
+        required: true
+      tags:
+      - academy
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CourseEnrollment'
+          description: ''
   /api/academy/courses/{slug}/sessions/:
     get:
       operationId: academy_courses_sessions_list
@@ -302,6 +322,45 @@ paths:
               schema:
                 $ref: '#/components/schemas/PaginatedCourseListList'
           description: ''
+  /api/academy/enrollments/:
+    get:
+      operationId: academy_enrollments_list
+      parameters:
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      tags:
+      - academy
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedCourseEnrollmentList'
+          description: ''
   /api/academy/sessions/{id}/:
     get:
       operationId: academy_sessions_retrieve
@@ -398,6 +457,87 @@ paths:
       responses:
         '204':
           description: No response body
+  /api/academy/sessions/{id}/progress/:
+    get:
+      operationId: academy_sessions_progress_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - academy
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionProgress'
+          description: ''
+    put:
+      operationId: academy_sessions_progress_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - academy
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SessionProgressRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/SessionProgressRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/SessionProgressRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionProgress'
+          description: ''
+    patch:
+      operationId: academy_sessions_progress_partial_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - academy
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedSessionProgressRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedSessionProgressRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedSessionProgressRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionProgress'
+          description: ''
   /api/accounts/admin/upgrade-requests/:
     get:
       operationId: accounts_admin_upgrade_requests_list
@@ -497,6 +637,258 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/AdminUpgradeRequest'
+          description: ''
+  /api/accounts/badges/:
+    get:
+      operationId: accounts_badges_list
+      parameters:
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      tags:
+      - accounts
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedBadgeList'
+          description: ''
+    post:
+      operationId: accounts_badges_create
+      tags:
+      - accounts
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BadgeRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/BadgeRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/BadgeRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Badge'
+          description: ''
+  /api/accounts/badges/{slug}/:
+    get:
+      operationId: accounts_badges_retrieve
+      parameters:
+      - in: path
+        name: slug
+        schema:
+          type: string
+        required: true
+      tags:
+      - accounts
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Badge'
+          description: ''
+    put:
+      operationId: accounts_badges_update
+      parameters:
+      - in: path
+        name: slug
+        schema:
+          type: string
+        required: true
+      tags:
+      - accounts
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BadgeRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/BadgeRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/BadgeRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Badge'
+          description: ''
+    patch:
+      operationId: accounts_badges_partial_update
+      parameters:
+      - in: path
+        name: slug
+        schema:
+          type: string
+        required: true
+      tags:
+      - accounts
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedBadgeRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedBadgeRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedBadgeRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Badge'
+          description: ''
+    delete:
+      operationId: accounts_badges_destroy
+      parameters:
+      - in: path
+        name: slug
+        schema:
+          type: string
+        required: true
+      tags:
+      - accounts
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/accounts/badges/mine/:
+    get:
+      operationId: accounts_badges_mine_list
+      parameters:
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      tags:
+      - accounts
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/UserBadge'
+          description: ''
+  /api/accounts/devices/:
+    get:
+      operationId: accounts_devices_list
+      parameters:
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      tags:
+      - accounts
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/UserDevice'
+          description: ''
+  /api/accounts/devices/{id}/logout/:
+    post:
+      operationId: accounts_devices_logout_create
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - accounts
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeviceLogoutResponse'
+          description: ''
+  /api/accounts/devices/logout-others/:
+    post:
+      operationId: accounts_devices_logout_others_create
+      tags:
+      - accounts
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OtherDeviceLogoutResponse'
           description: ''
   /api/accounts/logout/:
     post:
@@ -783,6 +1175,68 @@ paths:
       responses:
         '204':
           description: No response body
+  /api/accounts/security/settings/:
+    get:
+      operationId: accounts_security_settings_retrieve
+      tags:
+      - accounts
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SecuritySettings'
+          description: ''
+    put:
+      operationId: accounts_security_settings_update
+      tags:
+      - accounts
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SecuritySettingsRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/SecuritySettingsRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/SecuritySettingsRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SecuritySettings'
+          description: ''
+    patch:
+      operationId: accounts_security_settings_partial_update
+      tags:
+      - accounts
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedSecuritySettingsRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedSecuritySettingsRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedSecuritySettingsRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SecuritySettings'
+          description: ''
   /api/accounts/upgrade-requests/:
     get:
       operationId: accounts_upgrade_requests_list
@@ -847,6 +1301,22 @@ paths:
               schema:
                 $ref: '#/components/schemas/UpgradeRequest'
           description: ''
+  /api/accounts/user-badges/{id}/:
+    delete:
+      operationId: accounts_user_badges_destroy
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - accounts
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
   /api/accounts/users/:
     get:
       operationId: accounts_users_list
@@ -1072,6 +1542,71 @@ paths:
               schema:
                 $ref: '#/components/schemas/UserList'
           description: ''
+  /api/accounts/users/{id}/badges/:
+    get:
+      operationId: accounts_users_badges_list
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      tags:
+      - accounts
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/UserBadge'
+          description: ''
+    post:
+      operationId: accounts_users_badges_create
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - accounts
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserBadgeRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/UserBadgeRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/UserBadgeRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserBadge'
+          description: ''
   /api/accounts/users/{id}/custom-role/:
     patch:
       operationId: accounts_users_custom_role_partial_update
@@ -1173,6 +1708,35 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/UserStatusUpdateResponse'
+          description: ''
+  /api/activity/recent/:
+    get:
+      operationId: activity_recent_list
+      parameters:
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      tags:
+      - activity
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/UserActivity'
           description: ''
   /api/articles/:
     get:
@@ -2116,6 +2680,466 @@ paths:
       responses:
         '204':
           description: No response body
+  /api/chat/social/feed/:
+    get:
+      operationId: chat_social_feed_list
+      parameters:
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      tags:
+      - chat
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedTraderPostList'
+          description: ''
+    post:
+      operationId: chat_social_feed_create
+      tags:
+      - chat
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TraderPostRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/TraderPostRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/TraderPostRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TraderPost'
+          description: ''
+  /api/chat/social/following/:
+    get:
+      operationId: chat_social_following_list
+      parameters:
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      tags:
+      - chat
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Follow'
+          description: ''
+  /api/chat/social/posts/{id}/:
+    get:
+      operationId: chat_social_posts_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - chat
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TraderPost'
+          description: ''
+    put:
+      operationId: chat_social_posts_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - chat
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TraderPostRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/TraderPostRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/TraderPostRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TraderPost'
+          description: ''
+    patch:
+      operationId: chat_social_posts_partial_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - chat
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedTraderPostRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedTraderPostRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedTraderPostRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TraderPost'
+          description: ''
+    delete:
+      operationId: chat_social_posts_destroy
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - chat
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/chat/social/posts/{id}/comments/:
+    get:
+      operationId: chat_social_posts_comments_list
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      tags:
+      - chat
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedPostCommentList'
+          description: ''
+    post:
+      operationId: chat_social_posts_comments_create
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - chat
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PostCommentRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PostCommentRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PostCommentRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PostComment'
+          description: ''
+  /api/chat/social/posts/{id}/reaction/:
+    post:
+      operationId: chat_social_posts_reaction_create
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - chat
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PostReactionRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PostReactionRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PostReactionRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PostReaction'
+          description: ''
+    delete:
+      operationId: chat_social_posts_reaction_destroy
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - chat
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/chat/social/posts/{id}/report/:
+    post:
+      operationId: chat_social_posts_report_create
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - chat
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PostReportRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PostReportRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PostReportRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PostReport'
+          description: ''
+  /api/chat/social/posts/{id}/save/:
+    post:
+      operationId: chat_social_posts_save_create
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - chat
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TraderPostRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/TraderPostRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/TraderPostRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TraderPost'
+          description: ''
+    delete:
+      operationId: chat_social_posts_save_destroy
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - chat
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/chat/social/saved/:
+    get:
+      operationId: chat_social_saved_list
+      parameters:
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      tags:
+      - chat
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedTraderPostList'
+          description: ''
+  /api/chat/social/users/{user_id}/follow/:
+    post:
+      operationId: chat_social_users_follow_create
+      parameters:
+      - in: path
+        name: user_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - chat
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Follow'
+          description: ''
+    delete:
+      operationId: chat_social_users_follow_destroy
+      parameters:
+      - in: path
+        name: user_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - chat
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
   /api/dashboard/:
     get:
       operationId: dashboard_retrieve
@@ -2559,6 +3583,26 @@ paths:
       responses:
         '204':
           description: No response body
+  /api/livestream/{slug}/join/:
+    post:
+      operationId: livestream_join_create
+      parameters:
+      - in: path
+        name: slug
+        schema:
+          type: string
+        required: true
+      tags:
+      - livestream
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JoinLiveEventResponse'
+          description: ''
   /api/livestream/manage/:
     get:
       operationId: livestream_manage_list
@@ -2744,6 +3788,21 @@ paths:
               schema:
                 $ref: '#/components/schemas/Notification'
           description: ''
+    delete:
+      operationId: notifications_destroy
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - notifications
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
   /api/notifications/{id}/read/:
     post:
       operationId: notifications_read_create
@@ -3677,6 +4736,38 @@ paths:
           description: ''
 components:
   schemas:
+    ActivityTypeEnum:
+      enum:
+      - REGISTER
+      - LOGIN
+      - LOGOUT
+      - PROFILE_UPDATE
+      - ARTICLE_READ
+      - VIDEO_WATCH
+      - LIVE_JOIN
+      - COURSE_VIEW
+      - COURSE_SESSION_VIEW
+      - CREATE
+      - UPDATE
+      - DELETE
+      - SOCIAL
+      - SECURITY
+      type: string
+      description: |-
+        * `REGISTER` - Registration
+        * `LOGIN` - Login
+        * `LOGOUT` - Logout
+        * `PROFILE_UPDATE` - Profile updated
+        * `ARTICLE_READ` - Article read
+        * `VIDEO_WATCH` - Video watched
+        * `LIVE_JOIN` - Live joined
+        * `COURSE_VIEW` - Course viewed
+        * `COURSE_SESSION_VIEW` - Course session viewed
+        * `CREATE` - Content created
+        * `UPDATE` - Content updated
+        * `DELETE` - Content deleted
+        * `SOCIAL` - Social activity
+        * `SECURITY` - Security activity
     AdminUpgradeRequest:
       type: object
       properties:
@@ -4043,6 +5134,65 @@ components:
       required:
       - content
       - title
+    Badge:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        name:
+          type: string
+          maxLength: 120
+        slug:
+          type: string
+          readOnly: true
+          pattern: ^[-\w]+$
+        description:
+          type: string
+        icon:
+          type: string
+          format: uri
+          nullable: true
+        color:
+          type: string
+          maxLength: 20
+        is_active:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - id
+      - name
+      - slug
+      - updated_at
+    BadgeRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        description:
+          type: string
+        icon:
+          type: string
+          format: binary
+          nullable: true
+        color:
+          type: string
+          minLength: 1
+          maxLength: 20
+        is_active:
+          type: boolean
+      required:
+      - name
     BlankEnum:
       enum:
       - ''
@@ -4439,6 +5589,30 @@ components:
       description: |-
         * `DRAFT` - Draft
         * `PUBLISHED` - Published
+    CourseEnrollment:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        course:
+          allOf:
+          - $ref: '#/components/schemas/CourseList'
+          readOnly: true
+        enrolled_at:
+          type: string
+          format: date-time
+          readOnly: true
+        completed_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+      required:
+      - completed_at
+      - course
+      - enrolled_at
+      - id
     CourseList:
       type: object
       properties:
@@ -4457,6 +5631,9 @@ components:
             maxLength: 0
         description:
           type: string
+        short_description:
+          type: string
+          maxLength: 500
         cover_image:
           type: string
           format: uri
@@ -4469,6 +5646,33 @@ components:
           readOnly: true
         status:
           $ref: '#/components/schemas/ContentStatusEnum'
+        difficulty:
+          $ref: '#/components/schemas/DifficultyEnum'
+        trailer_url:
+          oneOf:
+          - type: string
+            format: uri
+            maxLength: 500
+          - type: string
+            maxLength: 0
+        estimated_duration_minutes:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+          nullable: true
+        prerequisites: {}
+        learning_outcomes: {}
+        enrollment_open:
+          type: boolean
+        starts_at:
+          type: string
+          format: date-time
+          nullable: true
+        ends_at:
+          type: string
+          format: date-time
+          nullable: true
         allowed_levels:
           type: array
           items:
@@ -4518,6 +5722,16 @@ components:
             maxLength: 500
           - type: string
             maxLength: 0
+        video_file:
+          type: string
+          format: uri
+          nullable: true
+        duration_minutes:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+          nullable: true
         text:
           type: string
         image:
@@ -4526,6 +5740,12 @@ components:
           nullable: true
         is_published:
           type: boolean
+        is_preview:
+          type: boolean
+        available_at:
+          type: string
+          format: date-time
+          nullable: true
         created_at:
           type: string
           format: date-time
@@ -4560,6 +5780,16 @@ components:
             maxLength: 500
           - type: string
             maxLength: 0
+        video_file:
+          type: string
+          format: binary
+          nullable: true
+        duration_minutes:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+          nullable: true
         text:
           type: string
         image:
@@ -4568,6 +5798,12 @@ components:
           nullable: true
         is_published:
           type: boolean
+        is_preview:
+          type: boolean
+        available_at:
+          type: string
+          format: date-time
+          nullable: true
       required:
       - order
       - title
@@ -4586,6 +5822,9 @@ components:
           pattern: ^[-\w]+$
         description:
           type: string
+        short_description:
+          type: string
+          maxLength: 500
         cover_image:
           type: string
           format: uri
@@ -4598,6 +5837,33 @@ components:
           readOnly: true
         status:
           $ref: '#/components/schemas/ContentStatusEnum'
+        difficulty:
+          $ref: '#/components/schemas/DifficultyEnum'
+        trailer_url:
+          oneOf:
+          - type: string
+            format: uri
+            maxLength: 500
+          - type: string
+            maxLength: 0
+        estimated_duration_minutes:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+          nullable: true
+        prerequisites: {}
+        learning_outcomes: {}
+        enrollment_open:
+          type: boolean
+        starts_at:
+          type: string
+          format: date-time
+          nullable: true
+        ends_at:
+          type: string
+          format: date-time
+          nullable: true
         allowed_levels:
           type: array
           items:
@@ -4629,12 +5895,42 @@ components:
           maxLength: 250
         description:
           type: string
+        short_description:
+          type: string
+          maxLength: 500
         cover_image:
           type: string
           format: binary
           nullable: true
         status:
           $ref: '#/components/schemas/ContentStatusEnum'
+        difficulty:
+          $ref: '#/components/schemas/DifficultyEnum'
+        trailer_url:
+          oneOf:
+          - type: string
+            format: uri
+            maxLength: 500
+          - type: string
+            maxLength: 0
+        estimated_duration_minutes:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+          nullable: true
+        prerequisites: {}
+        learning_outcomes: {}
+        enrollment_open:
+          type: boolean
+        starts_at:
+          type: string
+          format: date-time
+          nullable: true
+        ends_at:
+          type: string
+          format: date-time
+          nullable: true
         allowed_levels:
           type: array
           items:
@@ -4799,6 +6095,23 @@ components:
       - videos
       - wallet_balance
       - wallet_currency
+    DeviceLogoutResponse:
+      type: object
+      properties:
+        message:
+          type: string
+      required:
+      - message
+    DifficultyEnum:
+      enum:
+      - BEGINNER
+      - INTERMEDIATE
+      - ADVANCED
+      type: string
+      description: |-
+        * `BEGINNER` - Beginner
+        * `INTERMEDIATE` - Intermediate
+        * `ADVANCED` - Advanced
     EducationLevelEnum:
       enum:
       - HIGH_SCHOOL
@@ -4815,6 +6128,24 @@ components:
         * `MASTER` - Master
         * `DOCTORATE` - Doctorate
         * `OTHER` - Other
+    Follow:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        following:
+          allOf:
+          - $ref: '#/components/schemas/SocialUser'
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - following
+      - id
     GenderEnum:
       enum:
       - MALE
@@ -4837,6 +6168,17 @@ components:
       required:
       - membership_role
       - message
+    JoinLiveEventResponse:
+      type: object
+      properties:
+        join_url:
+          type: string
+          format: uri
+        provider:
+          type: string
+      required:
+      - join_url
+      - provider
     LandingPage:
       type: object
       properties:
@@ -5083,6 +6425,8 @@ components:
         is_live_now:
           type: boolean
           readOnly: true
+        provider:
+          $ref: '#/components/schemas/ProviderEnum'
         description:
           type: string
         stream_url:
@@ -5093,6 +6437,16 @@ components:
           - type: string
             maxLength: 0
         replay_url:
+          oneOf:
+          - type: string
+            format: uri
+            maxLength: 500
+          - type: string
+            maxLength: 0
+        provider_event_id:
+          type: string
+          maxLength: 150
+        provider_join_url:
           oneOf:
           - type: string
             format: uri
@@ -5157,6 +6511,8 @@ components:
         is_live_now:
           type: boolean
           readOnly: true
+        provider:
+          $ref: '#/components/schemas/ProviderEnum'
       required:
       - host
       - id
@@ -5208,6 +6564,19 @@ components:
             maxLength: 500
           - type: string
             maxLength: 0
+        provider:
+          $ref: '#/components/schemas/ProviderEnum'
+        provider_event_id:
+          type: string
+          maxLength: 150
+        provider_join_url:
+          oneOf:
+          - type: string
+            format: uri
+            maxLength: 500
+          - type: string
+            maxLength: 0
+        provider_metadata: {}
         starts_at:
           type: string
           format: date-time
@@ -5270,6 +6639,19 @@ components:
             maxLength: 500
           - type: string
             maxLength: 0
+        provider:
+          $ref: '#/components/schemas/ProviderEnum'
+        provider_event_id:
+          type: string
+          maxLength: 150
+        provider_join_url:
+          oneOf:
+          - type: string
+            format: uri
+            maxLength: 500
+          - type: string
+            maxLength: 0
+        provider_metadata: {}
         starts_at:
           type: string
           format: date-time
@@ -5423,6 +6805,19 @@ components:
           type: string
         notification_type:
           $ref: '#/components/schemas/NotificationTypeEnum'
+        priority:
+          $ref: '#/components/schemas/PriorityEnum'
+        action_label:
+          type: string
+          maxLength: 80
+        image:
+          type: string
+          format: uri
+          nullable: true
+        expires_at:
+          type: string
+          format: date-time
+          nullable: true
         recipient:
           type: integer
           nullable: true
@@ -5469,6 +6864,19 @@ components:
           minLength: 1
         notification_type:
           $ref: '#/components/schemas/NotificationTypeEnum'
+        priority:
+          $ref: '#/components/schemas/PriorityEnum'
+        action_label:
+          type: string
+          maxLength: 80
+        image:
+          type: string
+          format: binary
+          nullable: true
+        expires_at:
+          type: string
+          format: date-time
+          nullable: true
         recipient:
           type: integer
           nullable: true
@@ -5490,6 +6898,9 @@ components:
       - ARTICLE
       - VIDEO
       - SYSTEM
+      - SOCIAL
+      - ACADEMY
+      - SECURITY
       type: string
       description: |-
         * `INFO` - Information
@@ -5497,6 +6908,9 @@ components:
         * `ARTICLE` - Article
         * `VIDEO` - Video
         * `SYSTEM` - System
+        * `SOCIAL` - Social
+        * `ACADEMY` - Academy
+        * `SECURITY` - Security
     NotificationUnreadCountResponse:
       type: object
       properties:
@@ -5504,6 +6918,16 @@ components:
           type: integer
       required:
       - unread_count
+    OtherDeviceLogoutResponse:
+      type: object
+      properties:
+        message:
+          type: string
+        revoked_count:
+          type: integer
+      required:
+      - message
+      - revoked_count
     PaginatedAdminUpgradeRequestList:
       type: object
       required:
@@ -5550,6 +6974,29 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/ArticleList'
+    PaginatedBadgeList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Badge'
     PaginatedBrokerListList:
       type: object
       required:
@@ -5619,6 +7066,29 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/ChatRoom'
+    PaginatedCourseEnrollmentList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/CourseEnrollment'
     PaginatedCourseListList:
       type: object
       required:
@@ -5780,6 +7250,29 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/PlatformRole'
+    PaginatedPostCommentList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/PostComment'
     PaginatedSignalListList:
       type: object
       required:
@@ -5803,6 +7296,29 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/SignalList'
+    PaginatedTraderPostList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/TraderPost'
     PaginatedTransactionList:
       type: object
       required:
@@ -5994,6 +7510,25 @@ components:
             type: integer
             maximum: 5
             minimum: 1
+    PatchedBadgeRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        description:
+          type: string
+        icon:
+          type: string
+          format: binary
+          nullable: true
+        color:
+          type: string
+          minLength: 1
+          maxLength: 20
+        is_active:
+          type: boolean
     PatchedBrokerWriteRequest:
       type: object
       properties:
@@ -6095,6 +7630,16 @@ components:
             maxLength: 500
           - type: string
             maxLength: 0
+        video_file:
+          type: string
+          format: binary
+          nullable: true
+        duration_minutes:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+          nullable: true
         text:
           type: string
         image:
@@ -6103,6 +7648,12 @@ components:
           nullable: true
         is_published:
           type: boolean
+        is_preview:
+          type: boolean
+        available_at:
+          type: string
+          format: date-time
+          nullable: true
     PatchedCourseWriteRequest:
       type: object
       properties:
@@ -6112,12 +7663,42 @@ components:
           maxLength: 250
         description:
           type: string
+        short_description:
+          type: string
+          maxLength: 500
         cover_image:
           type: string
           format: binary
           nullable: true
         status:
           $ref: '#/components/schemas/ContentStatusEnum'
+        difficulty:
+          $ref: '#/components/schemas/DifficultyEnum'
+        trailer_url:
+          oneOf:
+          - type: string
+            format: uri
+            maxLength: 500
+          - type: string
+            maxLength: 0
+        estimated_duration_minutes:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+          nullable: true
+        prerequisites: {}
+        learning_outcomes: {}
+        enrollment_open:
+          type: boolean
+        starts_at:
+          type: string
+          format: date-time
+          nullable: true
+        ends_at:
+          type: string
+          format: date-time
+          nullable: true
         allowed_levels:
           type: array
           items:
@@ -6231,6 +7812,19 @@ components:
             maxLength: 500
           - type: string
             maxLength: 0
+        provider:
+          $ref: '#/components/schemas/ProviderEnum'
+        provider_event_id:
+          type: string
+          maxLength: 150
+        provider_join_url:
+          oneOf:
+          - type: string
+            format: uri
+            maxLength: 500
+          - type: string
+            maxLength: 0
+        provider_metadata: {}
         starts_at:
           type: string
           format: date-time
@@ -6263,6 +7857,19 @@ components:
           minLength: 1
         notification_type:
           $ref: '#/components/schemas/NotificationTypeEnum'
+        priority:
+          $ref: '#/components/schemas/PriorityEnum'
+        action_label:
+          type: string
+          maxLength: 80
+        image:
+          type: string
+          format: binary
+          nullable: true
+        expires_at:
+          type: string
+          format: date-time
+          nullable: true
         recipient:
           type: integer
           nullable: true
@@ -6306,6 +7913,41 @@ components:
           type: string
           format: binary
           nullable: true
+    PatchedSecuritySettingsRequest:
+      type: object
+      properties:
+        max_active_devices:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        session_lifetime_days:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        notify_new_login:
+          type: boolean
+        require_verified_email_for_sensitive_actions:
+          type: boolean
+        maintenance_message:
+          type: string
+          maxLength: 300
+    PatchedSessionProgressRequest:
+      type: object
+      properties:
+        session:
+          type: integer
+        progress_percent:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        last_position_seconds:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
     PatchedSignalCreateRequest:
       type: object
       properties:
@@ -6345,6 +7987,21 @@ components:
             type: integer
             maximum: 5
             minimum: 1
+    PatchedTraderPostRequest:
+      type: object
+      properties:
+        text:
+          type: string
+        image:
+          type: string
+          format: binary
+          nullable: true
+        video:
+          type: string
+          format: binary
+          nullable: true
+        visibility:
+          $ref: '#/components/schemas/VisibilityEnum'
     PatchedUpgradeRequestReviewRequest:
       type: object
       properties:
@@ -6486,15 +8143,33 @@ components:
         summary:
           type: string
         external_url:
+          oneOf:
+          - type: string
+            format: uri
+            maxLength: 500
+          - type: string
+            maxLength: 0
+        video_file:
           type: string
-          format: uri
-          minLength: 1
-          maxLength: 500
+          format: binary
+          nullable: true
         thumbnail:
           type: string
           format: binary
           nullable: true
         duration_seconds:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+          nullable: true
+        width:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+          nullable: true
+        height:
           type: integer
           maximum: 9223372036854775807
           minimum: 0
@@ -6604,6 +8279,111 @@ components:
       required:
       - id
       - name
+    PostComment:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        post:
+          type: integer
+          readOnly: true
+        author:
+          allOf:
+          - $ref: '#/components/schemas/SocialUser'
+          readOnly: true
+        parent:
+          type: integer
+          nullable: true
+        text:
+          type: string
+          maxLength: 2000
+        is_edited:
+          type: boolean
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - author
+      - created_at
+      - id
+      - is_edited
+      - post
+      - text
+      - updated_at
+    PostCommentRequest:
+      type: object
+      properties:
+        parent:
+          type: integer
+          nullable: true
+        text:
+          type: string
+          minLength: 1
+          maxLength: 2000
+      required:
+      - text
+    PostReaction:
+      type: object
+      properties:
+        reaction_type:
+          $ref: '#/components/schemas/ReactionTypeEnum'
+    PostReactionRequest:
+      type: object
+      properties:
+        reaction_type:
+          $ref: '#/components/schemas/ReactionTypeEnum'
+    PostReport:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        post:
+          type: integer
+          readOnly: true
+        reason:
+          type: string
+          maxLength: 500
+        status:
+          allOf:
+          - $ref: '#/components/schemas/PostReportStatusEnum'
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - id
+      - post
+      - reason
+      - status
+    PostReportRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 500
+      required:
+      - reason
+    PostReportStatusEnum:
+      enum:
+      - PENDING
+      - REVIEWED
+      - DISMISSED
+      type: string
+      description: |-
+        * `PENDING` - Pending
+        * `REVIEWED` - Reviewed
+        * `DISMISSED` - Dismissed
     PreferredLearningTimeEnum:
       enum:
       - MORNING
@@ -6618,6 +8398,18 @@ components:
         * `EVENING` - Evening
         * `NIGHT` - Night
         * `FLEXIBLE` - Flexible
+    PriorityEnum:
+      enum:
+      - LOW
+      - NORMAL
+      - HIGH
+      - URGENT
+      type: string
+      description: |-
+        * `LOW` - Low
+        * `NORMAL` - Normal
+        * `HIGH` - High
+        * `URGENT` - Urgent
     ProfileUpdateResponse:
       type: object
       properties:
@@ -6628,6 +8420,14 @@ components:
       required:
       - message
       - user
+    ProviderEnum:
+      enum:
+      - MANUAL
+      - ALOCOM
+      type: string
+      description: |-
+        * `MANUAL` - Manual
+        * `ALOCOM` - Alocom
     PublicLandingPage:
       type: object
       properties:
@@ -6701,6 +8501,16 @@ components:
       - sections
       - site_key
       - updated_at
+    ReactionTypeEnum:
+      enum:
+      - LIKE
+      - INSIGHTFUL
+      - SUPPORT
+      type: string
+      description: |-
+        * `LIKE` - Like
+        * `INSIGHTFUL` - Insightful
+        * `SUPPORT` - Support
     Register:
       type: object
       properties:
@@ -6827,6 +8637,101 @@ components:
         * `TESTIMONIALS` - Testimonials
         * `PARTNERS` - Partners
         * `CUSTOM` - Custom
+    SecuritySettings:
+      type: object
+      properties:
+        max_active_devices:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        session_lifetime_days:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        notify_new_login:
+          type: boolean
+        require_verified_email_for_sensitive_actions:
+          type: boolean
+        maintenance_message:
+          type: string
+          maxLength: 300
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - updated_at
+    SecuritySettingsRequest:
+      type: object
+      properties:
+        max_active_devices:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        session_lifetime_days:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        notify_new_login:
+          type: boolean
+        require_verified_email_for_sensitive_actions:
+          type: boolean
+        maintenance_message:
+          type: string
+          maxLength: 300
+    SessionProgress:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        session:
+          type: integer
+        progress_percent:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        last_position_seconds:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        completed_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - completed_at
+      - id
+      - session
+      - updated_at
+    SessionProgressRequest:
+      type: object
+      properties:
+        session:
+          type: integer
+        progress_percent:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        last_position_seconds:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+      required:
+      - session
     SignalCreate:
       type: object
       properties:
@@ -7087,6 +8992,36 @@ components:
         * `pending` - Pending
         * `approved` - Approved
         * `rejected` - Rejected
+    SocialUser:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        username:
+          type: string
+          readOnly: true
+        first_name:
+          type: string
+          readOnly: true
+        last_name:
+          type: string
+          readOnly: true
+        avatar:
+          type: string
+          format: uri
+          nullable: true
+          readOnly: true
+        access_level:
+          type: integer
+          readOnly: true
+      required:
+      - access_level
+      - avatar
+      - first_name
+      - id
+      - last_name
+      - username
     TokenRefresh:
       type: object
       properties:
@@ -7104,6 +9039,76 @@ components:
           minLength: 1
       required:
       - refresh
+    TraderPost:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        author:
+          allOf:
+          - $ref: '#/components/schemas/SocialUser'
+          readOnly: true
+        text:
+          type: string
+        image:
+          type: string
+          format: uri
+          nullable: true
+        video:
+          type: string
+          format: uri
+          nullable: true
+        visibility:
+          $ref: '#/components/schemas/VisibilityEnum'
+        is_edited:
+          type: boolean
+          readOnly: true
+        reactions_count:
+          type: integer
+          readOnly: true
+        comments_count:
+          type: integer
+          readOnly: true
+        is_reacted:
+          type: boolean
+          readOnly: true
+        is_saved:
+          type: boolean
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - author
+      - comments_count
+      - created_at
+      - id
+      - is_edited
+      - is_reacted
+      - is_saved
+      - reactions_count
+      - updated_at
+    TraderPostRequest:
+      type: object
+      properties:
+        text:
+          type: string
+        image:
+          type: string
+          format: binary
+          nullable: true
+        video:
+          type: string
+          format: binary
+          nullable: true
+        visibility:
+          $ref: '#/components/schemas/VisibilityEnum'
     TradingFrequencyEnum:
       enum:
       - NEVER
@@ -7342,6 +9347,134 @@ components:
         * `3` - Level 3
         * `4` - Level 4
         * `5` - Level 5
+    UserActivity:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        activity_type:
+          allOf:
+          - $ref: '#/components/schemas/ActivityTypeEnum'
+          readOnly: true
+        title:
+          type: string
+          readOnly: true
+        description:
+          type: string
+          readOnly: true
+        target_type:
+          type: string
+          readOnly: true
+        target_id:
+          type: string
+          readOnly: true
+        target_url:
+          type: string
+          readOnly: true
+        metadata:
+          readOnly: true
+        ip_address:
+          type: string
+          readOnly: true
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - activity_type
+      - created_at
+      - description
+      - id
+      - ip_address
+      - metadata
+      - target_id
+      - target_type
+      - target_url
+      - title
+    UserBadge:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        badge:
+          allOf:
+          - $ref: '#/components/schemas/Badge'
+          readOnly: true
+        note:
+          type: string
+          maxLength: 300
+        awarded_by:
+          type: string
+          readOnly: true
+          nullable: true
+        awarded_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - awarded_at
+      - awarded_by
+      - badge
+      - id
+    UserBadgeRequest:
+      type: object
+      properties:
+        badge_id:
+          type: integer
+          writeOnly: true
+        note:
+          type: string
+          maxLength: 300
+      required:
+      - badge_id
+    UserDevice:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        device_id:
+          type: string
+          readOnly: true
+        name:
+          type: string
+          readOnly: true
+        user_agent:
+          type: string
+          readOnly: true
+        ip_address:
+          type: string
+          readOnly: true
+          nullable: true
+        is_active:
+          type: boolean
+          readOnly: true
+        last_seen_at:
+          type: string
+          format: date-time
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        revoked_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+      required:
+      - created_at
+      - device_id
+      - id
+      - ip_address
+      - is_active
+      - last_seen_at
+      - name
+      - revoked_at
+      - user_agent
     UserList:
       type: object
       properties:
@@ -7608,14 +9741,45 @@ components:
         summary:
           type: string
         external_url:
+          oneOf:
+          - type: string
+            format: uri
+            maxLength: 500
+          - type: string
+            maxLength: 0
+        video_file:
           type: string
           format: uri
-          maxLength: 500
+          nullable: true
         thumbnail:
           type: string
           format: uri
           nullable: true
         duration_seconds:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+          nullable: true
+        original_filename:
+          type: string
+          maxLength: 255
+        mime_type:
+          type: string
+          maxLength: 100
+        file_size_bytes:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+          nullable: true
+        width:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+          nullable: true
+        height:
           type: integer
           maximum: 9223372036854775807
           minimum: 0
@@ -7652,7 +9816,6 @@ components:
       - author
       - category
       - created_at
-      - external_url
       - id
       - title
       - updated_at
@@ -7675,14 +9838,45 @@ components:
         summary:
           type: string
         external_url:
+          oneOf:
+          - type: string
+            format: uri
+            maxLength: 500
+          - type: string
+            maxLength: 0
+        video_file:
           type: string
           format: uri
-          maxLength: 500
+          nullable: true
         thumbnail:
           type: string
           format: uri
           nullable: true
         duration_seconds:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+          nullable: true
+        original_filename:
+          type: string
+          maxLength: 255
+        mime_type:
+          type: string
+          maxLength: 100
+        file_size_bytes:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+          nullable: true
+        width:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+          nullable: true
+        height:
           type: integer
           maximum: 9223372036854775807
           minimum: 0
@@ -7715,7 +9909,6 @@ components:
       - author
       - category
       - created_at
-      - external_url
       - id
       - title
     VideoWrite:
@@ -7734,14 +9927,43 @@ components:
         summary:
           type: string
         external_url:
+          oneOf:
+          - type: string
+            format: uri
+            maxLength: 500
+          - type: string
+            maxLength: 0
+        video_file:
           type: string
           format: uri
-          maxLength: 500
+          nullable: true
         thumbnail:
           type: string
           format: uri
           nullable: true
         duration_seconds:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+          nullable: true
+        original_filename:
+          type: string
+          readOnly: true
+        mime_type:
+          type: string
+          readOnly: true
+        file_size_bytes:
+          type: integer
+          readOnly: true
+          nullable: true
+        width:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+          nullable: true
+        height:
           type: integer
           maximum: 9223372036854775807
           minimum: 0
@@ -7773,8 +9995,10 @@ components:
           readOnly: true
       required:
       - created_at
-      - external_url
+      - file_size_bytes
       - id
+      - mime_type
+      - original_filename
       - published_at
       - slug
       - title
@@ -7789,15 +10013,33 @@ components:
         summary:
           type: string
         external_url:
+          oneOf:
+          - type: string
+            format: uri
+            maxLength: 500
+          - type: string
+            maxLength: 0
+        video_file:
           type: string
-          format: uri
-          minLength: 1
-          maxLength: 500
+          format: binary
+          nullable: true
         thumbnail:
           type: string
           format: binary
           nullable: true
         duration_seconds:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+          nullable: true
+        width:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+          nullable: true
+        height:
           type: integer
           maximum: 9223372036854775807
           minimum: 0
@@ -7815,8 +10057,17 @@ components:
             maximum: 5
             minimum: 1
       required:
-      - external_url
       - title
+    VisibilityEnum:
+      enum:
+      - PUBLIC
+      - FOLLOWERS
+      - PRIVATE
+      type: string
+      description: |-
+        * `PUBLIC` - Public
+        * `FOLLOWERS` - Followers
+        * `PRIVATE` - Private
     Wallet:
       type: object
       properties:

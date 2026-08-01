@@ -9,6 +9,7 @@ class NotificationAdmin(admin.ModelAdmin):
         "id",
         "title",
         "notification_type",
+        "priority",
         "recipient",
         "target_role",
         "is_active",
@@ -16,6 +17,7 @@ class NotificationAdmin(admin.ModelAdmin):
     )
     list_filter = (
         "notification_type",
+        "priority",
         "target_role",
         "is_active",
         "created_at",

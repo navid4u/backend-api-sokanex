@@ -23,6 +23,8 @@ from .serializers import (
     VideoWriteSerializer,
 )
 from .services import VideoService
+from apps.activity.models import UserActivity
+from apps.activity.services import ActivityService
 
 
 class VideoCategoryListCreateView(
@@ -208,3 +210,13 @@ class VideoDetailView(
         VideoService.update_video(
             serializer
         )
+
+    def retrieve(self, request, *args, **kwargs):
+        response = super().retrieve(request, *args, **kwargs)
+        video = self.get_object()
+        ActivityService.record(
+            request.user, UserActivity.Type.VIDEO_WATCH, "Video opened",
+            target_type="video", target_id=video.pk,
+            target_url=f"/videos/{video.slug}",
+        )
+        return response

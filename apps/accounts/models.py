@@ -377,3 +377,121 @@ class UserProfile(models.Model):
 
     def __str__(self):
         return f"Profile details for {self.user}"
+
+
+class SecuritySettings(models.Model):
+    max_active_devices = models.PositiveSmallIntegerField(default=5)
+    session_lifetime_days = models.PositiveSmallIntegerField(default=7)
+    notify_new_login = models.BooleanField(default=True)
+    require_verified_email_for_sensitive_actions = models.BooleanField(default=False)
+    maintenance_message = models.CharField(max_length=300, blank=True)
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="security_settings_updates",
+    )
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name_plural = "Security settings"
+
+    def save(self, *args, **kwargs):
+        self.pk = 1
+        super().save(*args, **kwargs)
+
+    @classmethod
+    def load(cls):
+        obj, _ = cls.objects.get_or_create(pk=1)
+        return obj
+
+    def __str__(self):
+        return "Platform security settings"
+
+
+class UserDevice(models.Model):
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="devices",
+    )
+    device_id = models.CharField(max_length=64)
+    name = models.CharField(max_length=150, blank=True)
+    user_agent = models.CharField(max_length=500, blank=True)
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    refresh_jti = models.CharField(max_length=255, blank=True)
+    last_seen_at = models.DateTimeField(auto_now=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    revoked_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-last_seen_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["user", "device_id"],
+                name="unique_user_device_id",
+            )
+        ]
+        indexes = [models.Index(fields=["user", "revoked_at", "-last_seen_at"])]
+
+    @property
+    def is_active(self):
+        return self.revoked_at is None
+
+    def __str__(self):
+        return self.name or self.device_id
+
+
+class Badge(models.Model):
+    name = models.CharField(max_length=120, unique=True)
+    slug = models.SlugField(max_length=140, unique=True, blank=True, allow_unicode=True)
+    description = models.TextField(blank=True)
+    icon = models.ImageField(upload_to="badges/icons/", null=True, blank=True)
+    color = models.CharField(max_length=20, default="#2563EB")
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["name"]
+
+    def save(self, *args, **kwargs):
+        if not self.slug:
+            base = slugify(self.name, allow_unicode=True) or "badge"
+            candidate, counter = base, 2
+            while Badge.objects.filter(slug=candidate).exclude(pk=self.pk).exists():
+                candidate = f"{base}-{counter}"
+                counter += 1
+            self.slug = candidate
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return self.name
+
+
+class UserBadge(models.Model):
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="earned_badges",
+    )
+    badge = models.ForeignKey(Badge, on_delete=models.CASCADE, related_name="awards")
+    note = models.CharField(max_length=300, blank=True)
+    awarded_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="awarded_badges",
+    )
+    awarded_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-awarded_at"]
+        constraints = [
+            models.UniqueConstraint(fields=["user", "badge"], name="unique_badge_per_user")
+        ]
+
+    def __str__(self):
+        return f"{self.user} - {self.badge}"

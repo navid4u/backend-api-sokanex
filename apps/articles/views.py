@@ -22,6 +22,8 @@ from .serializers import (
     CategorySerializer,
 )
 from .services import ArticleService
+from apps.activity.models import UserActivity
+from apps.activity.services import ActivityService
 
 
 class CategoryListCreateView(
@@ -208,3 +210,13 @@ class ArticleDetailView(
         ArticleService.update_article(
             serializer
         )
+
+    def retrieve(self, request, *args, **kwargs):
+        response = super().retrieve(request, *args, **kwargs)
+        article = self.get_object()
+        ActivityService.record(
+            request.user, UserActivity.Type.ARTICLE_READ, "Article read",
+            target_type="article", target_id=article.pk,
+            target_url=f"/articles/{article.slug}",
+        )
+        return response

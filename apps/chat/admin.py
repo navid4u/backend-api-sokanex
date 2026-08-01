@@ -1,6 +1,9 @@
 from django.contrib import admin
 
-from .models import ChatRoom, Message, RoomMembership
+from .models import (
+    ChatRoom, Message, PostComment, PostReaction, PostReport,
+    RoomMembership, SavedPost, TraderPost, UserFollow,
+)
 
 
 class RoomMembershipInline(admin.TabularInline):
@@ -126,3 +129,29 @@ class MessageAdmin(admin.ModelAdmin):
         if obj.is_deleted:
             return "[deleted]"
         return obj.text[:80]
+
+
+@admin.register(TraderPost)
+class TraderPostAdmin(admin.ModelAdmin):
+    list_display = ("id", "author", "visibility", "is_deleted", "created_at")
+    list_filter = ("visibility", "is_deleted", "created_at")
+    search_fields = ("author__username", "text")
+
+
+@admin.register(PostComment)
+class PostCommentAdmin(admin.ModelAdmin):
+    list_display = ("id", "post", "author", "is_deleted", "created_at")
+    list_filter = ("is_deleted", "created_at")
+    search_fields = ("author__username", "text")
+
+
+@admin.register(PostReport)
+class PostReportAdmin(admin.ModelAdmin):
+    list_display = ("id", "post", "reporter", "status", "created_at")
+    list_filter = ("status", "created_at")
+    search_fields = ("reporter__username", "reason")
+
+
+admin.site.register(PostReaction)
+admin.site.register(SavedPost)
+admin.site.register(UserFollow)

@@ -7,10 +7,28 @@ from .views import (
     JoinChatRoomView,
     LeaveChatRoomView,
     RoomMessageListCreateView,
+    FollowingListView,
+    FollowUserView,
+    PostCommentListCreateView,
+    PostReactionView,
+    ReportPostView,
+    SavePostView,
+    SavedPostListView,
+    SocialFeedView,
+    SocialPostDetailView,
 )
 
 
 urlpatterns = [
+    path("social/feed/", SocialFeedView.as_view(), name="social-feed"),
+    path("social/saved/", SavedPostListView.as_view(), name="social-saved"),
+    path("social/following/", FollowingListView.as_view(), name="social-following"),
+    path("social/users/<int:user_id>/follow/", FollowUserView.as_view(), name="social-follow-user"),
+    path("social/posts/<int:pk>/", SocialPostDetailView.as_view(), name="social-post-detail"),
+    path("social/posts/<int:pk>/comments/", PostCommentListCreateView.as_view(), name="social-post-comments"),
+    path("social/posts/<int:pk>/reaction/", PostReactionView.as_view(), name="social-post-reaction"),
+    path("social/posts/<int:pk>/save/", SavePostView.as_view(), name="social-post-save"),
+    path("social/posts/<int:pk>/report/", ReportPostView.as_view(), name="social-post-report"),
     path(
         "",
         ChatRoomListCreateView.as_view(),

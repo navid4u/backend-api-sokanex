@@ -114,18 +114,19 @@ class NotificationUnreadCountView(APIView):
 class NotificationDetailView(
     mixins.RetrieveModelMixin,
     mixins.UpdateModelMixin,
+    mixins.DestroyModelMixin,
     generics.GenericAPIView,
 ):
     serializer_class = NotificationSerializer
 
     def get_permissions(self):
         permissions = [IsAuthenticated()]
-        if self.request.method == "PATCH":
+        if self.request.method in ("PATCH", "DELETE"):
             permissions.append(IsEmployee())
         return permissions
 
     def get_queryset(self):
-        if self.request.method == "PATCH":
+        if self.request.method in ("PATCH", "DELETE"):
             return Notification.objects.select_related(
                 "created_by",
                 "recipient",
@@ -146,6 +147,9 @@ class NotificationDetailView(
             *args,
             **kwargs,
         )
+
+    def delete(self, request, *args, **kwargs):
+        return self.destroy(request, *args, **kwargs)
 
 
 class MarkNotificationReadView(APIView):

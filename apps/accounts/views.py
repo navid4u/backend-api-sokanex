@@ -43,6 +43,7 @@ from common.permissions import (
 
 from .filters import UserFilter
 from .serializers import (
+    BadgeSerializer,
     AdminUpgradeRequestSerializer,
     CustomTokenObtainPairSerializer,
     LogoutSerializer,
@@ -58,9 +59,24 @@ from .serializers import (
     UserSerializer,
     UpgradeRequestReviewSerializer,
     UpgradeRequestSerializer,
+    SecuritySettingsSerializer,
+    UserBadgeSerializer,
+    UserDeviceSerializer,
 )
-from .models import PlatformRole, UpgradeRequest, UserProfile
+from .models import (
+    Badge,
+    PlatformRole,
+    SecuritySettings,
+    UpgradeRequest,
+    UserBadge,
+    UserDevice,
+    UserProfile,
+)
+from django.utils import timezone
+from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken, OutstandingToken
 from .services import UserService
+from apps.activity.models import UserActivity
+from apps.activity.services import ActivityService
 
 
 User = get_user_model()
@@ -129,6 +145,13 @@ class ProfileView(APIView):
         )
         serializer.save()
 
+        ActivityService.record(
+            request.user,
+            UserActivity.Type.PROFILE_UPDATE,
+            "Profile updated",
+            ip_address=ActivityService.client_ip(request),
+        )
+
         response_serializer = UserSerializer(
             request.user,
             context={
@@ -177,6 +200,18 @@ class LogoutView(
         )
         serializer.save()
 
+        ActivityService.record(
+            request.user,
+            UserActivity.Type.LOGOUT,
+            "Account logout",
+            ip_address=ActivityService.client_ip(request),
+        )
+
+        UserDevice.objects.filter(
+            user=request.user,
+            refresh_jti=str(serializer.token.get("jti", "")),
+        ).update(revoked_at=timezone.now())
+
         return Response(
             {
                 "message": (
@@ -185,6 +220,114 @@ class LogoutView(
             },
             status=status.HTTP_200_OK,
         )
+
+
+class MyDeviceListView(generics.ListAPIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = UserDeviceSerializer
+    pagination_class = None
+
+    def get_queryset(self):
+        if getattr(self, "swagger_fake_view", False):
+            return UserDevice.objects.none()
+        return UserDevice.objects.filter(user=self.request.user)
+
+
+class RevokeDeviceView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(request=None, responses=inline_serializer(name="DeviceLogoutResponse", fields={"message": serializers.CharField()}))
+    def post(self, request, pk):
+        device = get_object_or_404(UserDevice, pk=pk, user=request.user)
+        if device.refresh_jti:
+            outstanding = OutstandingToken.objects.filter(
+                user=request.user, jti=device.refresh_jti
+            ).first()
+            if outstanding:
+                BlacklistedToken.objects.get_or_create(token=outstanding)
+        device.revoked_at = timezone.now()
+        device.save(update_fields=["revoked_at"])
+        return Response({"message": "Device logged out successfully."})
+
+
+class RevokeOtherDevicesView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(request=None, responses=inline_serializer(name="OtherDeviceLogoutResponse", fields={"message": serializers.CharField(), "revoked_count": serializers.IntegerField()}))
+    def post(self, request):
+        current_device_id = request.headers.get("X-Device-ID", "").strip()
+        queryset = UserDevice.objects.filter(user=request.user, revoked_at__isnull=True)
+        if current_device_id:
+            queryset = queryset.exclude(device_id=current_device_id)
+        devices = list(queryset)
+        jtids = [device.refresh_jti for device in devices if device.refresh_jti]
+        for token in OutstandingToken.objects.filter(user=request.user, jti__in=jtids):
+            BlacklistedToken.objects.get_or_create(token=token)
+        count = queryset.update(revoked_at=timezone.now())
+        return Response({"message": "Other devices logged out.", "revoked_count": count})
+
+
+class BadgeListCreateView(generics.ListCreateAPIView):
+    queryset = Badge.objects.all()
+    serializer_class = BadgeSerializer
+    parser_classes = [JSONParser, MultiPartParser, FormParser]
+
+    def get_permissions(self):
+        permissions = [IsAuthenticated()]
+        if self.request.method == "POST":
+            permissions.append(CanManageUsers())
+        return permissions
+
+
+class BadgeDetailView(generics.RetrieveUpdateDestroyAPIView):
+    queryset = Badge.objects.all()
+    serializer_class = BadgeSerializer
+    lookup_field = "slug"
+    permission_classes = [IsAuthenticated, CanManageUsers]
+    parser_classes = [JSONParser, MultiPartParser, FormParser]
+
+
+class MyBadgeListView(generics.ListAPIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = UserBadgeSerializer
+    pagination_class = None
+
+    def get_queryset(self):
+        if getattr(self, "swagger_fake_view", False):
+            return UserBadge.objects.none()
+        return UserBadge.objects.filter(user=self.request.user).select_related("badge", "awarded_by")
+
+
+class UserBadgeListCreateView(generics.ListCreateAPIView):
+    permission_classes = [IsAuthenticated, CanManageUsers]
+    serializer_class = UserBadgeSerializer
+    pagination_class = None
+
+    def get_queryset(self):
+        if getattr(self, "swagger_fake_view", False):
+            return UserBadge.objects.none()
+        return UserBadge.objects.filter(user_id=self.kwargs["pk"]).select_related("badge", "awarded_by")
+
+    def perform_create(self, serializer):
+        target_user = get_object_or_404(User, pk=self.kwargs["pk"])
+        serializer.save(user=target_user, awarded_by=self.request.user)
+
+
+class UserBadgeDetailView(generics.DestroyAPIView):
+    permission_classes = [IsAuthenticated, CanManageUsers]
+    queryset = UserBadge.objects.all()
+    serializer_class = UserBadgeSerializer
+
+
+class SecuritySettingsView(generics.RetrieveUpdateAPIView):
+    permission_classes = [IsAuthenticated, IsAdmin]
+    serializer_class = SecuritySettingsSerializer
+
+    def get_object(self):
+        return SecuritySettings.load()
+
+    def perform_update(self, serializer):
+        serializer.save(updated_by=self.request.user)
 
 
 class UserListView(
@@ -388,6 +531,12 @@ class ProfileDetailsView(APIView):
         )
         serializer.is_valid(raise_exception=True)
         serializer.save()
+        ActivityService.record(
+            request.user,
+            UserActivity.Type.PROFILE_UPDATE,
+            "Profile details updated",
+            ip_address=ActivityService.client_ip(request),
+        )
         return Response(serializer.data)
 
 

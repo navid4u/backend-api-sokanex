@@ -2,6 +2,7 @@ asgiref==3.12.1
 Django==6.0.7
 django-cors-headers==4.9.0
 django-filter==25.2
+cryptography==45.0.5
 djangorestframework==3.17.1
 djangorestframework-simplejwt==5.5.1
 drf-spectacular==0.30.0

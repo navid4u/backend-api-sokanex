@@ -47,6 +47,7 @@ ALLOWED_HOSTS = get_list_setting(
 INSTALLED_APPS = [
     # Local user model
     "apps.accounts",
+    "apps.activity",
 
     # Django
     "django.contrib.admin",
@@ -428,8 +429,10 @@ FILE_UPLOAD_MAX_MEMORY_SIZE = (
 )
 
 # Allows chat attachments up to serializer limits.
-DATA_UPLOAD_MAX_MEMORY_SIZE = (
-    25 * 1024 * 1024
+DATA_UPLOAD_MAX_MEMORY_SIZE = config(
+    "DATA_UPLOAD_MAX_MEMORY_SIZE",
+    default=550 * 1024 * 1024,
+    cast=int,
 )
 
 

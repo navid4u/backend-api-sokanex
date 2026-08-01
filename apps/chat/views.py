@@ -1,4 +1,5 @@
 from django.shortcuts import get_object_or_404
+from django.db.models import Count, Exists, OuterRef, Q
 
 from drf_spectacular.utils import (
     extend_schema,
@@ -18,16 +19,25 @@ from rest_framework.filters import (
     SearchFilter,
 )
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from common.permissions import IsEmployee
 
-from .models import ChatRoom, Message
+from .models import (
+    ChatRoom, Message, PostComment, PostReaction, PostReport,
+    SavedPost, TraderPost, UserFollow,
+)
 from .serializers import (
     ChatRoomSerializer,
     ChatRoomWriteSerializer,
     MessageSerializer,
+    FollowSerializer,
+    PostCommentSerializer,
+    PostReactionSerializer,
+    PostReportSerializer,
+    TraderPostSerializer,
 )
 from .services import ChatService
 
@@ -332,3 +342,151 @@ class DeleteMessageView(APIView):
         return Response(
             status=status.HTTP_204_NO_CONTENT
         )
+
+
+def social_posts_for(user):
+    following_ids = UserFollow.objects.filter(follower=user).values("following_id")
+    queryset = TraderPost.objects.filter(is_deleted=False).filter(
+        Q(visibility=TraderPost.Visibility.PUBLIC)
+        | Q(author=user)
+        | Q(visibility=TraderPost.Visibility.FOLLOWERS, author_id__in=following_ids)
+    )
+    return queryset.select_related("author").annotate(
+        reactions_count=Count("reactions", distinct=True),
+        comments_count=Count("comments", filter=Q(comments__is_deleted=False), distinct=True),
+        is_reacted=Exists(PostReaction.objects.filter(post=OuterRef("pk"), user=user)),
+        is_saved=Exists(SavedPost.objects.filter(post=OuterRef("pk"), user=user)),
+    )
+
+
+class SocialFeedView(generics.ListCreateAPIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = TraderPostSerializer
+    parser_classes = [JSONParser, MultiPartParser, FormParser]
+    filter_backends = [SearchFilter, OrderingFilter]
+    search_fields = ["text", "author__username", "author__first_name", "author__last_name"]
+    ordering_fields = ["created_at", "updated_at"]
+
+    def get_queryset(self):
+        queryset = social_posts_for(self.request.user)
+        if self.request.query_params.get("following") == "true":
+            followed = UserFollow.objects.filter(follower=self.request.user).values("following_id")
+            queryset = queryset.filter(author_id__in=followed)
+        return queryset
+
+    def perform_create(self, serializer):
+        serializer.save(author=self.request.user)
+
+
+class SocialPostDetailView(generics.RetrieveUpdateDestroyAPIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = TraderPostSerializer
+    parser_classes = [JSONParser, MultiPartParser, FormParser]
+
+    def get_queryset(self):
+        return social_posts_for(self.request.user)
+
+    def perform_update(self, serializer):
+        if serializer.instance.author_id != self.request.user.id:
+            raise serializers.ValidationError("Only the post author can edit this post.")
+        serializer.save(is_edited=True)
+
+    def perform_destroy(self, instance):
+        if instance.author_id != self.request.user.id and not self.request.user.is_staff:
+            raise serializers.ValidationError("Only the author or a moderator can delete this post.")
+        instance.is_deleted = True
+        instance.save(update_fields=["is_deleted", "updated_at"])
+
+
+class PostCommentListCreateView(generics.ListCreateAPIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = PostCommentSerializer
+
+    def get_post(self):
+        return get_object_or_404(social_posts_for(self.request.user), pk=self.kwargs["pk"])
+
+    def get_queryset(self):
+        if getattr(self, "swagger_fake_view", False):
+            return PostComment.objects.none()
+        return PostComment.objects.filter(post=self.get_post(), is_deleted=False).select_related("author")
+
+    def perform_create(self, serializer):
+        serializer.save(post=self.get_post(), author=self.request.user)
+
+
+class PostReactionView(APIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = PostReactionSerializer
+
+    def post(self, request, pk):
+        post = get_object_or_404(social_posts_for(request.user), pk=pk)
+        serializer = PostReactionSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        reaction, _ = PostReaction.objects.update_or_create(
+            post=post, user=request.user, defaults=serializer.validated_data
+        )
+        return Response(PostReactionSerializer(reaction).data)
+
+    def delete(self, request, pk):
+        PostReaction.objects.filter(post_id=pk, user=request.user).delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class SavePostView(APIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = TraderPostSerializer
+
+    def post(self, request, pk):
+        post = get_object_or_404(social_posts_for(request.user), pk=pk)
+        SavedPost.objects.get_or_create(user=request.user, post=post)
+        return Response({"message": "Post saved."})
+
+    def delete(self, request, pk):
+        SavedPost.objects.filter(user=request.user, post_id=pk).delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class SavedPostListView(generics.ListAPIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = TraderPostSerializer
+
+    def get_queryset(self):
+        if getattr(self, "swagger_fake_view", False):
+            return TraderPost.objects.none()
+        return social_posts_for(self.request.user).filter(saves__user=self.request.user)
+
+
+class FollowUserView(APIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = FollowSerializer
+
+    def post(self, request, user_id):
+        if request.user.id == user_id:
+            raise serializers.ValidationError("You cannot follow yourself.")
+        target = get_object_or_404(request.user.__class__, pk=user_id, is_active=True)
+        UserFollow.objects.get_or_create(follower=request.user, following=target)
+        return Response({"message": "User followed."})
+
+    def delete(self, request, user_id):
+        UserFollow.objects.filter(follower=request.user, following_id=user_id).delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class FollowingListView(generics.ListAPIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = FollowSerializer
+    pagination_class = None
+
+    def get_queryset(self):
+        if getattr(self, "swagger_fake_view", False):
+            return UserFollow.objects.none()
+        return UserFollow.objects.filter(follower=self.request.user).select_related("following")
+
+
+class ReportPostView(generics.CreateAPIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = PostReportSerializer
+
+    def perform_create(self, serializer):
+        post = get_object_or_404(social_posts_for(self.request.user), pk=self.kwargs["pk"])
+        serializer.save(post=post, reporter=self.request.user)

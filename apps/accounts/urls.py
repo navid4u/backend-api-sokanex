@@ -1,6 +1,8 @@
 from django.urls import path
 
 from .views import (
+    BadgeDetailView,
+    BadgeListCreateView,
     LogoutView,
     ProfileView,
     ProfileDetailsView,
@@ -17,10 +19,26 @@ from .views import (
     UpdateUserCustomRoleView,
     UserListView,
     UserDetailView,
+    MyBadgeListView,
+    MyDeviceListView,
+    RevokeDeviceView,
+    RevokeOtherDevicesView,
+    SecuritySettingsView,
+    UserBadgeDetailView,
+    UserBadgeListCreateView,
 )
 
 
 urlpatterns = [
+    path("devices/", MyDeviceListView.as_view(), name="my-devices"),
+    path("devices/logout-others/", RevokeOtherDevicesView.as_view(), name="logout-other-devices"),
+    path("devices/<int:pk>/logout/", RevokeDeviceView.as_view(), name="logout-device"),
+    path("badges/", BadgeListCreateView.as_view(), name="badge-list-create"),
+    path("badges/mine/", MyBadgeListView.as_view(), name="my-badges"),
+    path("badges/<str:slug>/", BadgeDetailView.as_view(), name="badge-detail"),
+    path("users/<int:pk>/badges/", UserBadgeListCreateView.as_view(), name="user-badges"),
+    path("user-badges/<int:pk>/", UserBadgeDetailView.as_view(), name="user-badge-detail"),
+    path("security/settings/", SecuritySettingsView.as_view(), name="security-settings"),
     path(
         "profile/",
         ProfileView.as_view(),

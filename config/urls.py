@@ -59,6 +59,10 @@ urlpatterns = [
         "api/accounts/",
         include("apps.accounts.urls"),
     ),
+    path(
+        "api/activity/",
+        include("apps.activity.urls"),
+    ),
 
     path(
         "api/token/",

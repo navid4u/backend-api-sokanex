@@ -73,6 +73,13 @@ class Video(LevelRestrictedContent):
 
     external_url = models.URLField(
         max_length=500,
+        blank=True,
+    )
+
+    video_file = models.FileField(
+        upload_to="videos/files/%Y/%m/",
+        null=True,
+        blank=True,
     )
 
     thumbnail = models.ImageField(
@@ -85,6 +92,12 @@ class Video(LevelRestrictedContent):
         null=True,
         blank=True,
     )
+
+    original_filename = models.CharField(max_length=255, blank=True)
+    mime_type = models.CharField(max_length=100, blank=True)
+    file_size_bytes = models.PositiveBigIntegerField(null=True, blank=True)
+    width = models.PositiveIntegerField(null=True, blank=True)
+    height = models.PositiveIntegerField(null=True, blank=True)
 
     category = models.ForeignKey(
         VideoCategory,
