@@ -3583,26 +3583,6 @@ paths:
       responses:
         '204':
           description: No response body
-  /api/livestream/{slug}/join/:
-    post:
-      operationId: livestream_join_create
-      parameters:
-      - in: path
-        name: slug
-        schema:
-          type: string
-        required: true
-      tags:
-      - livestream
-      security:
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/JoinLiveEventResponse'
-          description: ''
   /api/livestream/manage/:
     get:
       operationId: livestream_manage_list
@@ -6168,17 +6148,6 @@ components:
       required:
       - membership_role
       - message
-    JoinLiveEventResponse:
-      type: object
-      properties:
-        join_url:
-          type: string
-          format: uri
-        provider:
-          type: string
-      required:
-      - join_url
-      - provider
     LandingPage:
       type: object
       properties:
@@ -6425,8 +6394,6 @@ components:
         is_live_now:
           type: boolean
           readOnly: true
-        provider:
-          $ref: '#/components/schemas/ProviderEnum'
         description:
           type: string
         stream_url:
@@ -6437,16 +6404,6 @@ components:
           - type: string
             maxLength: 0
         replay_url:
-          oneOf:
-          - type: string
-            format: uri
-            maxLength: 500
-          - type: string
-            maxLength: 0
-        provider_event_id:
-          type: string
-          maxLength: 150
-        provider_join_url:
           oneOf:
           - type: string
             format: uri
@@ -6511,8 +6468,6 @@ components:
         is_live_now:
           type: boolean
           readOnly: true
-        provider:
-          $ref: '#/components/schemas/ProviderEnum'
       required:
       - host
       - id
@@ -6564,19 +6519,6 @@ components:
             maxLength: 500
           - type: string
             maxLength: 0
-        provider:
-          $ref: '#/components/schemas/ProviderEnum'
-        provider_event_id:
-          type: string
-          maxLength: 150
-        provider_join_url:
-          oneOf:
-          - type: string
-            format: uri
-            maxLength: 500
-          - type: string
-            maxLength: 0
-        provider_metadata: {}
         starts_at:
           type: string
           format: date-time
@@ -6639,19 +6581,6 @@ components:
             maxLength: 500
           - type: string
             maxLength: 0
-        provider:
-          $ref: '#/components/schemas/ProviderEnum'
-        provider_event_id:
-          type: string
-          maxLength: 150
-        provider_join_url:
-          oneOf:
-          - type: string
-            format: uri
-            maxLength: 500
-          - type: string
-            maxLength: 0
-        provider_metadata: {}
         starts_at:
           type: string
           format: date-time
@@ -7812,19 +7741,6 @@ components:
             maxLength: 500
           - type: string
             maxLength: 0
-        provider:
-          $ref: '#/components/schemas/ProviderEnum'
-        provider_event_id:
-          type: string
-          maxLength: 150
-        provider_join_url:
-          oneOf:
-          - type: string
-            format: uri
-            maxLength: 500
-          - type: string
-            maxLength: 0
-        provider_metadata: {}
         starts_at:
           type: string
           format: date-time
@@ -8420,14 +8336,6 @@ components:
       required:
       - message
       - user
-    ProviderEnum:
-      enum:
-      - MANUAL
-      - ALOCOM
-      type: string
-      description: |-
-        * `MANUAL` - Manual
-        * `ALOCOM` - Alocom
     PublicLandingPage:
       type: object
       properties:

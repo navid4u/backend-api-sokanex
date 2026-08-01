@@ -39,7 +39,6 @@ class LiveEventListSerializer(
             "allowed_levels",
             "host",
             "is_live_now",
-            "provider",
         )
 
     def get_is_live_now(self, obj) -> bool:
@@ -69,8 +68,6 @@ class LiveEventDetailSerializer(
                 "description",
                 "stream_url",
                 "replay_url",
-                "provider_event_id",
-                "provider_join_url",
                 "created_at",
                 "updated_at",
             )
@@ -93,10 +90,6 @@ class LiveEventWriteSerializer(
             "thumbnail",
             "stream_url",
             "replay_url",
-            "provider",
-            "provider_event_id",
-            "provider_join_url",
-            "provider_metadata",
             "starts_at",
             "ends_at",
             "status",

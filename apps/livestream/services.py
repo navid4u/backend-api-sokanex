@@ -2,13 +2,7 @@ from django.db.models import Q
 from django.utils import timezone
 
 from .models import LiveEvent
-from .models import AlocomSettings
 from common.content_access import restrict_queryset_for_user
-import json
-import ssl
-from urllib.error import HTTPError, URLError
-from urllib.parse import urljoin
-from urllib.request import Request, urlopen
 
 
 class LiveEventService:
@@ -63,38 +57,3 @@ class LiveEventService:
                 starts_at__gte=timezone.now(),
             )
         )
-
-
-class AlocomClientError(Exception):
-    pass
-
-
-class AlocomClient:
-    """Low-level client. Resource paths come from Alocom's OpenAPI contract."""
-
-    def __init__(self, integration=None):
-        self.integration = integration or AlocomSettings.load()
-
-    def request(self, method, path, payload=None):
-        if not self.integration.enabled:
-            raise AlocomClientError("Alocom integration is disabled.")
-        token = self.integration.get_api_token()
-        if not token:
-            raise AlocomClientError("Alocom API token is not configured.")
-        url = urljoin(self.integration.api_base_url.rstrip("/") + "/", path.lstrip("/"))
-        body = json.dumps(payload).encode() if payload is not None else None
-        request = Request(
-            url,
-            data=body,
-            method=method.upper(),
-            headers={"Authorization": f"Bearer {token}", "Accept": "application/json", "Content-Type": "application/json"},
-        )
-        context = None if self.integration.verify_ssl else ssl._create_unverified_context()
-        try:
-            with urlopen(request, timeout=self.integration.request_timeout_seconds, context=context) as response:
-                content = response.read()
-                return json.loads(content.decode()) if content else {}
-        except HTTPError as exc:
-            raise AlocomClientError(f"Alocom returned HTTP {exc.code}.") from exc
-        except (URLError, TimeoutError, ValueError) as exc:
-            raise AlocomClientError("Could not communicate with Alocom.") from exc

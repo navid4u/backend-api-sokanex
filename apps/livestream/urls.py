@@ -4,12 +4,10 @@ from .views import (
     LiveEventDetailView,
     LiveEventListCreateView,
     LiveEventManagementListView,
-    JoinLiveEventView,
 )
 
 
 urlpatterns = [
-    path("<str:slug>/join/", JoinLiveEventView.as_view(), name="live-join"),
     path(
         "manage/",
         LiveEventManagementListView.as_view(),

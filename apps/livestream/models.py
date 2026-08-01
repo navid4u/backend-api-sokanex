@@ -2,9 +2,6 @@ from django.conf import settings
 from django.db import models
 from django.utils.text import slugify
 from common.content_access import LevelRestrictedContent
-import base64
-import hashlib
-from cryptography.fernet import Fernet, InvalidToken
 
 
 class LiveEvent(LevelRestrictedContent):
@@ -45,14 +42,6 @@ class LiveEvent(LevelRestrictedContent):
         max_length=500,
         blank=True,
     )
-    provider = models.CharField(
-        max_length=20,
-        choices=(("MANUAL", "Manual"), ("ALOCOM", "Alocom")),
-        default="MANUAL",
-    )
-    provider_event_id = models.CharField(max_length=150, blank=True)
-    provider_join_url = models.URLField(max_length=500, blank=True)
-    provider_metadata = models.JSONField(default=dict, blank=True)
 
     starts_at = models.DateTimeField()
 
@@ -134,50 +123,3 @@ class LiveEvent(LevelRestrictedContent):
 
     def __str__(self):
         return self.title
-
-
-class AlocomSettings(models.Model):
-    api_base_url = models.URLField(default="https://pnlapi.alocom.co")
-    api_token_encrypted = models.TextField(blank=True, editable=False)
-    enabled = models.BooleanField(default=False)
-    request_timeout_seconds = models.PositiveSmallIntegerField(default=20)
-    verify_ssl = models.BooleanField(default=True)
-    updated_by = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name="alocom_settings_updates",
-    )
-    updated_at = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        verbose_name_plural = "Alocom settings"
-
-    @staticmethod
-    def _fernet():
-        digest = hashlib.sha256(settings.SECRET_KEY.encode()).digest()
-        return Fernet(base64.urlsafe_b64encode(digest))
-
-    def set_api_token(self, value):
-        self.api_token_encrypted = self._fernet().encrypt(value.encode()).decode() if value else ""
-
-    def get_api_token(self):
-        if not self.api_token_encrypted:
-            return ""
-        try:
-            return self._fernet().decrypt(self.api_token_encrypted.encode()).decode()
-        except InvalidToken:
-            return ""
-
-    def save(self, *args, **kwargs):
-        self.pk = 1
-        super().save(*args, **kwargs)
-
-    @classmethod
-    def load(cls):
-        obj, _ = cls.objects.get_or_create(pk=1)
-        return obj
-
-    def __str__(self):
-        return "Alocom integration settings"

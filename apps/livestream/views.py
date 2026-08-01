@@ -10,11 +10,6 @@ from rest_framework.filters import (
 from rest_framework.permissions import (
     IsAuthenticated,
 )
-from rest_framework.views import APIView
-from rest_framework.response import Response
-from drf_spectacular.utils import extend_schema, inline_serializer
-from rest_framework import serializers
-from django.shortcuts import get_object_or_404
 
 from apps.accounts.models import User
 from common.permissions import IsEmployee
@@ -27,8 +22,6 @@ from .serializers import (
 )
 from .services import LiveEventService
 from .models import LiveEvent
-from apps.activity.models import UserActivity
-from apps.activity.services import ActivityService
 
 
 class LiveEventListCreateView(
@@ -165,26 +158,3 @@ class LiveEventDetailView(
             return LiveEventService.all_events()
 
         return LiveEventService.public_events(user)
-
-
-class JoinLiveEventView(APIView):
-    permission_classes = [IsAuthenticated]
-
-    @extend_schema(
-        request=None,
-        responses=inline_serializer(
-            name="JoinLiveEventResponse",
-            fields={"join_url": serializers.URLField(), "provider": serializers.CharField()},
-        ),
-    )
-    def post(self, request, slug):
-        event = get_object_or_404(LiveEventService.public_events(request.user), slug=slug)
-        join_url = event.provider_join_url or event.stream_url
-        if not join_url:
-            raise serializers.ValidationError("This live event does not have a join URL yet.")
-        ActivityService.record(
-            request.user, UserActivity.Type.LIVE_JOIN, "Live event joined",
-            target_type="live_event", target_id=event.pk,
-            target_url=f"/livestream/{event.slug}",
-        )
-        return Response({"join_url": join_url, "provider": event.provider})
