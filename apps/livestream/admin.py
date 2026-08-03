@@ -1,7 +1,11 @@
 from django.contrib import admin
 from django.utils import timezone
 
-from .models import LiveEvent
+from .models import LiveChatMessage, LiveEvent, LivePresence, SpeakRequest
+
+admin.site.register(LivePresence)
+admin.site.register(SpeakRequest)
+admin.site.register(LiveChatMessage)
 
 
 @admin.register(LiveEvent)

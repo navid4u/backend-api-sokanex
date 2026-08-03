@@ -361,6 +361,192 @@ paths:
               schema:
                 $ref: '#/components/schemas/PaginatedCourseEnrollmentList'
           description: ''
+  /api/academy/quizzes/{id}/attempts/:
+    post:
+      operationId: academy_quizzes_attempts_create
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - academy
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QuizAttempt'
+          description: ''
+  /api/academy/quizzes/{id}/attempts/mine/:
+    get:
+      operationId: academy_quizzes_attempts_mine_list
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      tags:
+      - academy
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedQuizAttemptList'
+          description: ''
+  /api/academy/quizzes/manage/:
+    post:
+      operationId: academy_quizzes_manage_create
+      tags:
+      - academy
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/QuizWriteRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/QuizWriteRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/QuizWriteRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QuizWrite'
+          description: ''
+  /api/academy/quizzes/manage/{id}/:
+    get:
+      operationId: academy_quizzes_manage_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - academy
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QuizWrite'
+          description: ''
+    put:
+      operationId: academy_quizzes_manage_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - academy
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/QuizWriteRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/QuizWriteRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/QuizWriteRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QuizWrite'
+          description: ''
+    patch:
+      operationId: academy_quizzes_manage_partial_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - academy
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedQuizWriteRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedQuizWriteRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedQuizWriteRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QuizWrite'
+          description: ''
+    delete:
+      operationId: academy_quizzes_manage_destroy
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - academy
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
   /api/academy/sessions/{id}/:
     get:
       operationId: academy_sessions_retrieve
@@ -457,6 +643,38 @@ paths:
       responses:
         '204':
           description: No response body
+  /api/academy/sessions/{id}/media/:
+    get:
+      operationId: academy_sessions_media_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - academy
+      security:
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/academy/sessions/{id}/media-ticket/:
+    post:
+      operationId: academy_sessions_media_ticket_create
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - academy
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
   /api/academy/sessions/{id}/progress/:
     get:
       operationId: academy_sessions_progress_retrieve
@@ -537,6 +755,128 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/SessionProgress'
+          description: ''
+  /api/academy/sessions/{id}/quiz/:
+    get:
+      operationId: academy_sessions_quiz_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - academy
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QuizPublic'
+          description: ''
+  /api/accounts/admin/broker-connections/:
+    get:
+      operationId: accounts_admin_broker_connections_list
+      parameters:
+      - in: query
+        name: broker_name
+        schema:
+          type: string
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      - in: query
+        name: status
+        schema:
+          type: string
+          enum:
+          - connected
+          - not_started
+          - pending
+          - rejected
+        description: |-
+          * `not_started` - Not started
+          * `pending` - Pending
+          * `rejected` - Rejected
+          * `connected` - Connected
+      tags:
+      - accounts
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedBrokerConnectionList'
+          description: ''
+  /api/accounts/admin/broker-connections/{id}/:
+    get:
+      operationId: accounts_admin_broker_connections_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - accounts
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BrokerConnection'
+          description: ''
+  /api/accounts/admin/broker-connections/{id}/review/:
+    patch:
+      operationId: accounts_admin_broker_connections_review_partial_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - accounts
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedBrokerConnectionReviewRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedBrokerConnectionReviewRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedBrokerConnectionReviewRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BrokerConnectionReview'
           description: ''
   /api/accounts/admin/upgrade-requests/:
     get:
@@ -880,6 +1220,45 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/UserBadge'
+          description: ''
+  /api/accounts/broker-connection/:
+    get:
+      operationId: accounts_broker_connection_retrieve
+      tags:
+      - accounts
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BrokerConnection'
+          description: ''
+    post:
+      operationId: accounts_broker_connection_create
+      tags:
+      - accounts
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/BrokerConnectionRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/BrokerConnectionRequest'
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BrokerConnectionRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BrokerConnection'
           description: ''
   /api/accounts/devices/:
     get:
@@ -2418,6 +2797,240 @@ paths:
               schema:
                 $ref: '#/components/schemas/PaginatedBrokerListList'
           description: ''
+  /api/channels/internal-analysis/:
+    get:
+      operationId: channels_internal_analysis_list
+      parameters:
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      tags:
+      - channels
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedChannelPostList'
+          description: ''
+    post:
+      operationId: channels_internal_analysis_create
+      tags:
+      - channels
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChannelPostRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ChannelPostRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ChannelPostRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChannelPost'
+          description: ''
+  /api/channels/posts/{id}/:
+    get:
+      operationId: channels_posts_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - channels
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChannelPost'
+          description: ''
+    put:
+      operationId: channels_posts_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - channels
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChannelPostRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ChannelPostRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ChannelPostRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChannelPost'
+          description: ''
+    patch:
+      operationId: channels_posts_partial_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - channels
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedChannelPostRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedChannelPostRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedChannelPostRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChannelPost'
+          description: ''
+    delete:
+      operationId: channels_posts_destroy
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - channels
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/channels/ticket/:
+    post:
+      operationId: channels_ticket_create
+      tags:
+      - channels
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/channels/vip-signals/:
+    get:
+      operationId: channels_vip_signals_list
+      parameters:
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      tags:
+      - channels
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedChannelPostList'
+          description: ''
+    post:
+      operationId: channels_vip_signals_create
+      tags:
+      - channels
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChannelPostRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ChannelPostRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ChannelPostRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChannelPost'
+          description: ''
   /api/chat/:
     get:
       operationId: chat_list
@@ -3574,6 +4187,7 @@ paths:
           type: string
           enum:
           - CANCELLED
+          - DISABLED
           - ENDED
           - LIVE
           - SCHEDULED
@@ -3582,6 +4196,7 @@ paths:
           * `LIVE` - Live
           * `ENDED` - Ended
           * `CANCELLED` - Cancelled
+          * `DISABLED` - Disabled
       tags:
       - livestream
       security:
@@ -3714,6 +4329,246 @@ paths:
       responses:
         '204':
           description: No response body
+  /api/livestream/{slug}/chat/:
+    get:
+      operationId: livestream_chat_list
+      parameters:
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      - in: path
+        name: slug
+        schema:
+          type: string
+        required: true
+      tags:
+      - livestream
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedLiveChatMessageList'
+          description: ''
+    post:
+      operationId: livestream_chat_create
+      parameters:
+      - in: path
+        name: slug
+        schema:
+          type: string
+        required: true
+      tags:
+      - livestream
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LiveChatMessageRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/LiveChatMessageRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/LiveChatMessageRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LiveChatMessage'
+          description: ''
+  /api/livestream/{slug}/join/:
+    post:
+      operationId: livestream_join_create
+      parameters:
+      - in: path
+        name: slug
+        schema:
+          type: string
+        required: true
+      tags:
+      - livestream
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/livestream/{slug}/participants/{participant_id}/:
+    delete:
+      operationId: livestream_participants_destroy
+      parameters:
+      - in: path
+        name: participant_id
+        schema:
+          type: integer
+        required: true
+      - in: path
+        name: slug
+        schema:
+          type: string
+        required: true
+      tags:
+      - livestream
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/livestream/{slug}/participants/{participant_id}/mute/:
+    post:
+      operationId: livestream_participants_mute_create
+      parameters:
+      - in: path
+        name: participant_id
+        schema:
+          type: integer
+        required: true
+      - in: path
+        name: slug
+        schema:
+          type: string
+        required: true
+      tags:
+      - livestream
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LivePresence'
+          description: ''
+  /api/livestream/{slug}/presence/:
+    get:
+      operationId: livestream_presence_retrieve
+      parameters:
+      - in: path
+        name: slug
+        schema:
+          type: string
+        required: true
+      tags:
+      - livestream
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LivePresence'
+          description: ''
+  /api/livestream/{slug}/speak-requests/:
+    post:
+      operationId: livestream_speak_requests_create
+      parameters:
+      - in: path
+        name: slug
+        schema:
+          type: string
+        required: true
+      tags:
+      - livestream
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SpeakRequestRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/SpeakRequestRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/SpeakRequestRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SpeakRequest'
+          description: ''
+  /api/livestream/{slug}/speak-requests/{request_id}/:
+    patch:
+      operationId: livestream_speak_requests_partial_update
+      parameters:
+      - in: path
+        name: request_id
+        schema:
+          type: integer
+        required: true
+      - in: path
+        name: slug
+        schema:
+          type: string
+        required: true
+      tags:
+      - livestream
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedSpeakRequestReviewRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedSpeakRequestReviewRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedSpeakRequestReviewRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SpeakRequestReview'
+          description: ''
+  /api/livestream/{slug}/ticket/:
+    post:
+      operationId: livestream_ticket_create
+      parameters:
+      - in: path
+        name: slug
+        schema:
+          type: string
+        required: true
+      tags:
+      - livestream
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
   /api/livestream/manage/:
     get:
       operationId: livestream_manage_list
@@ -3766,6 +4621,7 @@ paths:
           type: string
           enum:
           - CANCELLED
+          - DISABLED
           - ENDED
           - LIVE
           - SCHEDULED
@@ -3774,6 +4630,7 @@ paths:
           * `LIVE` - Live
           * `ENDED` - Ended
           * `CANCELLED` - Cancelled
+          * `DISABLED` - Disabled
       tags:
       - livestream
       security:
@@ -3785,6 +4642,55 @@ paths:
               schema:
                 $ref: '#/components/schemas/PaginatedLiveEventListList'
           description: ''
+  /api/market/economic-calendar/:
+    get:
+      operationId: market_economic_calendar_list
+      parameters:
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      tags:
+      - market
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedEconomicEventList'
+          description: ''
+  /api/market/quotes/:
+    get:
+      operationId: market_quotes_retrieve
+      tags:
+      - market
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
   /api/notifications/:
     get:
       operationId: notifications_list
@@ -4035,15 +4941,27 @@ paths:
         schema:
           type: string
           enum:
+          - active
           - approved
+          - cancelled
           - draft
+          - failed
           - pending
           - rejected
+          - successful
         description: |-
           * `draft` - Draft
           * `pending` - Pending
           * `approved` - Approved
           * `rejected` - Rejected
+          * `active` - Active
+          * `successful` - Successful
+          * `failed` - Failed
+          * `cancelled` - Cancelled
+      - in: query
+        name: symbol
+        schema:
+          type: string
       tags:
       - signals
       security:
@@ -4227,6 +5145,197 @@ paths:
               schema:
                 $ref: '#/components/schemas/RejectSignalResponse'
           description: ''
+  /api/signals/{id}/updates/:
+    get:
+      operationId: signals_updates_list
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      tags:
+      - signals
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedSignalUpdateList'
+          description: ''
+    post:
+      operationId: signals_updates_create
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - signals
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SignalUpdateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/SignalUpdateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/SignalUpdateRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SignalUpdate'
+          description: ''
+  /api/signals/{id}/updates/{update_id}/:
+    get:
+      operationId: signals_updates_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      - in: path
+        name: update_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - signals
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SignalUpdate'
+          description: ''
+    put:
+      operationId: signals_updates_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      - in: path
+        name: update_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - signals
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SignalUpdateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/SignalUpdateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/SignalUpdateRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SignalUpdate'
+          description: ''
+    patch:
+      operationId: signals_updates_partial_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      - in: path
+        name: update_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - signals
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedSignalUpdateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedSignalUpdateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedSignalUpdateRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SignalUpdate'
+          description: ''
+    delete:
+      operationId: signals_updates_destroy
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      - in: path
+        name: update_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - signals
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
   /api/signals/my-signals/:
     get:
       operationId: signals_my_signals_list
@@ -4305,6 +5414,159 @@ paths:
               schema:
                 $ref: '#/components/schemas/PaginatedSignalListList'
           description: ''
+  /api/support/conversation/:
+    get:
+      operationId: support_conversation_retrieve
+      tags:
+      - support
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SupportThread'
+          description: ''
+  /api/support/conversations/:
+    get:
+      operationId: support_conversations_list
+      parameters:
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      tags:
+      - support
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedSupportThreadList'
+          description: ''
+  /api/support/conversations/{id}/messages/:
+    get:
+      operationId: support_conversations_messages_list
+      parameters:
+      - name: cursor
+        required: false
+        in: query
+        description: The pagination cursor value.
+        schema:
+          type: string
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      tags:
+      - support
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedSupportMessageList'
+          description: ''
+    post:
+      operationId: support_conversations_messages_create
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - support
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SupportMessageRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/SupportMessageRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/SupportMessageRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SupportMessage'
+          description: ''
+  /api/support/conversations/{id}/read/:
+    post:
+      operationId: support_conversations_read_create
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - support
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/support/conversations/{id}/ticket/:
+    post:
+      operationId: support_conversations_ticket_create
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - support
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
   /api/token/:
     post:
       operationId: token_create
@@ -5307,6 +6569,90 @@ components:
     BlankEnum:
       enum:
       - ''
+    BrokerConnection:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        user:
+          type: string
+          readOnly: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/Status8dcEnum'
+          readOnly: true
+        rejection_reason:
+          type: string
+          readOnly: true
+        submitted_at:
+          type: string
+          format: date-time
+          readOnly: true
+        reviewed_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        broker_name:
+          type: string
+          maxLength: 150
+        account_number:
+          type: string
+          maxLength: 100
+        referral_code:
+          type: string
+          maxLength: 100
+        document_url:
+          type: string
+          nullable: true
+          readOnly: true
+      required:
+      - account_number
+      - broker_name
+      - document_url
+      - id
+      - rejection_reason
+      - reviewed_at
+      - status
+      - submitted_at
+      - user
+    BrokerConnectionRequest:
+      type: object
+      properties:
+        broker_name:
+          type: string
+          minLength: 1
+          maxLength: 150
+        account_number:
+          type: string
+          minLength: 1
+          maxLength: 100
+        referral_code:
+          type: string
+          maxLength: 100
+      required:
+      - account_number
+      - broker_name
+    BrokerConnectionReview:
+      type: object
+      properties:
+        status:
+          $ref: '#/components/schemas/Status8dcEnum'
+        rejection_reason:
+          type: string
+        balance:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,18}(?:\.\d{0,2})?$
+        equity:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,18}(?:\.\d{0,2})?$
+        currency:
+          type: string
+          maxLength: 10
+        chart: {}
     BrokerDetail:
       type: object
       properties:
@@ -5596,6 +6942,128 @@ components:
           maxLength: 100
       required:
       - name
+    ChannelPost:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        channel:
+          type: string
+          readOnly: true
+        title:
+          type: string
+          maxLength: 250
+        body:
+          type: string
+        image:
+          type: string
+          format: uri
+          nullable: true
+        video:
+          type: string
+          format: uri
+          nullable: true
+        audio:
+          type: string
+          format: uri
+          nullable: true
+        cover:
+          type: string
+          format: uri
+          nullable: true
+        author:
+          type: string
+          readOnly: true
+        author_name:
+          type: string
+          readOnly: true
+        published_at:
+          type: string
+          format: date-time
+        is_pinned:
+          type: boolean
+        signal:
+          type: integer
+          nullable: true
+        signal_status:
+          type: string
+          readOnly: true
+          nullable: true
+        signal_status_display:
+          type: string
+          readOnly: true
+          nullable: true
+        scope:
+          oneOf:
+          - $ref: '#/components/schemas/ScopeEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        scope_display:
+          type: string
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - author
+      - author_name
+      - body
+      - channel
+      - created_at
+      - id
+      - published_at
+      - scope_display
+      - signal_status
+      - signal_status_display
+      - title
+      - updated_at
+    ChannelPostRequest:
+      type: object
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 250
+        body:
+          type: string
+          minLength: 1
+        image:
+          type: string
+          format: binary
+          nullable: true
+        video:
+          type: string
+          format: binary
+          nullable: true
+        audio:
+          type: string
+          format: binary
+          nullable: true
+        cover:
+          type: string
+          format: binary
+          nullable: true
+        published_at:
+          type: string
+          format: date-time
+        is_pinned:
+          type: boolean
+        signal:
+          type: integer
+          nullable: true
+        scope:
+          oneOf:
+          - $ref: '#/components/schemas/ScopeEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+      required:
+      - body
+      - published_at
+      - title
     ChatRoom:
       type: object
       properties:
@@ -5719,11 +7187,46 @@ components:
           format: date-time
           readOnly: true
           nullable: true
+        completed_sessions:
+          type: integer
+          readOnly: true
+        total_sessions:
+          type: integer
+          readOnly: true
+        weekly_used:
+          type: integer
+          readOnly: true
+        weekly_limit:
+          type: integer
+          readOnly: true
+          nullable: true
+        monthly_used:
+          type: integer
+          readOnly: true
+        monthly_limit:
+          type: integer
+          readOnly: true
+          nullable: true
+        next_session:
+          type: integer
+          nullable: true
+          readOnly: true
+        locked_reason:
+          type: string
+          readOnly: true
       required:
       - completed_at
+      - completed_sessions
       - course
       - enrolled_at
       - id
+      - locked_reason
+      - monthly_limit
+      - monthly_used
+      - next_session
+      - total_sessions
+      - weekly_limit
+      - weekly_used
     CourseList:
       type: object
       properties:
@@ -5776,6 +7279,18 @@ components:
         learning_outcomes: {}
         enrollment_open:
           type: boolean
+        weekly_session_limit:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+          nullable: true
+        monthly_session_limit:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+          nullable: true
         starts_at:
           type: string
           format: date-time
@@ -5837,6 +7352,33 @@ components:
           type: string
           format: uri
           nullable: true
+        media_type:
+          $ref: '#/components/schemas/MediaTypeEnum'
+        audio_file:
+          type: string
+          format: uri
+          nullable: true
+        cover:
+          type: string
+          format: uri
+          nullable: true
+        duration_seconds:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+          nullable: true
+        playback_speeds: {}
+        is_locked:
+          type: boolean
+          readOnly: true
+        lock_reason:
+          type: string
+          readOnly: true
+        unlock_at:
+          type: string
+          format: date-time
+          nullable: true
         duration_minutes:
           type: integer
           maximum: 9223372036854775807
@@ -5869,6 +7411,8 @@ components:
       - course
       - created_at
       - id
+      - is_locked
+      - lock_reason
       - order
       - title
       - updated_at
@@ -5894,6 +7438,27 @@ components:
         video_file:
           type: string
           format: binary
+          nullable: true
+        media_type:
+          $ref: '#/components/schemas/MediaTypeEnum'
+        audio_file:
+          type: string
+          format: binary
+          nullable: true
+        cover:
+          type: string
+          format: binary
+          nullable: true
+        duration_seconds:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+          nullable: true
+        playback_speeds: {}
+        unlock_at:
+          type: string
+          format: date-time
           nullable: true
         duration_minutes:
           type: integer
@@ -5967,6 +7532,18 @@ components:
         learning_outcomes: {}
         enrollment_open:
           type: boolean
+        weekly_session_limit:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+          nullable: true
+        monthly_session_limit:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+          nullable: true
         starts_at:
           type: string
           format: date-time
@@ -6034,6 +7611,18 @@ components:
         learning_outcomes: {}
         enrollment_open:
           type: boolean
+        weekly_session_limit:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+          nullable: true
+        monthly_session_limit:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+          nullable: true
         starts_at:
           type: string
           format: date-time
@@ -6073,6 +7662,8 @@ components:
           $ref: '#/components/schemas/DashboardStats'
         capabilities:
           $ref: '#/components/schemas/DashboardCapabilities'
+        finance:
+          $ref: '#/components/schemas/DashboardFinance'
         recent_signals:
           type: array
           items:
@@ -6104,6 +7695,7 @@ components:
       required:
       - capabilities
       - chat_rooms
+      - finance
       - live_events
       - recent_articles
       - recent_notifications
@@ -6140,6 +7732,41 @@ components:
       - can_review_signals
       - can_submit_signals
       - can_teach_academy
+    DashboardFinance:
+      type: object
+      properties:
+        connected:
+          type: boolean
+        broker_connected:
+          type: boolean
+        balance:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,18}(?:\.\d{0,2})?$
+        equity:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,18}(?:\.\d{0,2})?$
+        currency:
+          type: string
+        chart:
+          type: array
+          items:
+            type: string
+            format: decimal
+            pattern: ^-?\d{0,18}(?:\.\d{0,2})?$
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+      - balance
+      - broker_connected
+      - chart
+      - connected
+      - currency
+      - equity
+      - updated_at
     DashboardResponse:
       type: object
       properties:
@@ -6223,6 +7850,49 @@ components:
         * `BEGINNER` - Beginner
         * `INTERMEDIATE` - Intermediate
         * `ADVANCED` - Advanced
+    EconomicEvent:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        datetime:
+          type: string
+          format: date-time
+        currency:
+          type: string
+          maxLength: 10
+        impact:
+          $ref: '#/components/schemas/ImpactEnum'
+        impact_display:
+          type: string
+          readOnly: true
+        title:
+          type: string
+          maxLength: 300
+        actual:
+          type: string
+          maxLength: 50
+        forecast:
+          type: string
+          maxLength: 50
+        previous:
+          type: string
+          maxLength: 50
+        unit:
+          type: string
+          maxLength: 30
+        source_timestamp:
+          type: string
+          format: date-time
+      required:
+      - currency
+      - datetime
+      - id
+      - impact
+      - impact_display
+      - source_timestamp
+      - title
     EducationLevelEnum:
       enum:
       - HIGH_SCHOOL
@@ -6269,6 +7939,16 @@ components:
         * `FEMALE` - Female
         * `OTHER` - Other
         * `PREFER_NOT_TO_SAY` - Prefer not to say
+    ImpactEnum:
+      enum:
+      - low
+      - medium
+      - high
+      type: string
+      description: |-
+        * `low` - Low
+        * `medium` - Medium
+        * `high` - High
     JoinChatRoomResponse:
       type: object
       properties:
@@ -6483,6 +8163,36 @@ components:
           type: string
       required:
       - message
+    LiveChatMessage:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        sender:
+          type: string
+          readOnly: true
+        text:
+          type: string
+          maxLength: 1000
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - id
+      - sender
+      - text
+    LiveChatMessageRequest:
+      type: object
+      properties:
+        text:
+          type: string
+          minLength: 1
+          maxLength: 1000
+      required:
+      - text
     LiveEventDetail:
       type: object
       properties:
@@ -6512,6 +8222,9 @@ components:
           nullable: true
         status:
           $ref: '#/components/schemas/LiveEventStatusEnum'
+        viewer_count:
+          type: integer
+          readOnly: true
         allowed_levels:
           type: array
           items:
@@ -6534,6 +8247,17 @@ components:
             maxLength: 500
           - type: string
             maxLength: 0
+        provider_join_url:
+          oneOf:
+          - type: string
+            format: uri
+            maxLength: 500
+          - type: string
+            maxLength: 0
+        ended_at:
+          type: string
+          format: date-time
+          nullable: true
         replay_url:
           oneOf:
           - type: string
@@ -6557,6 +8281,7 @@ components:
       - starts_at
       - title
       - updated_at
+      - viewer_count
     LiveEventList:
       type: object
       properties:
@@ -6586,6 +8311,9 @@ components:
           nullable: true
         status:
           $ref: '#/components/schemas/LiveEventStatusEnum'
+        viewer_count:
+          type: integer
+          readOnly: true
         allowed_levels:
           type: array
           items:
@@ -6605,18 +8333,21 @@ components:
       - is_live_now
       - starts_at
       - title
+      - viewer_count
     LiveEventStatusEnum:
       enum:
       - SCHEDULED
       - LIVE
       - ENDED
       - CANCELLED
+      - DISABLED
       type: string
       description: |-
         * `SCHEDULED` - Scheduled
         * `LIVE` - Live
         * `ENDED` - Ended
         * `CANCELLED` - Cancelled
+        * `DISABLED` - Disabled
     LiveEventWrite:
       type: object
       properties:
@@ -6643,6 +8374,17 @@ components:
             maxLength: 500
           - type: string
             maxLength: 0
+        provider_join_url:
+          oneOf:
+          - type: string
+            format: uri
+            maxLength: 500
+          - type: string
+            maxLength: 0
+        ended_at:
+          type: string
+          format: date-time
+          nullable: true
         replay_url:
           oneOf:
           - type: string
@@ -6705,6 +8447,17 @@ components:
             maxLength: 500
           - type: string
             maxLength: 0
+        provider_join_url:
+          oneOf:
+          - type: string
+            format: uri
+            maxLength: 500
+          - type: string
+            maxLength: 0
+        ended_at:
+          type: string
+          format: date-time
+          nullable: true
         replay_url:
           oneOf:
           - type: string
@@ -6735,6 +8488,36 @@ components:
       required:
       - starts_at
       - title
+    LivePresence:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        user:
+          type: integer
+          readOnly: true
+        username:
+          type: string
+          readOnly: true
+        joined_at:
+          type: string
+          format: date-time
+          readOnly: true
+        last_seen_at:
+          type: string
+          format: date-time
+          readOnly: true
+        is_muted:
+          type: boolean
+          readOnly: true
+      required:
+      - id
+      - is_muted
+      - joined_at
+      - last_seen_at
+      - user
+      - username
     LogoutRequest:
       type: object
       properties:
@@ -6775,6 +8558,18 @@ components:
           type: string
       required:
       - message
+    MediaTypeEnum:
+      enum:
+      - video
+      - audio
+      - text
+      - live
+      type: string
+      description: |-
+        * `video` - Video
+        * `audio` - Audio
+        * `text` - Text
+        * `live` - Live
     Message:
       type: object
       properties:
@@ -7017,6 +8812,16 @@ components:
       required:
       - code
       - phone
+    OrderTypeEnum:
+      enum:
+      - market
+      - limit
+      - stop
+      type: string
+      description: |-
+        * `market` - Market
+        * `limit` - Limit
+        * `stop` - Stop
     OtherDeviceLogoutResponse:
       type: object
       properties:
@@ -7096,6 +8901,29 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Badge'
+    PaginatedBrokerConnectionList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/BrokerConnection'
     PaginatedBrokerListList:
       type: object
       required:
@@ -7142,6 +8970,29 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Category'
+    PaginatedChannelPostList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/ChannelPost'
     PaginatedChatRoomList:
       type: object
       required:
@@ -7234,6 +9085,29 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/CourseSession'
+    PaginatedEconomicEventList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/EconomicEvent'
     PaginatedLandingSectionList:
       type: object
       required:
@@ -7257,6 +9131,29 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/LandingSection'
+    PaginatedLiveChatMessageList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/LiveChatMessage'
     PaginatedLiveEventListList:
       type: object
       required:
@@ -7372,6 +9269,29 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/PostComment'
+    PaginatedQuizAttemptList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/QuizAttempt'
     PaginatedSignalListList:
       type: object
       required:
@@ -7395,6 +9315,29 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/SignalList'
+    PaginatedSignalUpdateList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/SignalUpdate'
     PaginatedSupportMessageList:
       type: object
       required:
@@ -7418,6 +9361,29 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/SupportMessage'
+    PaginatedSupportThreadList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/SupportThread'
     PaginatedTraderPostList:
       type: object
       required:
@@ -7651,6 +9617,26 @@ components:
           maxLength: 20
         is_active:
           type: boolean
+    PatchedBrokerConnectionReviewRequest:
+      type: object
+      properties:
+        status:
+          $ref: '#/components/schemas/Status8dcEnum'
+        rejection_reason:
+          type: string
+        balance:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,18}(?:\.\d{0,2})?$
+        equity:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,18}(?:\.\d{0,2})?$
+        currency:
+          type: string
+          minLength: 1
+          maxLength: 10
+        chart: {}
     PatchedBrokerWriteRequest:
       type: object
       properties:
@@ -7716,6 +9702,44 @@ components:
           type: string
           minLength: 1
           maxLength: 100
+    PatchedChannelPostRequest:
+      type: object
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 250
+        body:
+          type: string
+          minLength: 1
+        image:
+          type: string
+          format: binary
+          nullable: true
+        video:
+          type: string
+          format: binary
+          nullable: true
+        audio:
+          type: string
+          format: binary
+          nullable: true
+        cover:
+          type: string
+          format: binary
+          nullable: true
+        published_at:
+          type: string
+          format: date-time
+        is_pinned:
+          type: boolean
+        signal:
+          type: integer
+          nullable: true
+        scope:
+          oneOf:
+          - $ref: '#/components/schemas/ScopeEnum'
+          - $ref: '#/components/schemas/BlankEnum'
     PatchedChatRoomWriteRequest:
       type: object
       properties:
@@ -7755,6 +9779,27 @@ components:
         video_file:
           type: string
           format: binary
+          nullable: true
+        media_type:
+          $ref: '#/components/schemas/MediaTypeEnum'
+        audio_file:
+          type: string
+          format: binary
+          nullable: true
+        cover:
+          type: string
+          format: binary
+          nullable: true
+        duration_seconds:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+          nullable: true
+        playback_speeds: {}
+        unlock_at:
+          type: string
+          format: date-time
           nullable: true
         duration_minutes:
           type: integer
@@ -7813,6 +9858,18 @@ components:
         learning_outcomes: {}
         enrollment_open:
           type: boolean
+        weekly_session_limit:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+          nullable: true
+        monthly_session_limit:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+          nullable: true
         starts_at:
           type: string
           format: date-time
@@ -7927,6 +9984,17 @@ components:
             maxLength: 500
           - type: string
             maxLength: 0
+        provider_join_url:
+          oneOf:
+          - type: string
+            format: uri
+            maxLength: 500
+          - type: string
+            maxLength: 0
+        ended_at:
+          type: string
+          format: date-time
+          nullable: true
         replay_url:
           oneOf:
           - type: string
@@ -8022,6 +10090,36 @@ components:
           type: string
           format: binary
           nullable: true
+    PatchedQuizWriteRequest:
+      type: object
+      properties:
+        session:
+          type: integer
+        title:
+          type: string
+          minLength: 1
+          maxLength: 250
+        required_score:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        max_attempts:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        retry_delay_minutes:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        is_active:
+          type: boolean
+        questions:
+          type: array
+          items:
+            $ref: '#/components/schemas/QuizQuestionWriteRequest'
     PatchedSecuritySettingsRequest:
       type: object
       properties:
@@ -8072,6 +10170,11 @@ components:
           $ref: '#/components/schemas/SignalMarketEnum'
         direction:
           $ref: '#/components/schemas/SignalDirectionEnum'
+        order_type:
+          $ref: '#/components/schemas/OrderTypeEnum'
+        timeframe:
+          type: string
+          maxLength: 30
         entry_price:
           type: string
           format: decimal
@@ -8096,6 +10199,33 @@ components:
             type: integer
             maximum: 5
             minimum: 1
+    PatchedSignalUpdateRequest:
+      type: object
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 200
+        message:
+          type: string
+          minLength: 1
+        status:
+          oneOf:
+          - $ref: '#/components/schemas/SignalStatusEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        image:
+          type: string
+          format: binary
+          nullable: true
+        audio:
+          type: string
+          format: binary
+          nullable: true
+    PatchedSpeakRequestReviewRequest:
+      type: object
+      properties:
+        status:
+          $ref: '#/components/schemas/StatusE94Enum'
     PatchedTraderPostRequest:
       type: object
       properties:
@@ -8602,6 +10732,263 @@ components:
       - sections
       - site_key
       - updated_at
+    QuizAttempt:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        score:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,2})?$
+          readOnly: true
+        passed:
+          type: boolean
+          readOnly: true
+        required_score:
+          type: integer
+          readOnly: true
+        attempt_number:
+          type: integer
+          readOnly: true
+        next_attempt_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - attempt_number
+      - created_at
+      - id
+      - next_attempt_at
+      - passed
+      - required_score
+      - score
+    QuizOptionPublic:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        text:
+          type: string
+          maxLength: 500
+        order:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+      required:
+      - id
+      - text
+    QuizOptionWrite:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        text:
+          type: string
+          maxLength: 500
+        is_correct:
+          type: boolean
+        order:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+      required:
+      - id
+      - text
+    QuizOptionWriteRequest:
+      type: object
+      properties:
+        text:
+          type: string
+          minLength: 1
+          maxLength: 500
+        is_correct:
+          type: boolean
+        order:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+      required:
+      - text
+    QuizPublic:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        session:
+          type: integer
+        title:
+          type: string
+          maxLength: 250
+        required_score:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        max_attempts:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        retry_delay_minutes:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        questions:
+          type: array
+          items:
+            $ref: '#/components/schemas/QuizQuestionPublic'
+          readOnly: true
+      required:
+      - id
+      - questions
+      - session
+      - title
+    QuizQuestionPublic:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        text:
+          type: string
+        order:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        options:
+          type: array
+          items:
+            $ref: '#/components/schemas/QuizOptionPublic'
+          readOnly: true
+      required:
+      - id
+      - options
+      - text
+    QuizQuestionWrite:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        text:
+          type: string
+        order:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        options:
+          type: array
+          items:
+            $ref: '#/components/schemas/QuizOptionWrite'
+      required:
+      - id
+      - options
+      - text
+    QuizQuestionWriteRequest:
+      type: object
+      properties:
+        text:
+          type: string
+          minLength: 1
+        order:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        options:
+          type: array
+          items:
+            $ref: '#/components/schemas/QuizOptionWriteRequest'
+      required:
+      - options
+      - text
+    QuizWrite:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        session:
+          type: integer
+        title:
+          type: string
+          maxLength: 250
+        required_score:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        max_attempts:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        retry_delay_minutes:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        is_active:
+          type: boolean
+        questions:
+          type: array
+          items:
+            $ref: '#/components/schemas/QuizQuestionWrite'
+      required:
+      - id
+      - questions
+      - session
+      - title
+    QuizWriteRequest:
+      type: object
+      properties:
+        session:
+          type: integer
+        title:
+          type: string
+          minLength: 1
+          maxLength: 250
+        required_score:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        max_attempts:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        retry_delay_minutes:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        is_active:
+          type: boolean
+        questions:
+          type: array
+          items:
+            $ref: '#/components/schemas/QuizQuestionWriteRequest'
+      required:
+      - questions
+      - session
+      - title
     ReactionTypeEnum:
       enum:
       - LIKE
@@ -8706,6 +11093,18 @@ components:
         * `LOW` - Low
         * `MEDIUM` - Medium
         * `HIGH` - High
+    ScopeEnum:
+      enum:
+      - dollar
+      - gold
+      - stock
+      - housing
+      type: string
+      description: |-
+        * `dollar` - Dollar
+        * `gold` - Gold
+        * `stock` - Stock
+        * `housing` - Housing
     SectionTypeEnum:
       enum:
       - HERO
@@ -8829,6 +11228,10 @@ components:
         id:
           type: integer
           readOnly: true
+        signal_id:
+          type: string
+          readOnly: true
+          nullable: true
         title:
           type: string
           maxLength: 200
@@ -8839,6 +11242,11 @@ components:
           $ref: '#/components/schemas/SignalMarketEnum'
         direction:
           $ref: '#/components/schemas/SignalDirectionEnum'
+        order_type:
+          $ref: '#/components/schemas/OrderTypeEnum'
+        timeframe:
+          type: string
+          maxLength: 30
         entry_price:
           type: string
           format: decimal
@@ -8868,6 +11276,7 @@ components:
       - entry_price
       - id
       - market
+      - signal_id
       - stop_loss
       - symbol
       - take_profit
@@ -8887,6 +11296,11 @@ components:
           $ref: '#/components/schemas/SignalMarketEnum'
         direction:
           $ref: '#/components/schemas/SignalDirectionEnum'
+        order_type:
+          $ref: '#/components/schemas/OrderTypeEnum'
+        timeframe:
+          type: string
+          maxLength: 30
         entry_price:
           type: string
           format: decimal
@@ -8925,6 +11339,10 @@ components:
         id:
           type: integer
           readOnly: true
+        signal_id:
+          type: string
+          nullable: true
+          maxLength: 20
         title:
           type: string
           maxLength: 200
@@ -8935,6 +11353,11 @@ components:
           $ref: '#/components/schemas/SignalMarketEnum'
         direction:
           $ref: '#/components/schemas/SignalDirectionEnum'
+        order_type:
+          $ref: '#/components/schemas/OrderTypeEnum'
+        timeframe:
+          type: string
+          maxLength: 30
         entry_price:
           type: string
           format: decimal
@@ -8957,6 +11380,25 @@ components:
           $ref: '#/components/schemas/SignalStatusEnum'
         rejection_reason:
           type: string
+        result_price:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,8})?$
+          nullable: true
+        result_percent:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,6}(?:\.\d{0,4})?$
+          nullable: true
+        closed_at:
+          type: string
+          format: date-time
+          nullable: true
+        updates:
+          type: array
+          items:
+            $ref: '#/components/schemas/SignalUpdate'
+          readOnly: true
         allowed_levels:
           type: array
           items:
@@ -8991,6 +11433,7 @@ components:
       - title
       - trader
       - updated_at
+      - updates
     SignalDirectionEnum:
       enum:
       - buy
@@ -9005,6 +11448,10 @@ components:
         id:
           type: integer
           readOnly: true
+        signal_id:
+          type: string
+          nullable: true
+          maxLength: 20
         title:
           type: string
           maxLength: 200
@@ -9015,6 +11462,11 @@ components:
           $ref: '#/components/schemas/SignalMarketEnum'
         direction:
           $ref: '#/components/schemas/SignalDirectionEnum'
+        order_type:
+          $ref: '#/components/schemas/OrderTypeEnum'
+        timeframe:
+          type: string
+          maxLength: 30
         entry_price:
           type: string
           format: decimal
@@ -9033,6 +11485,20 @@ components:
           nullable: true
         status:
           $ref: '#/components/schemas/SignalStatusEnum'
+        result_price:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,8})?$
+          nullable: true
+        result_percent:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,6}(?:\.\d{0,4})?$
+          nullable: true
+        closed_at:
+          type: string
+          format: date-time
+          nullable: true
         allowed_levels:
           type: array
           items:
@@ -9077,12 +11543,86 @@ components:
       - pending
       - approved
       - rejected
+      - active
+      - successful
+      - failed
+      - cancelled
       type: string
       description: |-
         * `draft` - Draft
         * `pending` - Pending
         * `approved` - Approved
         * `rejected` - Rejected
+        * `active` - Active
+        * `successful` - Successful
+        * `failed` - Failed
+        * `cancelled` - Cancelled
+    SignalUpdate:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        title:
+          type: string
+          maxLength: 200
+        message:
+          type: string
+        status:
+          oneOf:
+          - $ref: '#/components/schemas/SignalStatusEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        image:
+          type: string
+          format: uri
+          nullable: true
+        audio:
+          type: string
+          format: uri
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+        author:
+          type: string
+          readOnly: true
+      required:
+      - author
+      - created_at
+      - id
+      - message
+      - title
+      - updated_at
+    SignalUpdateRequest:
+      type: object
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 200
+        message:
+          type: string
+          minLength: 1
+        status:
+          oneOf:
+          - $ref: '#/components/schemas/SignalStatusEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        image:
+          type: string
+          format: binary
+          nullable: true
+        audio:
+          type: string
+          format: binary
+          nullable: true
+      required:
+      - message
+      - title
     SocialUser:
       type: object
       properties:
@@ -9113,6 +11653,74 @@ components:
       - id
       - last_name
       - username
+    SpeakRequest:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        user:
+          type: integer
+          readOnly: true
+        username:
+          type: string
+          readOnly: true
+        message:
+          type: string
+          maxLength: 300
+        status:
+          allOf:
+          - $ref: '#/components/schemas/StatusE94Enum'
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        reviewed_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+      required:
+      - created_at
+      - id
+      - reviewed_at
+      - status
+      - user
+      - username
+    SpeakRequestRequest:
+      type: object
+      properties:
+        message:
+          type: string
+          maxLength: 300
+    SpeakRequestReview:
+      type: object
+      properties:
+        status:
+          $ref: '#/components/schemas/StatusE94Enum'
+    Status8dcEnum:
+      enum:
+      - not_started
+      - pending
+      - rejected
+      - connected
+      type: string
+      description: |-
+        * `not_started` - Not started
+        * `pending` - Pending
+        * `rejected` - Rejected
+        * `connected` - Connected
+    StatusE94Enum:
+      enum:
+      - pending
+      - approved
+      - rejected
+      type: string
+      description: |-
+        * `pending` - Pending
+        * `approved` - Approved
+        * `rejected` - Rejected
     SupportMessage:
       type: object
       properties:
@@ -9129,13 +11737,29 @@ components:
           type: string
           format: uri
           nullable: true
+        is_mine:
+          type: boolean
+          readOnly: true
         created_at:
           type: string
           format: date-time
           readOnly: true
+        delivered_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        read_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
       required:
       - created_at
+      - delivered_at
       - id
+      - is_mine
+      - read_at
       - sender
     SupportMessageRequest:
       type: object

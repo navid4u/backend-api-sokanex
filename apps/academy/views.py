@@ -1,24 +1,36 @@
 from django_filters.rest_framework import DjangoFilterBackend
 from django.shortcuts import get_object_or_404
-from rest_framework import generics
+from rest_framework import generics, serializers
 from rest_framework.filters import OrderingFilter, SearchFilter
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from drf_spectacular.utils import extend_schema
 from django.utils import timezone
+from django.db import transaction
+from datetime import timedelta
+from rest_framework.exceptions import PermissionDenied, Throttled
+from rest_framework.permissions import AllowAny
+from django.conf import settings
+from django.core import signing
+from django.http import StreamingHttpResponse
+import os
+from common.serializers import EmptySerializer
 
 from apps.accounts.models import User
 from common.content_access import restrict_queryset_for_user
 from common.permissions import CanTeachAcademy
 
-from .models import Course, CourseEnrollment, CourseSession, SessionProgress
+from .models import Course, CourseEnrollment, CourseSession, SessionProgress, Quiz, QuizAttempt
 from .serializers import (
     CourseListSerializer,
     CourseSessionSerializer,
     CourseWriteSerializer,
     CourseEnrollmentSerializer,
     SessionProgressSerializer,
+    QuizAttemptSerializer,
+    QuizPublicSerializer,
+    QuizWriteSerializer,
 )
 from apps.activity.models import UserActivity
 from apps.activity.services import ActivityService
@@ -42,6 +54,28 @@ def visible_courses(user):
         status=Course.Status.PUBLISHED
     ).select_related("instructor")
     return restrict_queryset_for_user(queryset, user)
+
+
+def session_lock_reason(session, user):
+    if session.is_preview or manageable_courses(user).filter(pk=session.course_id).exists():
+        return ""
+    now = timezone.now()
+    unlock_at = session.unlock_at or session.available_at
+    if unlock_at and unlock_at > now:
+        return "This session is not available yet."
+    enrollment = CourseEnrollment.objects.filter(user=user, course=session.course).first()
+    if enrollment:
+        weekly_limit = session.course.weekly_session_limit
+        monthly_limit = session.course.monthly_session_limit
+        if weekly_limit and enrollment.session_progress.filter(updated_at__gte=now - timedelta(days=7)).count() >= weekly_limit:
+            return "Weekly session quota reached."
+        if monthly_limit and enrollment.session_progress.filter(updated_at__gte=now - timedelta(days=30)).count() >= monthly_limit:
+            return "Monthly session quota reached."
+    previous = CourseSession.objects.filter(course=session.course, order__lt=session.order).order_by("-order").first()
+    if previous and hasattr(previous, "quiz") and previous.quiz.is_active:
+        if not QuizAttempt.objects.filter(quiz=previous.quiz, user=user, passed=True).exists():
+            return "Pass the previous session quiz first."
+    return ""
 
 
 class CourseListCreateView(generics.ListCreateAPIView):
@@ -185,6 +219,14 @@ class CourseSessionDetailView(
             is_published=True,
         ).select_related("course")
 
+    def get_object(self):
+        obj = super().get_object()
+        if self.request.method == "GET":
+            reason = session_lock_reason(obj, self.request.user)
+            if reason:
+                raise PermissionDenied(detail={"code": "SESSION_LOCKED", "lock_reason": reason})
+        return obj
+
 
 class EnrollCourseView(APIView):
     permission_classes = [IsAuthenticated]
@@ -241,3 +283,151 @@ class SessionProgressView(generics.RetrieveUpdateAPIView):
             target_id=progress.session_id,
             metadata={"progress_percent": progress.progress_percent},
         )
+
+
+class SessionQuizView(generics.RetrieveAPIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = QuizPublicSerializer
+
+    def get_object(self):
+        session = get_object_or_404(CourseSession, pk=self.kwargs["pk"], course__in=visible_courses(self.request.user))
+        reason = session_lock_reason(session, self.request.user)
+        if reason:
+            raise PermissionDenied(detail={"code": "SESSION_LOCKED", "lock_reason": reason})
+        return get_object_or_404(Quiz.objects.prefetch_related("questions__options"), session=session, is_active=True)
+
+
+class QuizAttemptCreateView(APIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = QuizAttemptSerializer
+
+    @transaction.atomic
+    def post(self, request, pk):
+        quiz = get_object_or_404(Quiz.objects.select_related("session__course").prefetch_related("questions__options"), pk=pk, is_active=True)
+        if not CourseEnrollment.objects.filter(user=request.user, course=quiz.session.course).exists():
+            raise PermissionDenied("Enroll in the course first.")
+        previous = QuizAttempt.objects.select_for_update().filter(quiz=quiz, user=request.user).first()
+        if previous and previous.passed:
+            return Response(QuizAttemptSerializer(previous).data)
+        if previous and previous.next_attempt_at and previous.next_attempt_at > timezone.now():
+            raise Throttled(wait=(previous.next_attempt_at - timezone.now()).total_seconds())
+        attempt_number = QuizAttempt.objects.filter(quiz=quiz, user=request.user).count() + 1
+        if attempt_number > quiz.max_attempts:
+            raise PermissionDenied("Maximum quiz attempts reached.")
+        answers = request.data.get("answers")
+        if not isinstance(answers, dict):
+            raise serializers.ValidationError({"answers": "Use an object mapping question IDs to option IDs."})
+        questions = list(quiz.questions.all())
+        correct = 0
+        for question in questions:
+            selected = str(answers.get(str(question.pk), answers.get(question.pk, "")))
+            if question.options.filter(pk=selected, is_correct=True).exists():
+                correct += 1
+        score = round((correct / len(questions)) * 100, 2) if questions else 0
+        passed = score >= quiz.required_score
+        next_attempt_at = None if passed else timezone.now() + timedelta(minutes=quiz.retry_delay_minutes)
+        attempt = QuizAttempt.objects.create(
+            quiz=quiz, user=request.user, answers=answers, score=score, passed=passed,
+            attempt_number=attempt_number, next_attempt_at=next_attempt_at,
+        )
+        return Response(QuizAttemptSerializer(attempt).data, status=201)
+
+
+class MyQuizAttemptListView(generics.ListAPIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = QuizAttemptSerializer
+
+    def get_queryset(self):
+        if getattr(self, "swagger_fake_view", False):
+            return QuizAttempt.objects.none()
+        return QuizAttempt.objects.filter(quiz_id=self.kwargs["pk"], user=self.request.user).select_related("quiz")
+
+
+class QuizManagementCreateView(generics.CreateAPIView):
+    permission_classes = [IsAuthenticated, CanTeachAcademy]
+    serializer_class = QuizWriteSerializer
+
+    def perform_create(self, serializer):
+        session = serializer.validated_data["session"]
+        if not manageable_courses(self.request.user).filter(pk=session.course_id).exists():
+            raise PermissionDenied()
+        serializer.save()
+
+
+class QuizManagementView(generics.RetrieveUpdateDestroyAPIView):
+    permission_classes = [IsAuthenticated, CanTeachAcademy]
+    serializer_class = QuizWriteSerializer
+
+    def get_queryset(self):
+        if getattr(self, "swagger_fake_view", False):
+            return Quiz.objects.none()
+        return Quiz.objects.filter(session__course__in=manageable_courses(self.request.user)).prefetch_related("questions__options")
+
+
+class SessionMediaTicketView(APIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = EmptySerializer
+
+    def post(self, request, pk):
+        session = get_object_or_404(CourseSession, pk=pk, course__in=visible_courses(request.user))
+        reason = session_lock_reason(session, request.user)
+        if reason:
+            raise PermissionDenied(detail={"code": "SESSION_LOCKED", "lock_reason": reason})
+        media = request.data.get("media", session.media_type)
+        if media not in ("video", "audio"):
+            raise serializers.ValidationError({"media": "Only video or audio can be streamed."})
+        ticket = signing.dumps({"user_id": request.user.pk, "session_id": session.pk, "media": media}, salt="academy-media", compress=True)
+        return Response({"url": f"/api/academy/sessions/{session.pk}/media/?ticket={ticket}", "expires_in": settings.CHANNEL_TICKET_TTL_SECONDS})
+
+
+class SessionMediaStreamView(APIView):
+    authentication_classes = []
+    permission_classes = [AllowAny]
+    serializer_class = EmptySerializer
+
+    def get(self, request, pk):
+        try:
+            payload = signing.loads(request.query_params.get("ticket", ""), salt="academy-media", max_age=settings.CHANNEL_TICKET_TTL_SECONDS)
+        except signing.BadSignature as exc:
+            raise PermissionDenied("Invalid or expired media ticket.") from exc
+        if payload.get("session_id") != pk:
+            raise PermissionDenied("Ticket does not match this session.")
+        session = get_object_or_404(CourseSession, pk=pk)
+        media_field = session.video_file if payload.get("media") == "video" else session.audio_file
+        if not media_field:
+            from rest_framework.exceptions import NotFound
+            raise NotFound("Media file is unavailable.")
+        path = media_field.path
+        size = os.path.getsize(path)
+        start, end = 0, size - 1
+        range_header = request.headers.get("Range", "")
+        status_code = 200
+        if range_header.startswith("bytes="):
+            value = range_header.removeprefix("bytes=").split(",", 1)[0]
+            first, _, last = value.partition("-")
+            start = int(first or 0)
+            end = min(int(last) if last else size - 1, size - 1)
+            if start > end or start >= size:
+                from rest_framework.exceptions import ValidationError
+                raise ValidationError({"range": "Invalid byte range."})
+            status_code = 206
+        length = end - start + 1
+
+        def chunks():
+            with open(path, "rb") as handle:
+                handle.seek(start)
+                remaining = length
+                while remaining:
+                    block = handle.read(min(64 * 1024, remaining))
+                    if not block:
+                        break
+                    remaining -= len(block)
+                    yield block
+
+        response = StreamingHttpResponse(chunks(), status=status_code, content_type="application/octet-stream")
+        response["Accept-Ranges"] = "bytes"
+        response["Content-Length"] = str(length)
+        if status_code == 206:
+            response["Content-Range"] = f"bytes {start}-{end}/{size}"
+        response["Cache-Control"] = "private, no-store"
+        return response

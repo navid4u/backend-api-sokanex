@@ -110,6 +110,16 @@ class DashboardCapabilitiesSerializer(
     can_manage_landing = serializers.BooleanField()
 
 
+class DashboardFinanceSerializer(serializers.Serializer):
+    connected = serializers.BooleanField()
+    broker_connected = serializers.BooleanField()
+    balance = serializers.DecimalField(max_digits=20, decimal_places=2)
+    equity = serializers.DecimalField(max_digits=20, decimal_places=2)
+    currency = serializers.CharField()
+    chart = serializers.ListField(child=serializers.DecimalField(max_digits=20, decimal_places=2))
+    updated_at = serializers.DateTimeField(allow_null=True)
+
+
 class DashboardSerializer(
     serializers.Serializer
 ):
@@ -121,6 +131,8 @@ class DashboardSerializer(
     capabilities = (
         DashboardCapabilitiesSerializer()
     )
+
+    finance = DashboardFinanceSerializer()
 
     recent_signals = SignalListSerializer(
         many=True,

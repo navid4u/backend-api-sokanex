@@ -1,6 +1,7 @@
 from rest_framework import serializers
 
 from common.validators import (
+    validate_attachment_upload,
     validate_image_upload,
 )
 from common.content_access import AllowedLevelsSerializerMixin
@@ -8,7 +9,28 @@ from common.content_access import AllowedLevelsSerializerMixin
 from .models import (
     Direction,
     Signal,
+    SignalUpdate,
 )
+
+
+class SignalUpdateSerializer(serializers.ModelSerializer):
+    author = serializers.CharField(source="author.username", read_only=True)
+
+    class Meta:
+        model = SignalUpdate
+        fields = ("id", "title", "message", "status", "image", "audio", "created_at", "updated_at", "author")
+        read_only_fields = ("id", "created_at", "updated_at", "author")
+
+    def validate_image(self, value):
+        return validate_image_upload(value, max_size_mb=10, file_label="Signal update image")
+
+    def validate_audio(self, value):
+        allowed = {"audio/mpeg", "audio/mp4", "audio/wav", "audio/ogg", "audio/webm"}
+        if getattr(value, "content_type", "").split(";", 1)[0].lower() not in allowed:
+            raise serializers.ValidationError("Unsupported audio content type.")
+        if value.size > 50 * 1024 * 1024:
+            raise serializers.ValidationError("Audio cannot exceed 50 MB.")
+        return value
 
 
 class SignalListSerializer(
@@ -26,15 +48,21 @@ class SignalListSerializer(
 
         fields = (
             "id",
+            "signal_id",
             "title",
             "symbol",
             "market",
             "direction",
+            "order_type",
+            "timeframe",
             "entry_price",
             "take_profit",
             "stop_loss",
             "image",
             "status",
+            "result_price",
+            "result_percent",
+            "closed_at",
             "allowed_levels",
             "trader",
             "created_at",
@@ -51,10 +79,13 @@ class SignalCreateSerializer(
 
         fields = (
             "id",
+            "signal_id",
             "title",
             "symbol",
             "market",
             "direction",
+            "order_type",
+            "timeframe",
             "entry_price",
             "stop_loss",
             "take_profit",
@@ -65,6 +96,7 @@ class SignalCreateSerializer(
 
         read_only_fields = (
             "id",
+            "signal_id",
         )
 
     def validate_image(self, value):
@@ -147,16 +179,20 @@ class SignalDetailSerializer(
         read_only=True,
         allow_null=True,
     )
+    updates = SignalUpdateSerializer(many=True, read_only=True)
 
     class Meta:
         model = Signal
 
         fields = (
             "id",
+            "signal_id",
             "title",
             "symbol",
             "market",
             "direction",
+            "order_type",
+            "timeframe",
             "entry_price",
             "stop_loss",
             "take_profit",
@@ -164,6 +200,10 @@ class SignalDetailSerializer(
             "image",
             "status",
             "rejection_reason",
+            "result_price",
+            "result_percent",
+            "closed_at",
+            "updates",
             "allowed_levels",
             "trader",
             "reviewed_by",

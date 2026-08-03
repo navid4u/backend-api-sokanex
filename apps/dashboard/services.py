@@ -7,6 +7,7 @@ from apps.videos.services import VideoService
 from apps.notifications.services import NotificationService
 from apps.chat.services import ChatService
 from apps.livestream.services import LiveEventService
+from apps.accounts.models import BrokerConnection
 
 
 class DashboardService:
@@ -38,6 +39,8 @@ class DashboardService:
         )[:5]
 
         wallet = WalletService.get_wallet(user)
+        broker = BrokerConnection.objects.filter(user=user).first()
+        broker_connected = bool(broker and broker.status == BrokerConnection.Status.CONNECTED)
 
         published_articles = (
             ArticleService.published_articles(user)
@@ -155,6 +158,16 @@ class DashboardService:
                         User.Permission.LANDING_MANAGE
                     )
                 ),
+            },
+
+            "finance": {
+                "connected": broker_connected,
+                "broker_connected": broker_connected,
+                "balance": broker.balance if broker_connected else 0,
+                "equity": broker.equity if broker_connected else 0,
+                "currency": broker.currency if broker_connected else "USD",
+                "chart": broker.chart if broker_connected else [0, 0, 0, 0, 0, 0, 0],
+                "updated_at": broker.updated_at if broker else None,
             },
 
             "recent_signals": recent_signals,

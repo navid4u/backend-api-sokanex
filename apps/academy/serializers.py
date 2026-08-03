@@ -3,7 +3,10 @@ from rest_framework import serializers
 from common.content_access import AllowedLevelsSerializerMixin
 from common.validators import validate_image_upload, validate_video_upload
 
-from .models import Course, CourseEnrollment, CourseSession, SessionProgress
+from .models import (
+    Course, CourseEnrollment, CourseSession, SessionProgress,
+    Quiz, QuizAttempt, QuizOption, QuizQuestion,
+)
 
 
 class CourseListSerializer(
@@ -38,6 +41,8 @@ class CourseListSerializer(
             "prerequisites",
             "learning_outcomes",
             "enrollment_open",
+            "weekly_session_limit",
+            "monthly_session_limit",
             "starts_at",
             "ends_at",
             "allowed_levels",
@@ -81,6 +86,8 @@ class CourseWriteSerializer(
             "prerequisites",
             "learning_outcomes",
             "enrollment_open",
+            "weekly_session_limit",
+            "monthly_session_limit",
             "starts_at",
             "ends_at",
             "allowed_levels",
@@ -115,6 +122,8 @@ class CourseSessionSerializer(serializers.ModelSerializer):
         source="course.slug",
         read_only=True,
     )
+    is_locked = serializers.SerializerMethodField()
+    lock_reason = serializers.SerializerMethodField()
 
     class Meta:
         model = CourseSession
@@ -125,6 +134,14 @@ class CourseSessionSerializer(serializers.ModelSerializer):
             "order",
             "video_url",
             "video_file",
+            "media_type",
+            "audio_file",
+            "cover",
+            "duration_seconds",
+            "playback_speeds",
+            "is_locked",
+            "lock_reason",
+            "unlock_at",
             "duration_minutes",
             "text",
             "image",
@@ -177,14 +194,150 @@ class CourseSessionSerializer(serializers.ModelSerializer):
             )
         return attrs
 
+    def get_lock_reason(self, obj) -> str:
+        request = self.context.get("request")
+        if not request or not request.user.is_authenticated:
+            return "Authentication required"
+        from .views import session_lock_reason
+        return session_lock_reason(obj, request.user)
+
+    def get_is_locked(self, obj) -> bool:
+        return bool(self.get_lock_reason(obj))
+
+    def validate_audio_file(self, value):
+        allowed = {"audio/mpeg", "audio/mp4", "audio/wav", "audio/ogg", "audio/webm"}
+        if getattr(value, "content_type", "").split(";", 1)[0].lower() not in allowed:
+            raise serializers.ValidationError("Unsupported audio content type.")
+        if value.size > 50 * 1024 * 1024:
+            raise serializers.ValidationError("Audio cannot exceed 50 MB.")
+        return value
+
+
+class QuizOptionPublicSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = QuizOption
+        fields = ("id", "text", "order")
+
+
+class QuizQuestionPublicSerializer(serializers.ModelSerializer):
+    options = QuizOptionPublicSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = QuizQuestion
+        fields = ("id", "text", "order", "options")
+
+
+class QuizPublicSerializer(serializers.ModelSerializer):
+    questions = QuizQuestionPublicSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = Quiz
+        fields = ("id", "session", "title", "required_score", "max_attempts", "retry_delay_minutes", "questions")
+
+
+class QuizAttemptSerializer(serializers.ModelSerializer):
+    required_score = serializers.IntegerField(source="quiz.required_score", read_only=True)
+
+    class Meta:
+        model = QuizAttempt
+        fields = ("id", "score", "passed", "required_score", "attempt_number", "next_attempt_at", "created_at")
+        read_only_fields = fields
+
+
+class QuizOptionWriteSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = QuizOption
+        fields = ("id", "text", "is_correct", "order")
+
+
+class QuizQuestionWriteSerializer(serializers.ModelSerializer):
+    options = QuizOptionWriteSerializer(many=True)
+
+    class Meta:
+        model = QuizQuestion
+        fields = ("id", "text", "order", "options")
+
+
+class QuizWriteSerializer(serializers.ModelSerializer):
+    questions = QuizQuestionWriteSerializer(many=True)
+
+    class Meta:
+        model = Quiz
+        fields = ("id", "session", "title", "required_score", "max_attempts", "retry_delay_minutes", "is_active", "questions")
+
+    def validate_questions(self, questions):
+        if not questions:
+            raise serializers.ValidationError("At least one question is required.")
+        for question in questions:
+            if len(question.get("options", [])) < 2 or sum(bool(item.get("is_correct")) for item in question.get("options", [])) != 1:
+                raise serializers.ValidationError("Each question needs at least two options and exactly one correct option.")
+        return questions
+
+    def create(self, validated_data):
+        questions = validated_data.pop("questions")
+        quiz = Quiz.objects.create(**validated_data)
+        self._save_questions(quiz, questions)
+        return quiz
+
+    def update(self, instance, validated_data):
+        questions = validated_data.pop("questions", None)
+        instance = super().update(instance, validated_data)
+        if questions is not None:
+            instance.questions.all().delete()
+            self._save_questions(instance, questions)
+        return instance
+
+    @staticmethod
+    def _save_questions(quiz, questions):
+        for question_data in questions:
+            options = question_data.pop("options")
+            question = QuizQuestion.objects.create(quiz=quiz, **question_data)
+            QuizOption.objects.bulk_create([QuizOption(question=question, **item) for item in options])
+
 
 class CourseEnrollmentSerializer(serializers.ModelSerializer):
     course = CourseListSerializer(read_only=True)
+    completed_sessions = serializers.SerializerMethodField()
+    total_sessions = serializers.IntegerField(source="course.sessions.count", read_only=True)
+    weekly_used = serializers.SerializerMethodField()
+    weekly_limit = serializers.IntegerField(source="course.weekly_session_limit", read_only=True, allow_null=True)
+    monthly_used = serializers.SerializerMethodField()
+    monthly_limit = serializers.IntegerField(source="course.monthly_session_limit", read_only=True, allow_null=True)
+    next_session = serializers.SerializerMethodField()
+    locked_reason = serializers.SerializerMethodField()
 
     class Meta:
         model = CourseEnrollment
-        fields = ("id", "course", "enrolled_at", "completed_at")
+        fields = (
+            "id", "course", "enrolled_at", "completed_at", "completed_sessions", "total_sessions",
+            "weekly_used", "weekly_limit", "monthly_used", "monthly_limit", "next_session", "locked_reason",
+        )
         read_only_fields = fields
+
+    def get_completed_sessions(self, obj) -> int:
+        return obj.session_progress.filter(completed_at__isnull=False).count()
+
+    def get_weekly_used(self, obj) -> int:
+        from django.utils import timezone
+        from datetime import timedelta
+        return obj.session_progress.filter(updated_at__gte=timezone.now() - timedelta(days=7)).count()
+
+    def get_monthly_used(self, obj) -> int:
+        from django.utils import timezone
+        from datetime import timedelta
+        return obj.session_progress.filter(updated_at__gte=timezone.now() - timedelta(days=30)).count()
+
+    def get_next_session(self, obj) -> int | None:
+        completed = obj.session_progress.filter(completed_at__isnull=False).values_list("session_id", flat=True)
+        session = obj.course.sessions.filter(is_published=True).exclude(pk__in=completed).order_by("order").first()
+        return session.pk if session else None
+
+    def get_locked_reason(self, obj) -> str:
+        session_id = self.get_next_session(obj)
+        if not session_id:
+            return ""
+        from .views import session_lock_reason
+        return session_lock_reason(obj.course.sessions.get(pk=session_id), obj.user)
 
 
 class SessionProgressSerializer(serializers.ModelSerializer):

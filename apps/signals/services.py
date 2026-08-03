@@ -79,7 +79,10 @@ class SignalService:
     def list_signals(user=None):
         queryset = (
             Signal.objects.filter(
-                status=SignalStatus.APPROVED
+                status__in=(
+                    SignalStatus.APPROVED, SignalStatus.ACTIVE, SignalStatus.SUCCESSFUL,
+                    SignalStatus.FAILED, SignalStatus.CANCELLED,
+                )
             )
             .select_related("created_by")
         )
@@ -105,7 +108,10 @@ class SignalService:
         if user.role == User.Role.TRADER:
             approved = restrict_queryset_for_user(
                 queryset.filter(
-                    status=SignalStatus.APPROVED
+                    status__in=(
+                        SignalStatus.APPROVED, SignalStatus.ACTIVE, SignalStatus.SUCCESSFUL,
+                        SignalStatus.FAILED, SignalStatus.CANCELLED,
+                    )
                 ),
                 user,
             )
@@ -114,7 +120,10 @@ class SignalService:
             ).distinct()
 
         queryset = queryset.filter(
-            status=SignalStatus.APPROVED
+            status__in=(
+                SignalStatus.APPROVED, SignalStatus.ACTIVE, SignalStatus.SUCCESSFUL,
+                SignalStatus.FAILED, SignalStatus.CANCELLED,
+            )
         )
         return restrict_queryset_for_user(queryset, user)
 

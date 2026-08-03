@@ -5,6 +5,10 @@ from django.utils.text import slugify
 from common.content_access import LevelRestrictedContent
 
 
+def default_playback_speeds():
+    return [0.75, 1, 1.25, 1.5, 2]
+
+
 class Course(LevelRestrictedContent):
     class Status(models.TextChoices):
         DRAFT = "DRAFT", "Draft"
@@ -44,6 +48,8 @@ class Course(LevelRestrictedContent):
     prerequisites = models.JSONField(default=list, blank=True)
     learning_outcomes = models.JSONField(default=list, blank=True)
     enrollment_open = models.BooleanField(default=True)
+    weekly_session_limit = models.PositiveIntegerField(null=True, blank=True)
+    monthly_session_limit = models.PositiveIntegerField(null=True, blank=True)
     starts_at = models.DateTimeField(null=True, blank=True)
     ends_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -77,6 +83,12 @@ class Course(LevelRestrictedContent):
 
 
 class CourseSession(models.Model):
+    class MediaType(models.TextChoices):
+        VIDEO = "video", "Video"
+        AUDIO = "audio", "Audio"
+        TEXT = "text", "Text"
+        LIVE = "live", "Live"
+
     course = models.ForeignKey(
         Course,
         on_delete=models.CASCADE,
@@ -88,6 +100,12 @@ class CourseSession(models.Model):
     video_file = models.FileField(
         upload_to="academy/sessions/videos/%Y/%m/", null=True, blank=True
     )
+    media_type = models.CharField(max_length=10, choices=MediaType.choices, default=MediaType.VIDEO)
+    audio_file = models.FileField(upload_to="academy/sessions/audio/%Y/%m/", null=True, blank=True)
+    cover = models.ImageField(upload_to="academy/sessions/covers/%Y/%m/", null=True, blank=True)
+    duration_seconds = models.PositiveIntegerField(null=True, blank=True)
+    playback_speeds = models.JSONField(default=default_playback_speeds, blank=True)
+    unlock_at = models.DateTimeField(null=True, blank=True)
     duration_minutes = models.PositiveIntegerField(null=True, blank=True)
     text = models.TextField(blank=True)
     image = models.ImageField(
@@ -145,3 +163,48 @@ class SessionProgress(models.Model):
         constraints = [
             models.UniqueConstraint(fields=["enrollment", "session"], name="unique_session_progress")
         ]
+
+
+class Quiz(models.Model):
+    session = models.OneToOneField(CourseSession, on_delete=models.CASCADE, related_name="quiz")
+    title = models.CharField(max_length=250)
+    required_score = models.PositiveSmallIntegerField(default=70)
+    max_attempts = models.PositiveSmallIntegerField(default=3)
+    retry_delay_minutes = models.PositiveIntegerField(default=60)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+
+class QuizQuestion(models.Model):
+    quiz = models.ForeignKey(Quiz, on_delete=models.CASCADE, related_name="questions")
+    text = models.TextField()
+    order = models.PositiveIntegerField(default=1)
+
+    class Meta:
+        ordering = ["order", "id"]
+
+
+class QuizOption(models.Model):
+    question = models.ForeignKey(QuizQuestion, on_delete=models.CASCADE, related_name="options")
+    text = models.CharField(max_length=500)
+    is_correct = models.BooleanField(default=False)
+    order = models.PositiveIntegerField(default=1)
+
+    class Meta:
+        ordering = ["order", "id"]
+
+
+class QuizAttempt(models.Model):
+    quiz = models.ForeignKey(Quiz, on_delete=models.CASCADE, related_name="attempts")
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="quiz_attempts")
+    answers = models.JSONField(default=dict)
+    score = models.DecimalField(max_digits=5, decimal_places=2)
+    passed = models.BooleanField(default=False)
+    attempt_number = models.PositiveIntegerField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    next_attempt_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        constraints = [models.UniqueConstraint(fields=["quiz", "user", "attempt_number"], name="unique_quiz_attempt_number")]

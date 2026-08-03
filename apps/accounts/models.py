@@ -523,3 +523,38 @@ class OTPChallenge(models.Model):
     def is_usable(self):
         from django.utils import timezone
         return not self.consumed_at and not self.locked_at and self.expires_at > timezone.now()
+
+
+class BrokerConnection(models.Model):
+    class Status(models.TextChoices):
+        NOT_STARTED = "not_started", "Not started"
+        PENDING = "pending", "Pending"
+        REJECTED = "rejected", "Rejected"
+        CONNECTED = "connected", "Connected"
+
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="broker_connection"
+    )
+    broker_name = models.CharField(max_length=150)
+    account_number = models.CharField(max_length=100)
+    referral_code = models.CharField(max_length=100, blank=True)
+    document = models.FileField(upload_to="broker-connections/%Y/%m/")
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
+    rejection_reason = models.TextField(blank=True)
+    balance = models.DecimalField(max_digits=20, decimal_places=2, default=0)
+    equity = models.DecimalField(max_digits=20, decimal_places=2, default=0)
+    currency = models.CharField(max_length=10, default="USD")
+    chart = models.JSONField(default=list, blank=True)
+    submitted_at = models.DateTimeField(auto_now_add=True)
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+    reviewed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="reviewed_broker_connections",
+    )
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-submitted_at"]
+
+    def __str__(self):
+        return f"{self.user} - {self.broker_name} ({self.status})"

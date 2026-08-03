@@ -7,10 +7,14 @@ from .views import (
     TraderSignalListView,
     ApproveSignalView,
     RejectSignalView,
+    SignalUpdateListCreateView,
+    SignalUpdateDetailView,
 )
 
 
 urlpatterns = [
+    path("<int:pk>/updates/", SignalUpdateListCreateView.as_view(), name="signal-update-list-create"),
+    path("<int:pk>/updates/<int:update_id>/", SignalUpdateDetailView.as_view(), name="signal-update-detail"),
     path(
         "my-signals/",
         TraderSignalListView.as_view(),

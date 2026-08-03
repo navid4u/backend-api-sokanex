@@ -3,8 +3,10 @@ from django.contrib.auth.admin import UserAdmin
 
 from .models import (
     Badge, PlatformRole, SecuritySettings, UpgradeRequest,
-    User, UserBadge, UserDevice, UserProfile,
+    User, UserBadge, UserDevice, UserProfile, BrokerConnection,
 )
+
+admin.site.register(BrokerConnection)
 
 
 class UserProfileInline(admin.StackedInline):

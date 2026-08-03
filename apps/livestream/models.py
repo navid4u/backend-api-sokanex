@@ -1,6 +1,7 @@
 from django.conf import settings
 from django.db import models
 from django.utils.text import slugify
+from datetime import timedelta
 from common.content_access import LevelRestrictedContent
 
 
@@ -11,6 +12,7 @@ class LiveEvent(LevelRestrictedContent):
         LIVE = "LIVE", "Live"
         ENDED = "ENDED", "Ended"
         CANCELLED = "CANCELLED", "Cancelled"
+        DISABLED = "DISABLED", "Disabled"
 
     title = models.CharField(
         max_length=250,
@@ -42,6 +44,8 @@ class LiveEvent(LevelRestrictedContent):
         max_length=500,
         blank=True,
     )
+    provider_join_url = models.URLField(max_length=500, blank=True)
+    ended_at = models.DateTimeField(null=True, blank=True)
 
     starts_at = models.DateTimeField()
 
@@ -123,3 +127,48 @@ class LiveEvent(LevelRestrictedContent):
 
     def __str__(self):
         return self.title
+
+    @property
+    def viewer_count(self) -> int:
+        from django.utils import timezone
+        return self.presences.filter(left_at__isnull=True, last_seen_at__gte=timezone.now() - timedelta(minutes=2)).count()
+
+
+class LivePresence(models.Model):
+    event = models.ForeignKey(LiveEvent, on_delete=models.CASCADE, related_name="presences")
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="live_presences")
+    joined_at = models.DateTimeField(auto_now_add=True)
+    last_seen_at = models.DateTimeField(auto_now=True)
+    left_at = models.DateTimeField(null=True, blank=True)
+    is_muted = models.BooleanField(default=False)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["event", "user"], name="unique_live_presence")]
+
+
+class SpeakRequest(models.Model):
+    class Status(models.TextChoices):
+        PENDING = "pending", "Pending"
+        APPROVED = "approved", "Approved"
+        REJECTED = "rejected", "Rejected"
+
+    event = models.ForeignKey(LiveEvent, on_delete=models.CASCADE, related_name="speak_requests")
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="live_speak_requests")
+    message = models.CharField(max_length=300, blank=True)
+    status = models.CharField(max_length=15, choices=Status.choices, default=Status.PENDING)
+    created_at = models.DateTimeField(auto_now_add=True)
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["created_at"]
+        constraints = [models.UniqueConstraint(fields=["event", "user", "status"], name="unique_live_speak_request_status")]
+
+
+class LiveChatMessage(models.Model):
+    event = models.ForeignKey(LiveEvent, on_delete=models.CASCADE, related_name="chat_messages")
+    sender = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="live_chat_messages")
+    text = models.CharField(max_length=1000)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at", "-id"]

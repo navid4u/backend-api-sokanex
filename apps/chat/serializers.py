@@ -239,14 +239,23 @@ class SupportThreadSerializer(serializers.ModelSerializer):
 
 class SupportMessageSerializer(serializers.ModelSerializer):
     sender = SocialUserSerializer(read_only=True)
+    is_mine = serializers.SerializerMethodField()
 
     class Meta:
         model = SupportMessage
-        fields = ("id", "sender", "text", "attachment", "created_at")
-        read_only_fields = ("id", "sender", "created_at")
+        fields = ("id", "sender", "text", "attachment", "is_mine", "created_at", "delivered_at", "read_at")
+        read_only_fields = ("id", "sender", "is_mine", "created_at", "delivered_at", "read_at")
+
+    def get_is_mine(self, obj) -> bool:
+        request = self.context.get("request")
+        return bool(request and obj.sender_id == request.user.id)
 
     def validate_attachment(self, value):
         return validate_attachment_upload(value, max_size_mb=20, file_label="Support attachment")
+
+    def validate_text(self, value):
+        from django.utils.html import strip_tags
+        return strip_tags(value).strip()
 
     def validate(self, attrs):
         if not attrs.get("text") and not attrs.get("attachment"):

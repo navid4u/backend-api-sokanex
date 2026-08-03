@@ -28,10 +28,18 @@ from .views import (
     UserBadgeListCreateView,
     OTPRequestView,
     OTPVerifyView,
+    BrokerConnectionView,
+    BrokerConnectionAdminListView,
+    BrokerConnectionAdminDetailView,
+    BrokerConnectionReviewView,
 )
 
 
 urlpatterns = [
+    path("broker-connection/", BrokerConnectionView.as_view(), name="broker-connection"),
+    path("admin/broker-connections/", BrokerConnectionAdminListView.as_view(), name="broker-connection-admin-list"),
+    path("admin/broker-connections/<int:pk>/", BrokerConnectionAdminDetailView.as_view(), name="broker-connection-admin-detail"),
+    path("admin/broker-connections/<int:pk>/review/", BrokerConnectionReviewView.as_view(), name="broker-connection-review"),
     path("auth/otp/request/", OTPRequestView.as_view(), name="otp-request"),
     path("auth/otp/verify/", OTPVerifyView.as_view(), name="otp-verify"),
     path("devices/", MyDeviceListView.as_view(), name="my-devices"),

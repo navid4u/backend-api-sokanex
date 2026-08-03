@@ -15,6 +15,7 @@ from rest_framework_simplejwt.tokens import (
 )
 
 from common.validators import (
+    validate_attachment_upload,
     validate_image_upload,
 )
 from django.utils import timezone
@@ -24,6 +25,7 @@ from .authentication import issue_login_tokens
 
 from .models import (
     Badge,
+    BrokerConnection,
     PlatformRole,
     SecuritySettings,
     UpgradeRequest,
@@ -35,6 +37,60 @@ from apps.activity.models import UserActivity
 from apps.activity.services import ActivityService
 
 User = get_user_model()
+
+
+class BrokerConnectionSerializer(serializers.ModelSerializer):
+    document_url = serializers.SerializerMethodField()
+    user = serializers.CharField(source="user.username", read_only=True)
+
+    class Meta:
+        model = BrokerConnection
+        fields = (
+            "id", "user", "status", "rejection_reason", "submitted_at", "reviewed_at",
+            "broker_name", "account_number", "referral_code", "document_url",
+        )
+        read_only_fields = ("id", "user", "status", "rejection_reason", "submitted_at", "reviewed_at", "document_url")
+
+    def get_document_url(self, obj) -> str | None:
+        if not obj.document:
+            return None
+        request = self.context.get("request")
+        return request.build_absolute_uri(obj.document.url) if request else obj.document.url
+
+    def validate_document(self, value):
+        allowed_types = {"image/jpeg", "image/png", "image/webp", "application/pdf"}
+        content_type = getattr(value, "content_type", "").split(";", 1)[0].lower()
+        if content_type not in allowed_types:
+            raise serializers.ValidationError("Only JPEG, PNG, WebP, or PDF documents are allowed.")
+        position = value.tell()
+        signature = value.read(12)
+        value.seek(position)
+        if content_type == "application/pdf" and not signature.startswith(b"%PDF-"):
+            raise serializers.ValidationError("The uploaded file is not a valid PDF.")
+        if content_type.startswith("image/"):
+            try:
+                from PIL import Image
+                Image.open(value).verify()
+                value.seek(position)
+            except Exception as exc:
+                raise serializers.ValidationError("The uploaded file is not a valid image.") from exc
+        return validate_attachment_upload(value, max_size_mb=10, file_label="Broker document")
+
+
+class BrokerConnectionReviewSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = BrokerConnection
+        fields = ("status", "rejection_reason", "balance", "equity", "currency", "chart")
+
+    def validate_status(self, value):
+        if value not in (BrokerConnection.Status.CONNECTED, BrokerConnection.Status.REJECTED, BrokerConnection.Status.PENDING):
+            raise serializers.ValidationError("Invalid review status.")
+        return value
+
+    def validate(self, attrs):
+        if attrs.get("status") == BrokerConnection.Status.REJECTED and not attrs.get("rejection_reason", "").strip():
+            raise serializers.ValidationError({"rejection_reason": "A rejection reason is required."})
+        return attrs
 
 
 class PlatformRoleSummarySerializer(serializers.ModelSerializer):

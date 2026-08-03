@@ -9,10 +9,24 @@ from .views import (
     EnrollCourseView,
     MyEnrollmentListView,
     SessionProgressView,
+    SessionQuizView,
+    QuizAttemptCreateView,
+    MyQuizAttemptListView,
+    QuizManagementView,
+    QuizManagementCreateView,
+    SessionMediaTicketView,
+    SessionMediaStreamView,
 )
 
 
 urlpatterns = [
+    path("sessions/<int:pk>/media-ticket/", SessionMediaTicketView.as_view(), name="academy-media-ticket"),
+    path("sessions/<int:pk>/media/", SessionMediaStreamView.as_view(), name="academy-media-stream"),
+    path("sessions/<int:pk>/quiz/", SessionQuizView.as_view(), name="academy-session-quiz"),
+    path("quizzes/<int:pk>/attempts/", QuizAttemptCreateView.as_view(), name="academy-quiz-attempt"),
+    path("quizzes/<int:pk>/attempts/mine/", MyQuizAttemptListView.as_view(), name="academy-my-quiz-attempts"),
+    path("quizzes/manage/", QuizManagementCreateView.as_view(), name="academy-quiz-create"),
+    path("quizzes/manage/<int:pk>/", QuizManagementView.as_view(), name="academy-quiz-detail"),
     path("enrollments/", MyEnrollmentListView.as_view(), name="academy-my-enrollments"),
     path("courses/<str:slug>/enroll/", EnrollCourseView.as_view(), name="academy-course-enroll"),
     path("sessions/<int:pk>/progress/", SessionProgressView.as_view(), name="academy-session-progress"),

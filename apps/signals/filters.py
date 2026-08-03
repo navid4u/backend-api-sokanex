@@ -25,6 +25,7 @@ class SignalFilter(django_filters.FilterSet):
         fields = [
             "market",
             "status",
+            "symbol",
             "direction",
             "created_by",
             "created_after",

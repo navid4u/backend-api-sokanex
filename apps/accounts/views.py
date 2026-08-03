@@ -39,6 +39,7 @@ from common.permissions import (
     CanManageRoles,
     CanManageUsers,
     IsAdmin,
+    IsEmployee,
     IsSuperAdmin,
     IsTrader,
 )
@@ -66,6 +67,8 @@ from .serializers import (
     UserDeviceSerializer,
     OTPRequestSerializer,
     OTPVerifySerializer,
+    BrokerConnectionSerializer,
+    BrokerConnectionReviewSerializer,
 )
 from .models import (
     Badge,
@@ -75,6 +78,7 @@ from .models import (
     UserBadge,
     UserDevice,
     UserProfile,
+    BrokerConnection,
 )
 from django.utils import timezone
 from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken, OutstandingToken
@@ -87,6 +91,57 @@ from common.responses import success_response
 
 
 User = get_user_model()
+
+
+class BrokerConnectionView(generics.GenericAPIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = BrokerConnectionSerializer
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
+
+    def get(self, request):
+        connection = BrokerConnection.objects.filter(user=request.user).first()
+        if not connection:
+            return Response({
+                "status": BrokerConnection.Status.NOT_STARTED,
+                "rejection_reason": "", "submitted_at": None, "reviewed_at": None,
+                "broker_name": "", "account_number": "", "referral_code": "", "document_url": None,
+            })
+        return Response(self.get_serializer(connection).data)
+
+    def post(self, request):
+        instance = BrokerConnection.objects.filter(user=request.user).first()
+        serializer = self.get_serializer(instance, data=request.data)
+        serializer.is_valid(raise_exception=True)
+        serializer.save(
+            user=request.user, status=BrokerConnection.Status.PENDING,
+            rejection_reason="", reviewed_at=None, reviewed_by=None,
+        )
+        return Response(serializer.data, status=status.HTTP_200_OK if instance else status.HTTP_201_CREATED)
+
+
+class BrokerConnectionAdminListView(generics.ListAPIView):
+    permission_classes = [IsAuthenticated, IsEmployee]
+    serializer_class = BrokerConnectionSerializer
+    queryset = BrokerConnection.objects.select_related("user", "reviewed_by")
+    filter_backends = [DjangoFilterBackend, SearchFilter]
+    filterset_fields = ["status", "broker_name"]
+    search_fields = ["user__username", "account_number", "referral_code"]
+
+
+class BrokerConnectionAdminDetailView(generics.RetrieveAPIView):
+    permission_classes = [IsAuthenticated, IsEmployee]
+    serializer_class = BrokerConnectionSerializer
+    queryset = BrokerConnection.objects.select_related("user", "reviewed_by")
+
+
+class BrokerConnectionReviewView(generics.UpdateAPIView):
+    permission_classes = [IsAuthenticated, IsEmployee]
+    serializer_class = BrokerConnectionReviewSerializer
+    queryset = BrokerConnection.objects.all()
+    http_method_names = ["patch", "options"]
+
+    def perform_update(self, serializer):
+        serializer.save(reviewed_by=self.request.user, reviewed_at=timezone.now())
 
 
 class CustomTokenObtainPairView(

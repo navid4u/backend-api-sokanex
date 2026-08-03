@@ -2,7 +2,7 @@ from django.utils import timezone
 
 from rest_framework import serializers
 
-from .models import LiveEvent
+from .models import LiveChatMessage, LiveEvent, LivePresence, SpeakRequest
 
 from common.validators import (
     validate_image_upload,
@@ -36,6 +36,7 @@ class LiveEventListSerializer(
             "starts_at",
             "ends_at",
             "status",
+            "viewer_count",
             "allowed_levels",
             "host",
             "is_live_now",
@@ -67,6 +68,8 @@ class LiveEventDetailSerializer(
             + (
                 "description",
                 "stream_url",
+                "provider_join_url",
+                "ended_at",
                 "replay_url",
                 "created_at",
                 "updated_at",
@@ -89,6 +92,8 @@ class LiveEventWriteSerializer(
             "description",
             "thumbnail",
             "stream_url",
+            "provider_join_url",
+            "ended_at",
             "replay_url",
             "starts_at",
             "ends_at",
@@ -179,3 +184,43 @@ class LiveEventWriteSerializer(
             max_size_mb=8,
             file_label="Live event thumbnail",
         )
+
+
+class LivePresenceSerializer(serializers.ModelSerializer):
+    username = serializers.CharField(source="user.username", read_only=True)
+
+    class Meta:
+        model = LivePresence
+        fields = ("id", "user", "username", "joined_at", "last_seen_at", "is_muted")
+        read_only_fields = fields
+
+
+class SpeakRequestSerializer(serializers.ModelSerializer):
+    username = serializers.CharField(source="user.username", read_only=True)
+
+    class Meta:
+        model = SpeakRequest
+        fields = ("id", "user", "username", "message", "status", "created_at", "reviewed_at")
+        read_only_fields = ("id", "user", "username", "status", "created_at", "reviewed_at")
+
+
+class SpeakRequestReviewSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = SpeakRequest
+        fields = ("status",)
+
+
+class LiveChatMessageSerializer(serializers.ModelSerializer):
+    sender = serializers.CharField(source="sender.username", read_only=True)
+
+    class Meta:
+        model = LiveChatMessage
+        fields = ("id", "sender", "text", "created_at")
+        read_only_fields = ("id", "sender", "created_at")
+
+    def validate_text(self, value):
+        from django.utils.html import strip_tags
+        value = strip_tags(value).strip()
+        if not value:
+            raise serializers.ValidationError("Message cannot be empty.")
+        return value

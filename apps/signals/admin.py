@@ -1,5 +1,7 @@
 from django.contrib import admin
-from .models import Signal
+from .models import Signal, SignalUpdate
+
+admin.site.register(SignalUpdate)
 
 
 @admin.register(Signal)

@@ -45,6 +45,7 @@ ALLOWED_HOSTS = get_list_setting(
 # --------------------------------------------------
 
 INSTALLED_APPS = [
+    "daphne",
     # Local user model
     "apps.accounts",
     "apps.activity",
@@ -63,9 +64,10 @@ INSTALLED_APPS = [
     "rest_framework",
     "drf_spectacular",
     (
-        "rest_framework_simplejwt."
+    "rest_framework_simplejwt."
         "token_blacklist"
     ),
+    "channels",
 
     # Project apps
     "apps.dashboard",
@@ -78,6 +80,8 @@ INSTALLED_APPS = [
     "apps.livestream",
     "apps.notifications",
     "apps.academy",
+    "apps.market",
+    "apps.content_channels",
     "landing",
 ]
 
@@ -146,6 +150,7 @@ TEMPLATES = [
 
 
 WSGI_APPLICATION = "config.wsgi.application"
+ASGI_APPLICATION = "config.asgi.application"
 
 
 # --------------------------------------------------
@@ -278,6 +283,8 @@ STATIC_ROOT = BASE_DIR / "staticfiles"
 
 MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
+FILE_UPLOAD_PERMISSIONS = 0o640
+FILE_UPLOAD_DIRECTORY_PERMISSIONS = 0o750
 
 
 # --------------------------------------------------
@@ -339,6 +346,7 @@ REST_FRAMEWORK = {
             default="3/hour",
         ),
         "otp_request": config("OTP_REQUEST_THROTTLE_RATE", default="3/10min"),
+        "support_message": config("SUPPORT_MESSAGE_THROTTLE_RATE", default="30/minute"),
     },
 }
 
@@ -425,6 +433,25 @@ PAYAMITO_USERNAME = config("PAYAMITO_USERNAME", default="")
 PAYAMITO_API_KEY = config("PAYAMITO_API_KEY", default="")
 PAYAMITO_FROM_NUMBER = config("PAYAMITO_FROM_NUMBER", default="")
 PAYAMITO_TIMEOUT_SECONDS = config("PAYAMITO_TIMEOUT_SECONDS", default=15, cast=int)
+MARKET_DATA_PROVIDER = config("MARKET_DATA_PROVIDER", default="")
+MARKET_DATA_PROVIDER_URL = config("MARKET_DATA_PROVIDER_URL", default="")
+MARKET_DATA_API_KEY = config("MARKET_DATA_API_KEY", default="")
+MARKET_DATA_TIMEOUT_SECONDS = config("MARKET_DATA_TIMEOUT_SECONDS", default=8, cast=int)
+MARKET_DATA_CACHE_SECONDS = config("MARKET_DATA_CACHE_SECONDS", default=60, cast=int)
+ECONOMIC_CALENDAR_PROVIDER = config("ECONOMIC_CALENDAR_PROVIDER", default="")
+ECONOMIC_CALENDAR_API_KEY = config("ECONOMIC_CALENDAR_API_KEY", default="")
+CHANNEL_TICKET_TTL_SECONDS = config("CHANNEL_TICKET_TTL_SECONDS", default=60, cast=int)
+SUPPORT_USERNAME = config("SUPPORT_USERNAME", default="support")
+REDIS_URL = config("REDIS_URL", default="")
+CHANNEL_LAYERS = {
+    "default": {
+        "BACKEND": "channels_redis.core.RedisChannelLayer" if REDIS_URL else "channels.layers.InMemoryChannelLayer",
+        **({"CONFIG": {"hosts": [REDIS_URL]}} if REDIS_URL else {}),
+    }
+}
+MEDIA_MAX_IMAGE_MB = config("MEDIA_MAX_IMAGE_MB", default=10, cast=int)
+MEDIA_MAX_AUDIO_MB = config("MEDIA_MAX_AUDIO_MB", default=50, cast=int)
+MEDIA_MAX_VIDEO_MB = config("MEDIA_MAX_VIDEO_MB", default=1024, cast=int)
 
 
 # --------------------------------------------------

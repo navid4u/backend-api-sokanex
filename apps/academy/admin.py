@@ -1,6 +1,11 @@
 from django.contrib import admin
 
-from .models import Course, CourseEnrollment, CourseSession, SessionProgress
+from .models import Course, CourseEnrollment, CourseSession, SessionProgress, Quiz, QuizAttempt, QuizOption, QuizQuestion
+
+admin.site.register(Quiz)
+admin.site.register(QuizQuestion)
+admin.site.register(QuizOption)
+admin.site.register(QuizAttempt)
 
 
 class CourseSessionInline(admin.TabularInline):

@@ -331,6 +331,8 @@ class SupportMessage(models.Model):
     text = models.TextField(blank=True)
     attachment = models.FileField(upload_to="chat/support/%Y/%m/", null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
+    delivered_at = models.DateTimeField(null=True, blank=True)
+    read_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         ordering = ["-created_at", "-id"]

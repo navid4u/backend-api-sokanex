@@ -22,6 +22,14 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from rest_framework.pagination import CursorPagination
+from django.utils import timezone
+from django.core import signing
+from django.conf import settings
+from asgiref.sync import async_to_sync
+from channels.layers import get_channel_layer
+from common.serializers import EmptySerializer
+from common.throttles import SupportMessageRateThrottle
 
 from common.permissions import IsEmployee
 
@@ -236,7 +244,18 @@ class RoomMessageListCreateView(
 
     ordering = [
         "-created_at",
+        "-id",
     ]
+
+    def filter_queryset(self, queryset):
+        queryset = super().filter_queryset(queryset)
+        requested = self.request.query_params.get("ordering", "")
+        terms = [term.strip() for term in requested.split(",") if term.strip()]
+        allowed = {field for field in self.ordering_fields}
+        if terms and all(term.lstrip("-") in allowed for term in terms):
+            tie_breaker = "-id" if terms[-1].startswith("-") else "id"
+            return queryset.order_by(*terms, tie_breaker)
+        return queryset
 
     def get_room(self):
         return get_object_or_404(
@@ -530,3 +549,86 @@ class SupportMessageListCreateView(generics.ListCreateAPIView):
         if thread.is_closed:
             raise serializers.ValidationError("This support conversation is closed.")
         serializer.save(thread=thread, sender=self.request.user)
+
+
+def support_staff(user):
+    return user.is_staff or user.role in (user.Role.EMPLOYEE, user.Role.ADMIN, user.Role.SUPER_ADMIN)
+
+
+def support_thread_for(user, pk):
+    queryset = SupportThread.objects.select_related("user", "assigned_to")
+    return get_object_or_404(queryset, pk=pk) if support_staff(user) else get_object_or_404(queryset, pk=pk, user=user)
+
+
+class SupportCursorPagination(CursorPagination):
+    page_size = 30
+    ordering = "-created_at"
+
+
+class SupportConversationView(APIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = SupportThreadSerializer
+
+    def get(self, request):
+        thread, _ = SupportThread.objects.get_or_create(user=request.user)
+        return Response(SupportThreadSerializer(thread, context={"request": request}).data)
+
+
+class SupportConversationMessageView(generics.ListCreateAPIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = SupportMessageSerializer
+    pagination_class = SupportCursorPagination
+
+    def get_throttles(self):
+        return [SupportMessageRateThrottle()] if self.request.method == "POST" else []
+
+    def get_thread(self):
+        return support_thread_for(self.request.user, self.kwargs["pk"])
+
+    def get_queryset(self):
+        if getattr(self, "swagger_fake_view", False):
+            return SupportMessage.objects.none()
+        return SupportMessage.objects.filter(thread=self.get_thread()).select_related("sender")
+
+    def perform_create(self, serializer):
+        thread = self.get_thread()
+        if thread.is_closed:
+            raise serializers.ValidationError("This support conversation is closed.")
+        message = serializer.save(thread=thread, sender=self.request.user, delivered_at=timezone.now())
+        payload = SupportMessageSerializer(message, context={"request": self.request}).data
+        async_to_sync(get_channel_layer().group_send)(
+            f"support_{thread.pk}", {"type": "support.event", "payload": {"type": "message.created", "data": payload}}
+        )
+
+
+class SupportConversationReadView(APIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = EmptySerializer
+
+    def post(self, request, pk):
+        thread = support_thread_for(request.user, pk)
+        SupportMessage.objects.filter(thread=thread, read_at__isnull=True).exclude(sender=request.user).update(read_at=timezone.now())
+        return Response({"read": True})
+
+
+class SupportQueueView(generics.ListAPIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = SupportThreadSerializer
+
+    def get_queryset(self):
+        if getattr(self, "swagger_fake_view", False) or not support_staff(self.request.user):
+            return SupportThread.objects.none()
+        return SupportThread.objects.filter(is_closed=False).select_related("user", "assigned_to").order_by("updated_at")
+
+
+class SupportTicketView(APIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = EmptySerializer
+
+    def post(self, request, pk):
+        thread = support_thread_for(request.user, pk)
+        ticket = signing.dumps(
+            {"user_id": request.user.pk, "thread_id": thread.pk},
+            salt="support-ws-ticket", compress=True,
+        )
+        return Response({"ticket": ticket, "expires_in": settings.CHANNEL_TICKET_TTL_SECONDS})
