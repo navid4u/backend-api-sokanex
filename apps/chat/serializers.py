@@ -8,7 +8,7 @@ from common.validators import (
 
 from .models import (
     ChatRoom, Message, PostComment, PostReaction, PostReport,
-    TraderPost, UserFollow,
+    SupportMessage, SupportThread, TraderPost, UserFollow,
 )
 from .services import ChatService
 
@@ -225,3 +225,30 @@ class FollowSerializer(serializers.ModelSerializer):
         model = UserFollow
         fields = ("id", "following", "created_at")
         read_only_fields = fields
+
+
+class SupportThreadSerializer(serializers.ModelSerializer):
+    slug = serializers.CharField(read_only=True)
+    user = SocialUserSerializer(read_only=True)
+
+    class Meta:
+        model = SupportThread
+        fields = ("id", "slug", "user", "is_closed", "created_at", "updated_at")
+        read_only_fields = fields
+
+
+class SupportMessageSerializer(serializers.ModelSerializer):
+    sender = SocialUserSerializer(read_only=True)
+
+    class Meta:
+        model = SupportMessage
+        fields = ("id", "sender", "text", "attachment", "created_at")
+        read_only_fields = ("id", "sender", "created_at")
+
+    def validate_attachment(self, value):
+        return validate_attachment_upload(value, max_size_mb=20, file_label="Support attachment")
+
+    def validate(self, attrs):
+        if not attrs.get("text") and not attrs.get("attachment"):
+            raise serializers.ValidationError("A support message needs text or an attachment.")
+        return attrs

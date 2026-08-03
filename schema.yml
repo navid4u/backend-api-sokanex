@@ -638,6 +638,60 @@ paths:
               schema:
                 $ref: '#/components/schemas/AdminUpgradeRequest'
           description: ''
+  /api/accounts/auth/otp/request/:
+    post:
+      operationId: accounts_auth_otp_request_create
+      tags:
+      - accounts
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OTPRequestRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/OTPRequestRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/OTPRequestRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OTPRequest'
+          description: ''
+  /api/accounts/auth/otp/verify/:
+    post:
+      operationId: accounts_auth_otp_verify_create
+      tags:
+      - accounts
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OTPVerifyRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/OTPVerifyRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/OTPVerifyRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OTPVerify'
+          description: ''
   /api/accounts/badges/:
     get:
       operationId: accounts_badges_list
@@ -3140,6 +3194,83 @@ paths:
       responses:
         '204':
           description: No response body
+  /api/chat/support/:
+    get:
+      operationId: chat_support_retrieve
+      tags:
+      - chat
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SupportThread'
+          description: ''
+  /api/chat/support/messages/:
+    get:
+      operationId: chat_support_messages_list
+      parameters:
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      tags:
+      - chat
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedSupportMessageList'
+          description: ''
+    post:
+      operationId: chat_support_messages_create
+      tags:
+      - chat
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SupportMessageRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/SupportMessageRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/SupportMessageRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SupportMessage'
+          description: ''
   /api/dashboard/:
     get:
       operationId: dashboard_retrieve
@@ -6847,6 +6978,45 @@ components:
           type: integer
       required:
       - unread_count
+    OTPRequest:
+      type: object
+      properties:
+        phone:
+          type: string
+      required:
+      - phone
+    OTPRequestRequest:
+      type: object
+      properties:
+        phone:
+          type: string
+          minLength: 1
+      required:
+      - phone
+    OTPVerify:
+      type: object
+      properties:
+        phone:
+          type: string
+        code:
+          type: string
+          pattern: ^\d{4}$
+      required:
+      - code
+      - phone
+    OTPVerifyRequest:
+      type: object
+      properties:
+        phone:
+          type: string
+          minLength: 1
+        code:
+          type: string
+          minLength: 1
+          pattern: ^\d{4}$
+      required:
+      - code
+      - phone
     OtherDeviceLogoutResponse:
       type: object
       properties:
@@ -7225,6 +7395,29 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/SignalList'
+    PaginatedSupportMessageList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/SupportMessage'
     PaginatedTraderPostList:
       type: object
       required:
@@ -8427,24 +8620,18 @@ components:
           readOnly: true
         username:
           type: string
-          description: Required. 150 characters or fewer. Letters, digits and @/./+/-/_
-            only.
-          pattern: ^[\w.@+-]+$
-          maxLength: 150
         email:
-          title: Email address
           oneOf:
           - type: string
             format: email
-            maxLength: 254
           - type: string
             maxLength: 0
+        phone:
+          type: string
         first_name:
           type: string
-          maxLength: 150
         last_name:
           type: string
-          maxLength: 150
         role:
           allOf:
           - $ref: '#/components/schemas/UserRoleEnum'
@@ -8457,38 +8644,34 @@ components:
       - access_level
       - id
       - role
-      - username
     RegisterRequest:
       type: object
       properties:
         username:
           type: string
-          minLength: 1
-          description: Required. 150 characters or fewer. Letters, digits and @/./+/-/_
-            only.
-          pattern: ^[\w.@+-]+$
-          maxLength: 150
         email:
-          title: Email address
           oneOf:
           - type: string
             format: email
-            maxLength: 254
           - type: string
             maxLength: 0
+        phone:
+          type: string
+          minLength: 1
         password:
+          type: string
+          writeOnly: true
+          minLength: 1
+        password_confirm:
           type: string
           writeOnly: true
           minLength: 1
         first_name:
           type: string
-          maxLength: 150
         last_name:
           type: string
-          maxLength: 150
       required:
       - password
-      - username
     RejectSignalRequestRequest:
       type: object
       properties:
@@ -8930,6 +9113,70 @@ components:
       - id
       - last_name
       - username
+    SupportMessage:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        sender:
+          allOf:
+          - $ref: '#/components/schemas/SocialUser'
+          readOnly: true
+        text:
+          type: string
+        attachment:
+          type: string
+          format: uri
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - id
+      - sender
+    SupportMessageRequest:
+      type: object
+      properties:
+        text:
+          type: string
+        attachment:
+          type: string
+          format: binary
+          nullable: true
+    SupportThread:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        slug:
+          type: string
+          readOnly: true
+        user:
+          allOf:
+          - $ref: '#/components/schemas/SocialUser'
+          readOnly: true
+        is_closed:
+          type: boolean
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - id
+      - is_closed
+      - slug
+      - updated_at
+      - user
     TokenRefresh:
       type: object
       properties:
@@ -9228,6 +9475,9 @@ components:
         is_verified:
           type: boolean
           readOnly: true
+        profile_completion:
+          type: integer
+          readOnly: true
         created_at:
           type: string
           format: date-time
@@ -9239,6 +9489,7 @@ components:
       - email
       - id
       - is_verified
+      - profile_completion
       - role
       - username
     UserAccessLevelEnum:

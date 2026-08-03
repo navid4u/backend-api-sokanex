@@ -7,6 +7,7 @@ from django.conf import settings
 from django.conf.urls.static import static
 from django.contrib import admin
 from django.urls import path, include
+from django.views.decorators.cache import never_cache
 
 from rest_framework_simplejwt.views import (
     TokenRefreshView,
@@ -72,7 +73,7 @@ urlpatterns = [
 
     path(
         "api/token/refresh/",
-        TokenRefreshView.as_view(),
+        never_cache(TokenRefreshView.as_view()),
         name="token-refresh",
     ),
 

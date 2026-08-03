@@ -1,6 +1,8 @@
 from django.contrib.auth import get_user_model
 from django.shortcuts import get_object_or_404
 from django.db.models.deletion import ProtectedError
+from django.utils.decorators import method_decorator
+from django.views.decorators.cache import never_cache
 from django_filters.rest_framework import (
     DjangoFilterBackend,
 )
@@ -62,6 +64,8 @@ from .serializers import (
     SecuritySettingsSerializer,
     UserBadgeSerializer,
     UserDeviceSerializer,
+    OTPRequestSerializer,
+    OTPVerifySerializer,
 )
 from .models import (
     Badge,
@@ -77,6 +81,9 @@ from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken, Ou
 from .services import UserService
 from apps.activity.models import UserActivity
 from apps.activity.services import ActivityService
+from .authentication import issue_login_tokens
+from .otp import OTPService
+from common.responses import success_response
 
 
 User = get_user_model()
@@ -94,6 +101,10 @@ class CustomTokenObtainPairView(
     throttle_classes = [
         LoginRateThrottle,
     ]
+
+    @method_decorator(never_cache)
+    def dispatch(self, *args, **kwargs):
+        return super().dispatch(*args, **kwargs)
 
 class ProfileView(APIView):
     permission_classes = [
@@ -182,6 +193,52 @@ class RegisterView(
     throttle_classes = [
         RegisterRateThrottle,
     ]
+
+    @method_decorator(never_cache)
+    def dispatch(self, *args, **kwargs):
+        return super().dispatch(*args, **kwargs)
+
+
+class OTPRequestView(APIView):
+    permission_classes = [AllowAny]
+    serializer_class = OTPRequestSerializer
+
+    @method_decorator(never_cache)
+    def dispatch(self, *args, **kwargs):
+        return super().dispatch(*args, **kwargs)
+
+    @extend_schema(request=OTPRequestSerializer)
+    def post(self, request):
+        serializer = OTPRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        OTPService.request_code(serializer.validated_data["phone"], request)
+        return success_response(
+            data={"expires_in": 120, "resend_after": 120},
+            message="کد تأیید ارسال شد.",
+        )
+
+
+class OTPVerifyView(APIView):
+    permission_classes = [AllowAny]
+    serializer_class = OTPVerifySerializer
+
+    @method_decorator(never_cache)
+    def dispatch(self, *args, **kwargs):
+        return super().dispatch(*args, **kwargs)
+
+    @extend_schema(request=OTPVerifySerializer)
+    def post(self, request):
+        serializer = OTPVerifySerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        phone = serializer.validated_data["phone"]
+        OTPService.verify_code(phone, serializer.validated_data["code"])
+        user = User.objects.filter(phone=phone, is_active=True).first()
+        if not user:
+            raise serializers.ValidationError({"code": "کد تأیید نامعتبر یا منقضی است."})
+        session = issue_login_tokens(user, request)
+        session["user"] = UserSerializer(user, context={"request": request}).data
+        return success_response(data=session, message="ورود موفق بود.")
+
 class LogoutView(
     generics.GenericAPIView
 ):

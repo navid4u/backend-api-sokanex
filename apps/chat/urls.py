@@ -16,10 +16,14 @@ from .views import (
     SavedPostListView,
     SocialFeedView,
     SocialPostDetailView,
+    SupportMessageListCreateView,
+    SupportThreadView,
 )
 
 
 urlpatterns = [
+    path("support/", SupportThreadView.as_view(), name="support-thread"),
+    path("support/messages/", SupportMessageListCreateView.as_view(), name="support-messages"),
     path("social/feed/", SocialFeedView.as_view(), name="social-feed"),
     path("social/saved/", SavedPostListView.as_view(), name="social-saved"),
     path("social/following/", FollowingListView.as_view(), name="social-following"),

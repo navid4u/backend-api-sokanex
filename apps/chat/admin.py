@@ -2,7 +2,7 @@ from django.contrib import admin
 
 from .models import (
     ChatRoom, Message, PostComment, PostReaction, PostReport,
-    RoomMembership, SavedPost, TraderPost, UserFollow,
+    RoomMembership, SavedPost, SupportMessage, SupportThread, TraderPost, UserFollow,
 )
 
 
@@ -155,3 +155,17 @@ class PostReportAdmin(admin.ModelAdmin):
 admin.site.register(PostReaction)
 admin.site.register(SavedPost)
 admin.site.register(UserFollow)
+
+
+class SupportMessageInline(admin.TabularInline):
+    model = SupportMessage
+    extra = 0
+    readonly_fields = ("created_at",)
+
+
+@admin.register(SupportThread)
+class SupportThreadAdmin(admin.ModelAdmin):
+    list_display = ("id", "user", "assigned_to", "is_closed", "updated_at")
+    search_fields = ("user__username", "user__phone")
+    list_filter = ("is_closed",)
+    inlines = (SupportMessageInline,)

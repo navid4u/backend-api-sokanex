@@ -17,10 +17,10 @@ from rest_framework_simplejwt.tokens import (
 from common.validators import (
     validate_image_upload,
 )
-from common.validators import (
-    validate_image_upload,
-)
 from django.utils import timezone
+from django.core.exceptions import ValidationError as DjangoValidationError
+from common.phone import normalize_iran_phone
+from .authentication import issue_login_tokens
 
 from .models import (
     Badge,
@@ -33,10 +33,6 @@ from .models import (
 )
 from apps.activity.models import UserActivity
 from apps.activity.services import ActivityService
-import hashlib
-import uuid
-from datetime import UTC, datetime, timedelta
-from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken, OutstandingToken
 
 User = get_user_model()
 
@@ -56,6 +52,7 @@ class UserSerializer(serializers.ModelSerializer):
         read_only=True,
         allow_null=True,
     )
+    profile_completion = serializers.SerializerMethodField()
 
     class Meta:
         model = User
@@ -71,6 +68,7 @@ class UserSerializer(serializers.ModelSerializer):
             "access_level",
             "custom_role",
             "is_verified",
+            "profile_completion",
             "created_at",
         )
         read_only_fields = (
@@ -82,6 +80,17 @@ class UserSerializer(serializers.ModelSerializer):
             "is_verified",
             "created_at",
         )
+
+    def get_profile_completion(self, obj) -> int:
+        profile, _ = UserProfile.objects.get_or_create(user=obj)
+        tracked = (
+            obj.first_name, obj.last_name, obj.phone, obj.avatar,
+            profile.birth_date, profile.country, profile.city,
+            profile.education_level, profile.occupation,
+            profile.risk_tolerance, profile.investment_goal,
+            profile.preferred_markets, profile.trading_frequency,
+        )
+        return round(sum(bool(value) for value in tracked) * 100 / len(tracked))
 
 
 class CustomTokenObtainPairSerializer(
@@ -99,72 +108,29 @@ class CustomTokenObtainPairSerializer(
         return token
 
     def validate(self, attrs):
+        identifier = str(attrs.get(self.username_field, "")).strip()
+        try:
+            attrs[self.username_field] = normalize_iran_phone(identifier)
+        except DjangoValidationError:
+            attrs[self.username_field] = identifier
         data = super().validate(attrs)
-
-        request = self.context.get("request")
-        supplied_device_id = request.headers.get("X-Device-ID", "").strip() if request else ""
-        if supplied_device_id:
-            device_id = supplied_device_id[:64]
-        else:
-            seed = f"{uuid.uuid4()}:{getattr(request, 'META', {}).get('HTTP_USER_AGENT', '')}"
-            device_id = hashlib.sha256(seed.encode()).hexdigest()
-        refresh = RefreshToken(data["refresh"])
-        user_agent = request.META.get("HTTP_USER_AGENT", "")[:500] if request else ""
-        ip_address = ActivityService.client_ip(request) if request else None
-        device, _ = UserDevice.objects.update_or_create(
-            user=self.user,
-            device_id=device_id,
-            defaults={
-                "name": request.headers.get("X-Device-Name", "")[:150] if request else "",
-                "user_agent": user_agent,
-                "ip_address": ip_address,
-                "refresh_jti": str(refresh["jti"]),
-                "revoked_at": None,
-            },
-        )
-        settings_obj = SecuritySettings.load()
-        refresh.set_exp(lifetime=timedelta(days=settings_obj.session_lifetime_days))
-        data["refresh"] = str(refresh)
-        data["access"] = str(refresh.access_token)
-        OutstandingToken.objects.filter(jti=str(refresh["jti"])).update(
-            token=data["refresh"],
-            expires_at=datetime.fromtimestamp(refresh["exp"], tz=UTC),
-        )
-        extra_devices = list(
-            UserDevice.objects.filter(user=self.user, revoked_at__isnull=True)
-            .exclude(pk=device.pk)
-            .order_by("-last_seen_at")
-            .values_list("pk", flat=True)[max(settings_obj.max_active_devices - 1, 0) :]
-        )
-        if extra_devices:
-            old_jtis = list(
-                UserDevice.objects.filter(pk__in=extra_devices)
-                .exclude(refresh_jti="")
-                .values_list("refresh_jti", flat=True)
-            )
-            for outstanding in OutstandingToken.objects.filter(user=self.user, jti__in=old_jtis):
-                BlacklistedToken.objects.get_or_create(token=outstanding)
-            UserDevice.objects.filter(pk__in=extra_devices).update(revoked_at=timezone.now())
-        ActivityService.record(
-            self.user,
-            UserActivity.Type.LOGIN,
-            "Account login",
-            description=device.name or user_agent[:150],
-            target_type="device",
-            target_id=device.pk,
-            ip_address=ip_address,
-        )
+        session = issue_login_tokens(self.user, self.context["request"], data["refresh"])
+        data.update(session)
 
         data["user"] = UserSerializer(
             self.user,
             context=self.context,
         ).data
-        data["device_id"] = device_id
-
         return data
 
 
 class RegisterSerializer(serializers.ModelSerializer):
+    username = serializers.CharField(required=False, allow_blank=True)
+    email = serializers.EmailField(required=False, allow_blank=True)
+    phone = serializers.CharField(required=False)
+    first_name = serializers.CharField(required=False, allow_blank=True)
+    last_name = serializers.CharField(required=False, allow_blank=True)
+    password_confirm = serializers.CharField(write_only=True, required=False)
     password = serializers.CharField(
         write_only=True,
         trim_whitespace=False,
@@ -179,7 +145,9 @@ class RegisterSerializer(serializers.ModelSerializer):
             "id",
             "username",
             "email",
+            "phone",
             "password",
+            "password_confirm",
             "first_name",
             "last_name",
             "role",
@@ -192,10 +160,14 @@ class RegisterSerializer(serializers.ModelSerializer):
         )
 
     def create(self, validated_data):
+        validated_data.pop("password_confirm", None)
+        phone = validated_data.get("phone")
+        username = phone or validated_data["username"]
         with transaction.atomic():
             user = User.objects.create_user(
-                username=validated_data["username"],
-                email=validated_data["email"],
+                username=username,
+                phone=phone,
+                email=validated_data.get("email", ""),
                 password=validated_data["password"],
                 first_name=validated_data.get(
                     "first_name",
@@ -216,10 +188,39 @@ class RegisterSerializer(serializers.ModelSerializer):
             )
             return user
 
+    def validate_phone(self, value):
+        try:
+            phone = normalize_iran_phone(value)
+        except DjangoValidationError as exc:
+            raise serializers.ValidationError(exc.messages[0])
+        if User.objects.filter(phone=phone).exists() or User.objects.filter(username=phone).exists():
+            raise serializers.ValidationError("کاربری با این شماره همراه قبلاً ثبت شده است.")
+        return phone
+
+    def validate(self, attrs):
+        confirmation = attrs.get("password_confirm")
+        if confirmation is not None and confirmation != attrs.get("password"):
+            raise serializers.ValidationError({"password_confirm": "تکرار رمز عبور مطابقت ندارد."})
+        if attrs.get("phone"):
+            missing = {
+                field: "این فیلد الزامی است."
+                for field in ("first_name", "last_name")
+                if not str(attrs.get(field, "")).strip()
+            }
+            if missing:
+                raise serializers.ValidationError(missing)
+            attrs["username"] = attrs["phone"]
+        elif not str(attrs.get("username", "")).strip():
+            raise serializers.ValidationError({"phone": "شماره همراه الزامی است."})
+        return attrs
+
     def validate_email(self, value):
         normalized_email = (
             value.strip().lower()
         )
+
+        if not normalized_email:
+            return ""
 
         if User.objects.filter(
             email__iexact=normalized_email
@@ -415,7 +416,10 @@ class AdminUserWriteSerializer(serializers.ModelSerializer):
     def validate_phone(self, value):
         if value in (None, ""):
             return None
-        normalized_phone = value.strip()
+        try:
+            normalized_phone = normalize_iran_phone(value)
+        except DjangoValidationError as exc:
+            raise serializers.ValidationError(exc.messages[0])
         queryset = User.objects.filter(phone=normalized_phone)
         if self.instance:
             queryset = queryset.exclude(pk=self.instance.pk)
@@ -817,7 +821,10 @@ class ProfileUpdateSerializer(
         ):
             return None
 
-        normalized_phone = value.strip()
+        try:
+            normalized_phone = normalize_iran_phone(value)
+        except DjangoValidationError as exc:
+            raise serializers.ValidationError(exc.messages[0])
 
         queryset = User.objects.filter(
             phone=normalized_phone
@@ -944,3 +951,17 @@ class SecuritySettingsSerializer(serializers.ModelSerializer):
         if not 1 <= value <= 90:
             raise serializers.ValidationError("Must be between 1 and 90.")
         return value
+
+
+class OTPRequestSerializer(serializers.Serializer):
+    phone = serializers.CharField()
+
+    def validate_phone(self, value):
+        try:
+            return normalize_iran_phone(value)
+        except DjangoValidationError as exc:
+            raise serializers.ValidationError(exc.messages[0])
+
+
+class OTPVerifySerializer(OTPRequestSerializer):
+    code = serializers.RegexField(r"^\d{4}$", error_messages={"invalid": "کد باید چهار رقم باشد."})

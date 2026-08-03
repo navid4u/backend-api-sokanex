@@ -26,10 +26,14 @@ from .views import (
     SecuritySettingsView,
     UserBadgeDetailView,
     UserBadgeListCreateView,
+    OTPRequestView,
+    OTPVerifyView,
 )
 
 
 urlpatterns = [
+    path("auth/otp/request/", OTPRequestView.as_view(), name="otp-request"),
+    path("auth/otp/verify/", OTPVerifyView.as_view(), name="otp-verify"),
     path("devices/", MyDeviceListView.as_view(), name="my-devices"),
     path("devices/logout-others/", RevokeOtherDevicesView.as_view(), name="logout-other-devices"),
     path("devices/<int:pk>/logout/", RevokeDeviceView.as_view(), name="logout-device"),

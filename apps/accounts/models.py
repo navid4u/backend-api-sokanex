@@ -3,6 +3,7 @@ from django.contrib.auth.models import AbstractUser
 from django.conf import settings
 from django.db.models import Q
 from django.utils.text import slugify
+from common.phone import normalize_iran_phone, validate_iran_phone
 
 
 class User(AbstractUser):
@@ -36,7 +37,8 @@ class User(AbstractUser):
         max_length=20,
         unique=True,
         null=True,
-        blank=True
+        blank=True,
+        validators=[validate_iran_phone],
     )
 
     avatar = models.ImageField(
@@ -72,6 +74,11 @@ class User(AbstractUser):
 
     def __str__(self):
         return self.username
+
+    def save(self, *args, **kwargs):
+        if self.phone:
+            self.phone = normalize_iran_phone(self.phone)
+        super().save(*args, **kwargs)
 
     def has_platform_permission(self, permission):
         if self.is_superuser or self.role == self.Role.SUPER_ADMIN:
@@ -495,3 +502,24 @@ class UserBadge(models.Model):
 
     def __str__(self):
         return f"{self.user} - {self.badge}"
+
+
+class OTPChallenge(models.Model):
+    phone = models.CharField(max_length=11, db_index=True)
+    code_digest = models.CharField(max_length=64)
+    salt = models.CharField(max_length=64)
+    request_ip = models.GenericIPAddressField(null=True, blank=True, db_index=True)
+    attempts = models.PositiveSmallIntegerField(default=0)
+    expires_at = models.DateTimeField()
+    consumed_at = models.DateTimeField(null=True, blank=True)
+    locked_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [models.Index(fields=["phone", "-created_at"])]
+
+    @property
+    def is_usable(self):
+        from django.utils import timezone
+        return not self.consumed_at and not self.locked_at and self.expires_at > timezone.now()

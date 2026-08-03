@@ -303,3 +303,34 @@ class PostReport(models.Model):
         constraints = [
             models.UniqueConstraint(fields=["post", "reporter"], name="unique_user_post_report")
         ]
+
+
+class SupportThread(models.Model):
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="support_thread"
+    )
+    assigned_to = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="assigned_support_threads",
+    )
+    is_closed = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    @property
+    def slug(self):
+        return "support"
+
+
+class SupportMessage(models.Model):
+    thread = models.ForeignKey(SupportThread, on_delete=models.CASCADE, related_name="messages")
+    sender = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True,
+        related_name="support_messages",
+    )
+    text = models.TextField(blank=True)
+    attachment = models.FileField(upload_to="chat/support/%Y/%m/", null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at", "-id"]

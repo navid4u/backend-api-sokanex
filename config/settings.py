@@ -338,6 +338,7 @@ REST_FRAMEWORK = {
             "REGISTER_THROTTLE_RATE",
             default="3/hour",
         ),
+        "otp_request": config("OTP_REQUEST_THROTTLE_RATE", default="3/10min"),
     },
 }
 
@@ -400,6 +401,7 @@ CORS_ALLOWED_ORIGINS = get_list_setting(
         "http://127.0.0.1:5173,"
         "https://sokanex.com,"
         "https://www.sokanex.com"
+        ",https://app.sokanex.com"
     ),
 )
 
@@ -411,11 +413,18 @@ CSRF_TRUSTED_ORIGINS = get_list_setting(
         "http://127.0.0.1:5173,"
         "https://sokanex.com,"
         "https://www.sokanex.com"
+        ",https://app.sokanex.com"
     ),
 )
 
 # React sends JWT in the Authorization header.
 CORS_ALLOW_CREDENTIALS = False
+
+PAYAMITO_ENABLED = config("PAYAMITO_ENABLED", default=False, cast=bool)
+PAYAMITO_USERNAME = config("PAYAMITO_USERNAME", default="")
+PAYAMITO_API_KEY = config("PAYAMITO_API_KEY", default="")
+PAYAMITO_FROM_NUMBER = config("PAYAMITO_FROM_NUMBER", default="")
+PAYAMITO_TIMEOUT_SECONDS = config("PAYAMITO_TIMEOUT_SECONDS", default=15, cast=int)
 
 
 # --------------------------------------------------

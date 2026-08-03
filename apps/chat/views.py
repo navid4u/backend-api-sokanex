@@ -27,7 +27,7 @@ from common.permissions import IsEmployee
 
 from .models import (
     ChatRoom, Message, PostComment, PostReaction, PostReport,
-    SavedPost, TraderPost, UserFollow,
+    SavedPost, SupportMessage, SupportThread, TraderPost, UserFollow,
 )
 from .serializers import (
     ChatRoomSerializer,
@@ -38,6 +38,8 @@ from .serializers import (
     PostReactionSerializer,
     PostReportSerializer,
     TraderPostSerializer,
+    SupportMessageSerializer,
+    SupportThreadSerializer,
 )
 from .services import ChatService
 
@@ -490,3 +492,41 @@ class ReportPostView(generics.CreateAPIView):
     def perform_create(self, serializer):
         post = get_object_or_404(social_posts_for(self.request.user), pk=self.kwargs["pk"])
         serializer.save(post=post, reporter=self.request.user)
+
+
+class SupportThreadView(APIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = SupportThreadSerializer
+
+    def get_thread(self, request):
+        user = request.user
+        requested_user_id = request.query_params.get("user_id")
+        if requested_user_id and (user.is_staff or user.role in (user.Role.ADMIN, user.Role.SUPER_ADMIN, user.Role.EMPLOYEE)):
+            target = get_object_or_404(user.__class__, pk=requested_user_id)
+        else:
+            target = user
+        thread, _ = SupportThread.objects.get_or_create(user=target)
+        return thread
+
+    def get(self, request):
+        return Response(SupportThreadSerializer(self.get_thread(request), context={"request": request}).data)
+
+
+class SupportMessageListCreateView(generics.ListCreateAPIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = SupportMessageSerializer
+
+    def get_thread(self):
+        helper = SupportThreadView()
+        return helper.get_thread(self.request)
+
+    def get_queryset(self):
+        if getattr(self, "swagger_fake_view", False):
+            return SupportMessage.objects.none()
+        return SupportMessage.objects.filter(thread=self.get_thread()).select_related("sender")
+
+    def perform_create(self, serializer):
+        thread = self.get_thread()
+        if thread.is_closed:
+            raise serializers.ValidationError("This support conversation is closed.")
+        serializer.save(thread=thread, sender=self.request.user)
