@@ -4404,6 +4404,43 @@ paths:
               schema:
                 $ref: '#/components/schemas/LiveChatMessage'
           description: ''
+  /api/livestream/{slug}/chat/{message_id}/:
+    delete:
+      operationId: livestream_chat_destroy
+      parameters:
+      - in: path
+        name: message_id
+        schema:
+          type: integer
+        required: true
+      - in: path
+        name: slug
+        schema:
+          type: string
+        required: true
+      tags:
+      - livestream
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/livestream/{slug}/end/:
+    post:
+      operationId: livestream_end_create
+      parameters:
+      - in: path
+        name: slug
+        schema:
+          type: string
+        required: true
+      tags:
+      - livestream
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
   /api/livestream/{slug}/join/:
     post:
       operationId: livestream_join_create
@@ -4486,6 +4523,104 @@ paths:
               schema:
                 $ref: '#/components/schemas/LivePresence'
           description: ''
+    post:
+      operationId: livestream_presence_create
+      parameters:
+      - in: path
+        name: slug
+        schema:
+          type: string
+        required: true
+      tags:
+      - livestream
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LivePresence'
+          description: ''
+    delete:
+      operationId: livestream_presence_destroy
+      parameters:
+      - in: path
+        name: slug
+        schema:
+          type: string
+        required: true
+      tags:
+      - livestream
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/livestream/{slug}/recordings/:
+    get:
+      operationId: livestream_recordings_retrieve
+      parameters:
+      - in: path
+        name: slug
+        schema:
+          type: string
+        required: true
+      tags:
+      - livestream
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LiveRecording'
+          description: ''
+    post:
+      operationId: livestream_recordings_create
+      parameters:
+      - in: path
+        name: slug
+        schema:
+          type: string
+        required: true
+      tags:
+      - livestream
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LiveRecording'
+          description: ''
+  /api/livestream/{slug}/recordings/{recording_id}/stop/:
+    post:
+      operationId: livestream_recordings_stop_create
+      parameters:
+      - in: path
+        name: recording_id
+        schema:
+          type: integer
+        required: true
+      - in: path
+        name: slug
+        schema:
+          type: string
+        required: true
+      tags:
+      - livestream
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LiveRecording'
+          description: ''
   /api/livestream/{slug}/speak-requests/:
     post:
       operationId: livestream_speak_requests_create
@@ -4553,6 +4688,22 @@ paths:
               schema:
                 $ref: '#/components/schemas/SpeakRequestReview'
           description: ''
+  /api/livestream/{slug}/start/:
+    post:
+      operationId: livestream_start_create
+      parameters:
+      - in: path
+        name: slug
+        schema:
+          type: string
+        required: true
+      tags:
+      - livestream
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
   /api/livestream/{slug}/ticket/:
     post:
       operationId: livestream_ticket_create
@@ -4640,8 +4791,18 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PaginatedLiveEventListList'
+                $ref: '#/components/schemas/PaginatedLiveEventManagementList'
           description: ''
+  /api/livestream/webhooks/livekit/:
+    post:
+      operationId: livestream_webhooks_livekit_create
+      tags:
+      - livestream
+      security:
+      - {}
+      responses:
+        '200':
+          description: No response body
   /api/market/economic-calendar/:
     get:
       operationId: market_economic_calendar_list
@@ -5046,13 +5207,13 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/SignalCreateRequest'
+              $ref: '#/components/schemas/SignalEditRequest'
           application/x-www-form-urlencoded:
             schema:
-              $ref: '#/components/schemas/SignalCreateRequest'
+              $ref: '#/components/schemas/SignalEditRequest'
           multipart/form-data:
             schema:
-              $ref: '#/components/schemas/SignalCreateRequest'
+              $ref: '#/components/schemas/SignalEditRequest'
         required: true
       security:
       - jwtAuth: []
@@ -5061,7 +5222,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/SignalCreate'
+                $ref: '#/components/schemas/SignalEdit'
           description: ''
     patch:
       operationId: signals_partial_update
@@ -5077,13 +5238,13 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/PatchedSignalCreateRequest'
+              $ref: '#/components/schemas/PatchedSignalEditRequest'
           application/x-www-form-urlencoded:
             schema:
-              $ref: '#/components/schemas/PatchedSignalCreateRequest'
+              $ref: '#/components/schemas/PatchedSignalEditRequest'
           multipart/form-data:
             schema:
-              $ref: '#/components/schemas/PatchedSignalCreateRequest'
+              $ref: '#/components/schemas/PatchedSignalEditRequest'
       security:
       - jwtAuth: []
       responses:
@@ -5091,7 +5252,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/SignalCreate'
+                $ref: '#/components/schemas/SignalEdit'
           description: ''
     delete:
       operationId: signals_destroy
@@ -5350,6 +5511,111 @@ paths:
       responses:
         '204':
           description: No response body
+  /api/signals/manage/:
+    get:
+      operationId: signals_manage_list
+      parameters:
+      - in: query
+        name: created_after
+        schema:
+          type: string
+          format: date
+      - in: query
+        name: created_before
+        schema:
+          type: string
+          format: date
+      - in: query
+        name: created_by
+        schema:
+          type: number
+      - in: query
+        name: direction
+        schema:
+          type: string
+          enum:
+          - buy
+          - sell
+        description: |-
+          * `buy` - Buy
+          * `sell` - Sell
+      - in: query
+        name: market
+        schema:
+          type: string
+          enum:
+          - crypto
+          - forex
+          - gold
+          - index
+          - stock
+        description: |-
+          * `forex` - Forex
+          * `crypto` - Crypto
+          * `gold` - Gold
+          * `stock` - Stock
+          * `index` - Index
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      - in: query
+        name: status
+        schema:
+          type: string
+          enum:
+          - active
+          - approved
+          - cancelled
+          - draft
+          - failed
+          - pending
+          - rejected
+          - successful
+        description: |-
+          * `draft` - Draft
+          * `pending` - Pending
+          * `approved` - Approved
+          * `rejected` - Rejected
+          * `active` - Active
+          * `successful` - Successful
+          * `failed` - Failed
+          * `cancelled` - Cancelled
+      - in: query
+        name: symbol
+        schema:
+          type: string
+      tags:
+      - signals
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedSignalManagementList'
+          description: ''
   /api/signals/my-signals/:
     get:
       operationId: signals_my_signals_list
@@ -8212,9 +8478,19 @@ components:
           type: string
           format: date-time
           readOnly: true
+        is_deleted:
+          type: boolean
+          readOnly: true
+        deleted_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
       required:
       - created_at
+      - deleted_at
       - id
+      - is_deleted
       - sender
       - text
     LiveChatMessageRequest:
@@ -8258,6 +8534,16 @@ components:
         viewer_count:
           type: integer
           readOnly: true
+        actual_viewer_count:
+          type: integer
+          readOnly: true
+        display_viewer_count:
+          type: integer
+          readOnly: true
+        max_participants:
+          type: integer
+          maximum: 10000
+          minimum: 1
         allowed_levels:
           type: array
           items:
@@ -8287,6 +8573,14 @@ components:
             maxLength: 500
           - type: string
             maxLength: 0
+        room_name:
+          type: string
+          nullable: true
+          maxLength: 255
+        comments_enabled:
+          type: boolean
+        recording_enabled:
+          type: boolean
         ended_at:
           type: string
           format: date-time
@@ -8307,7 +8601,9 @@ components:
           format: date-time
           readOnly: true
       required:
+      - actual_viewer_count
       - created_at
+      - display_viewer_count
       - host
       - id
       - is_live_now
@@ -8347,6 +8643,16 @@ components:
         viewer_count:
           type: integer
           readOnly: true
+        actual_viewer_count:
+          type: integer
+          readOnly: true
+        display_viewer_count:
+          type: integer
+          readOnly: true
+        max_participants:
+          type: integer
+          maximum: 10000
+          minimum: 1
         allowed_levels:
           type: array
           items:
@@ -8361,11 +8667,129 @@ components:
           type: boolean
           readOnly: true
       required:
+      - actual_viewer_count
+      - display_viewer_count
       - host
       - id
       - is_live_now
       - starts_at
       - title
+      - viewer_count
+    LiveEventManagement:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        title:
+          type: string
+          maxLength: 250
+        slug:
+          oneOf:
+          - type: string
+            pattern: ^[-\w]+$
+            maxLength: 280
+          - type: string
+            maxLength: 0
+        thumbnail:
+          type: string
+          format: uri
+          nullable: true
+        starts_at:
+          type: string
+          format: date-time
+        ends_at:
+          type: string
+          format: date-time
+          nullable: true
+        status:
+          $ref: '#/components/schemas/LiveEventStatusEnum'
+        viewer_count:
+          type: integer
+          readOnly: true
+        actual_viewer_count:
+          type: integer
+          readOnly: true
+        display_viewer_count:
+          type: integer
+          readOnly: true
+        max_participants:
+          type: integer
+          maximum: 10000
+          minimum: 1
+        allowed_levels:
+          type: array
+          items:
+            type: integer
+            maximum: 5
+            minimum: 1
+        host:
+          type: string
+          readOnly: true
+          nullable: true
+        is_live_now:
+          type: boolean
+          readOnly: true
+        description:
+          type: string
+        stream_url:
+          oneOf:
+          - type: string
+            format: uri
+            maxLength: 500
+          - type: string
+            maxLength: 0
+        provider_join_url:
+          oneOf:
+          - type: string
+            format: uri
+            maxLength: 500
+          - type: string
+            maxLength: 0
+        room_name:
+          type: string
+          nullable: true
+          maxLength: 255
+        comments_enabled:
+          type: boolean
+        recording_enabled:
+          type: boolean
+        ended_at:
+          type: string
+          format: date-time
+          nullable: true
+        replay_url:
+          oneOf:
+          - type: string
+            format: uri
+            maxLength: 500
+          - type: string
+            maxLength: 0
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+        viewer_display_offset:
+          type: integer
+          maximum: 1000000
+          minimum: 0
+        created_by:
+          type: integer
+          nullable: true
+      required:
+      - actual_viewer_count
+      - created_at
+      - display_viewer_count
+      - host
+      - id
+      - is_live_now
+      - starts_at
+      - title
+      - updated_at
       - viewer_count
     LiveEventStatusEnum:
       enum:
@@ -8414,6 +8838,22 @@ components:
             maxLength: 500
           - type: string
             maxLength: 0
+        room_name:
+          type: string
+          readOnly: true
+          nullable: true
+        max_participants:
+          type: integer
+          maximum: 10000
+          minimum: 1
+        viewer_display_offset:
+          type: integer
+          maximum: 1000000
+          minimum: 0
+        comments_enabled:
+          type: boolean
+        recording_enabled:
+          type: boolean
         ended_at:
           type: string
           format: date-time
@@ -8456,6 +8896,7 @@ components:
       required:
       - created_at
       - id
+      - room_name
       - slug
       - starts_at
       - title
@@ -8487,6 +8928,18 @@ components:
             maxLength: 500
           - type: string
             maxLength: 0
+        max_participants:
+          type: integer
+          maximum: 10000
+          minimum: 1
+        viewer_display_offset:
+          type: integer
+          maximum: 1000000
+          minimum: 0
+        comments_enabled:
+          type: boolean
+        recording_enabled:
+          type: boolean
         ended_at:
           type: string
           format: date-time
@@ -8544,13 +8997,82 @@ components:
         is_muted:
           type: boolean
           readOnly: true
+        can_publish:
+          type: boolean
+          readOnly: true
       required:
+      - can_publish
       - id
       - is_muted
       - joined_at
       - last_seen_at
       - user
       - username
+    LiveRecording:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        egress_id:
+          type: string
+          readOnly: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/LiveRecordingStatusEnum'
+          readOnly: true
+        file_path:
+          type: string
+          readOnly: true
+        playback_url:
+          type: string
+          format: uri
+          readOnly: true
+        error:
+          type: string
+          readOnly: true
+        started_by:
+          type: integer
+          readOnly: true
+          nullable: true
+        started_at:
+          type: string
+          format: date-time
+          readOnly: true
+        ended_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - egress_id
+      - ended_at
+      - error
+      - file_path
+      - id
+      - playback_url
+      - started_at
+      - started_by
+      - status
+      - updated_at
+    LiveRecordingStatusEnum:
+      enum:
+      - starting
+      - active
+      - ending
+      - complete
+      - failed
+      type: string
+      description: |-
+        * `starting` - Starting
+        * `active` - Active
+        * `ending` - Ending
+        * `complete` - Complete
+        * `failed` - Failed
     LogoutRequest:
       type: object
       properties:
@@ -9241,6 +9763,29 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/LiveEventList'
+    PaginatedLiveEventManagementList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/LiveEventManagement'
     PaginatedMessageList:
       type: object
       required:
@@ -9379,6 +9924,29 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/SignalList'
+    PaginatedSignalManagementList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/SignalManagement'
     PaginatedSignalUpdateList:
       type: object
       required:
@@ -10055,6 +10623,18 @@ components:
             maxLength: 500
           - type: string
             maxLength: 0
+        max_participants:
+          type: integer
+          maximum: 10000
+          minimum: 1
+        viewer_display_offset:
+          type: integer
+          maximum: 1000000
+          minimum: 0
+        comments_enabled:
+          type: boolean
+        recording_enabled:
+          type: boolean
         ended_at:
           type: string
           format: date-time
@@ -10219,7 +10799,7 @@ components:
           maximum: 9223372036854775807
           minimum: 0
           format: int64
-    PatchedSignalCreateRequest:
+    PatchedSignalEditRequest:
       type: object
       properties:
         title:
@@ -10263,6 +10843,18 @@ components:
             type: integer
             maximum: 5
             minimum: 1
+        status:
+          $ref: '#/components/schemas/SignalStatusEnum'
+        result_price:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,8})?$
+          nullable: true
+        result_percent:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,6}(?:\.\d{0,4})?$
+          nullable: true
     PatchedSignalUpdateRequest:
       type: object
       properties:
@@ -10500,6 +11092,7 @@ components:
       - LANDING_MANAGE
       - USER_MANAGE
       - ROLE_MANAGE
+      - LIVE_MANAGE
       type: string
       description: |-
         * `CONTENT_MANAGE` - Manage content
@@ -10511,6 +11104,7 @@ components:
         * `LANDING_MANAGE` - Manage landing page
         * `USER_MANAGE` - Manage users
         * `ROLE_MANAGE` - Manage custom roles
+        * `LIVE_MANAGE` - Manage live events
     PlatformRole:
       type: object
       properties:
@@ -11506,6 +12100,141 @@ components:
       description: |-
         * `buy` - Buy
         * `sell` - Sell
+    SignalEdit:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        signal_id:
+          type: string
+          readOnly: true
+          nullable: true
+        title:
+          type: string
+          maxLength: 200
+        symbol:
+          type: string
+          maxLength: 50
+        market:
+          $ref: '#/components/schemas/SignalMarketEnum'
+        direction:
+          $ref: '#/components/schemas/SignalDirectionEnum'
+        order_type:
+          $ref: '#/components/schemas/OrderTypeEnum'
+        timeframe:
+          type: string
+          maxLength: 30
+        entry_price:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,8})?$
+        stop_loss:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,8})?$
+        take_profit:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,8})?$
+        description:
+          type: string
+        image:
+          type: string
+          format: uri
+          nullable: true
+        allowed_levels:
+          type: array
+          items:
+            type: integer
+            maximum: 5
+            minimum: 1
+        status:
+          $ref: '#/components/schemas/SignalStatusEnum'
+        result_price:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,8})?$
+          nullable: true
+        result_percent:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,6}(?:\.\d{0,4})?$
+          nullable: true
+      required:
+      - direction
+      - entry_price
+      - id
+      - market
+      - signal_id
+      - stop_loss
+      - symbol
+      - take_profit
+      - title
+    SignalEditRequest:
+      type: object
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 200
+        symbol:
+          type: string
+          minLength: 1
+          maxLength: 50
+        market:
+          $ref: '#/components/schemas/SignalMarketEnum'
+        direction:
+          $ref: '#/components/schemas/SignalDirectionEnum'
+        order_type:
+          $ref: '#/components/schemas/OrderTypeEnum'
+        timeframe:
+          type: string
+          maxLength: 30
+        entry_price:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,8})?$
+        stop_loss:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,8})?$
+        take_profit:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,8})?$
+        description:
+          type: string
+        image:
+          type: string
+          format: binary
+          nullable: true
+        allowed_levels:
+          type: array
+          items:
+            type: integer
+            maximum: 5
+            minimum: 1
+        status:
+          $ref: '#/components/schemas/SignalStatusEnum'
+        result_price:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,8})?$
+          nullable: true
+        result_percent:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,6}(?:\.\d{0,4})?$
+          nullable: true
+      required:
+      - direction
+      - entry_price
+      - market
+      - stop_loss
+      - symbol
+      - take_profit
+      - title
     SignalList:
       type: object
       properties:
@@ -11587,6 +12316,96 @@ components:
       - take_profit
       - title
       - trader
+    SignalManagement:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        title:
+          type: string
+          maxLength: 200
+        symbol:
+          type: string
+          maxLength: 50
+        market:
+          $ref: '#/components/schemas/SignalMarketEnum'
+        direction:
+          $ref: '#/components/schemas/SignalDirectionEnum'
+        entry_price:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,8})?$
+        stop_loss:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,8})?$
+        take_profit:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,8})?$
+        description:
+          type: string
+        image:
+          type: string
+          format: uri
+          nullable: true
+        status:
+          $ref: '#/components/schemas/SignalStatusEnum'
+        rejection_reason:
+          type: string
+        allowed_levels:
+          type: array
+          items:
+            type: integer
+            maximum: 5
+            minimum: 1
+        trader:
+          type: string
+          readOnly: true
+        trader_id:
+          type: integer
+          readOnly: true
+        reviewed_by:
+          type: string
+          readOnly: true
+          nullable: true
+        result_price:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,8})?$
+          nullable: true
+        result_percent:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,6}(?:\.\d{0,4})?$
+          nullable: true
+        closed_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - direction
+      - entry_price
+      - id
+      - market
+      - reviewed_by
+      - stop_loss
+      - symbol
+      - take_profit
+      - title
+      - trader
+      - trader_id
+      - updated_at
     SignalMarketEnum:
       enum:
       - forex

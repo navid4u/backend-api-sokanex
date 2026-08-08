@@ -82,6 +82,14 @@ class CanReviewSignals(BasePermission):
         )
 
 
+class CanManageLive(BasePermission):
+    def has_permission(self, request, view):
+        return (
+            request.user.is_authenticated
+            and request.user.has_platform_permission(User.Permission.LIVE_MANAGE)
+        )
+
+
 class CanManageLanding(BasePermission):
     def has_permission(self, request, view):
         return (
@@ -144,6 +152,9 @@ class IsSignalOwnerOrEmployee(BasePermission):
                 user.is_superuser
                 or user.has_platform_permission(
                     User.Permission.CONTENT_MANAGE
+                )
+                or user.has_platform_permission(
+                    User.Permission.SIGNAL_REVIEW
                 )
                 or obj.created_by_id == user.id
             )

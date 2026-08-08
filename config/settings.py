@@ -349,6 +349,7 @@ REST_FRAMEWORK = {
         "support_message": config("SUPPORT_MESSAGE_THROTTLE_RATE", default="30/minute"),
         "market_quotes": config("MARKET_QUOTES_THROTTLE_RATE", default="60/minute"),
         "market_news": config("MARKET_NEWS_THROTTLE_RATE", default="30/minute"),
+        "live_chat": config("LIVE_CHAT_THROTTLE_RATE", default="30/minute"),
     },
 }
 
@@ -464,6 +465,13 @@ CHANNEL_LAYERS = {
 MEDIA_MAX_IMAGE_MB = config("MEDIA_MAX_IMAGE_MB", default=10, cast=int)
 MEDIA_MAX_AUDIO_MB = config("MEDIA_MAX_AUDIO_MB", default=50, cast=int)
 MEDIA_MAX_VIDEO_MB = config("MEDIA_MAX_VIDEO_MB", default=1024, cast=int)
+LIVEKIT_URL = config("LIVEKIT_URL", default="")
+LIVEKIT_API_URL = config("LIVEKIT_API_URL", default="")
+LIVEKIT_API_KEY = config("LIVEKIT_API_KEY", default="")
+LIVEKIT_API_SECRET = config("LIVEKIT_API_SECRET", default="")
+LIVEKIT_TOKEN_TTL_SECONDS = config("LIVEKIT_TOKEN_TTL_SECONDS", default=300, cast=int)
+LIVEKIT_RECORDING_PATH_PREFIX = config("LIVEKIT_RECORDING_PATH_PREFIX", default="recordings")
+LIVEKIT_RECORDING_PUBLIC_BASE_URL = config("LIVEKIT_RECORDING_PUBLIC_BASE_URL", default="")
 
 
 # --------------------------------------------------

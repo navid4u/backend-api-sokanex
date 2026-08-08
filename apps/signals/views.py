@@ -28,6 +28,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.pagination import PageNumberPagination
 from django.db.models import Count
+from apps.accounts.models import User
 
 
 
@@ -36,6 +37,8 @@ from .models import Signal, SignalUpdate
 from .serializers import (
     SignalCreateSerializer,
     SignalDetailSerializer,
+    SignalEditSerializer,
+    SignalManagementSerializer,
     SignalListSerializer,
     SignalUpdateSerializer,
 )
@@ -48,10 +51,11 @@ class SignalPagination(PageNumberPagination):
     max_page_size = 100
 
     def get_paginated_response(self, data):
-        summary = {
+        summary = {"pending": 0, "approved": 0, "rejected": 0}
+        summary.update({
             row["status"]: row["count"]
             for row in self.page.paginator.object_list.values("status").annotate(count=Count("id"))
-        }
+        })
         response = super().get_paginated_response(data)
         response.data["summary"] = summary
         return response
@@ -135,7 +139,7 @@ class SignalDetailView(
             "PUT",
             "PATCH",
         ]:
-            return SignalCreateSerializer
+            return SignalEditSerializer
 
         return SignalDetailSerializer
 
@@ -150,6 +154,44 @@ class SignalDetailView(
         return SignalService.accessible_signals(
             self.request.user
         )
+
+    def perform_update(self, serializer):
+        previous_status = serializer.instance.status
+        signal = serializer.save()
+        if signal.status != previous_status and self.request.user.has_platform_permission(
+            User.Permission.SIGNAL_REVIEW
+        ):
+            from django.utils import timezone
+            from .models import SignalStatus
+            signal.approved_by = self.request.user
+            signal.closed_at = timezone.now() if signal.status in (
+                SignalStatus.SUCCESSFUL, SignalStatus.FAILED, SignalStatus.CANCELLED,
+            ) else None
+            signal.save(update_fields=("approved_by", "closed_at", "updated_at"))
+            SignalUpdate.objects.create(
+                signal=signal, author=self.request.user, status=signal.status,
+                title="Signal status updated",
+                message=f"Status changed from {previous_status} to {signal.status}.",
+            )
+
+
+class SignalManagementListView(generics.ListAPIView):
+    permission_classes = [IsAuthenticated, CanReviewSignals]
+    serializer_class = SignalManagementSerializer
+    pagination_class = SignalPagination
+    filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
+    filterset_class = SignalFilter
+    search_fields = [
+        "title", "symbol", "created_by__username", "created_by__first_name",
+        "created_by__last_name",
+    ]
+    ordering_fields = ["created_at", "updated_at", "symbol", "status"]
+    ordering = ["-created_at", "-id"]
+
+    def get_queryset(self):
+        if getattr(self, "swagger_fake_view", False):
+            return Signal.objects.none()
+        return Signal.objects.select_related("created_by", "approved_by").all()
 class PendingSignalListView(
     generics.ListAPIView
 ):

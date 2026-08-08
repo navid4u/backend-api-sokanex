@@ -4,7 +4,7 @@ from rest_framework.exceptions import ValidationError
 
 from apps.accounts.models import User
 
-from .models import Signal, SignalStatus
+from .models import Signal, SignalStatus, SignalUpdate
 from common.content_access import restrict_queryset_for_user
 
 
@@ -39,6 +39,10 @@ class SignalService:
                 "updated_at",
             ]
         )
+        SignalUpdate.objects.create(
+            signal=signal, author=admin, status=SignalStatus.APPROVED,
+            title="Signal approved", message="Signal review was approved.",
+        )
 
         return signal
 
@@ -71,6 +75,10 @@ class SignalService:
                 "rejection_reason",
                 "updated_at",
             ]
+        )
+        SignalUpdate.objects.create(
+            signal=signal, author=admin, status=SignalStatus.REJECTED,
+            title="Signal rejected", message=reason,
         )
 
         return signal

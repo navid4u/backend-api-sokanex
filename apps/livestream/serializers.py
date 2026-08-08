@@ -2,7 +2,7 @@ from django.utils import timezone
 
 from rest_framework import serializers
 
-from .models import LiveChatMessage, LiveEvent, LivePresence, SpeakRequest
+from .models import LiveChatMessage, LiveEvent, LivePresence, LiveRecording, SpeakRequest
 
 from common.validators import (
     validate_image_upload,
@@ -24,6 +24,8 @@ class LiveEventListSerializer(
     is_live_now = (
         serializers.SerializerMethodField()
     )
+    actual_viewer_count = serializers.IntegerField(source="viewer_count", read_only=True)
+    display_viewer_count = serializers.IntegerField(read_only=True)
 
     class Meta:
         model = LiveEvent
@@ -37,6 +39,9 @@ class LiveEventListSerializer(
             "ends_at",
             "status",
             "viewer_count",
+            "actual_viewer_count",
+            "display_viewer_count",
+            "max_participants",
             "allowed_levels",
             "host",
             "is_live_now",
@@ -69,6 +74,9 @@ class LiveEventDetailSerializer(
                 "description",
                 "stream_url",
                 "provider_join_url",
+                "room_name",
+                "comments_enabled",
+                "recording_enabled",
                 "ended_at",
                 "replay_url",
                 "created_at",
@@ -93,6 +101,11 @@ class LiveEventWriteSerializer(
             "thumbnail",
             "stream_url",
             "provider_join_url",
+            "room_name",
+            "max_participants",
+            "viewer_display_offset",
+            "comments_enabled",
+            "recording_enabled",
             "ended_at",
             "replay_url",
             "starts_at",
@@ -108,6 +121,7 @@ class LiveEventWriteSerializer(
         read_only_fields = (
             "id",
             "slug",
+            "room_name",
             "created_at",
             "updated_at",
         )
@@ -167,14 +181,11 @@ class LiveEventWriteSerializer(
             status_value == LiveEvent.Status.LIVE
             and not stream_url
         ):
-            raise serializers.ValidationError(
-                {
-                    "stream_url": (
-                        "Stream URL is required "
-                        "for a live event."
-                    )
-                }
-            )
+            from django.conf import settings
+            if not settings.LIVEKIT_URL:
+                raise serializers.ValidationError(
+                    {"stream_url": "Stream URL is required when LiveKit is not configured."}
+                )
 
         return attrs
 
@@ -186,12 +197,20 @@ class LiveEventWriteSerializer(
         )
 
 
+class LiveEventManagementSerializer(LiveEventDetailSerializer):
+    class Meta(LiveEventDetailSerializer.Meta):
+        fields = LiveEventDetailSerializer.Meta.fields + (
+            "viewer_display_offset", "comments_enabled", "recording_enabled",
+            "room_name", "created_by",
+        )
+
+
 class LivePresenceSerializer(serializers.ModelSerializer):
     username = serializers.CharField(source="user.username", read_only=True)
 
     class Meta:
         model = LivePresence
-        fields = ("id", "user", "username", "joined_at", "last_seen_at", "is_muted")
+        fields = ("id", "user", "username", "joined_at", "last_seen_at", "is_muted", "can_publish")
         read_only_fields = fields
 
 
@@ -215,8 +234,8 @@ class LiveChatMessageSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = LiveChatMessage
-        fields = ("id", "sender", "text", "created_at")
-        read_only_fields = ("id", "sender", "created_at")
+        fields = ("id", "sender", "text", "created_at", "is_deleted", "deleted_at")
+        read_only_fields = ("id", "sender", "created_at", "is_deleted", "deleted_at")
 
     def validate_text(self, value):
         from django.utils.html import strip_tags
@@ -224,3 +243,13 @@ class LiveChatMessageSerializer(serializers.ModelSerializer):
         if not value:
             raise serializers.ValidationError("Message cannot be empty.")
         return value
+
+
+class LiveRecordingSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = LiveRecording
+        fields = (
+            "id", "egress_id", "status", "file_path", "playback_url", "error",
+            "started_by", "started_at", "ended_at", "updated_at",
+        )
+        read_only_fields = fields

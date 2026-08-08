@@ -210,3 +210,48 @@ class SignalDetailSerializer(
             "created_at",
             "updated_at",
         )
+
+
+class SignalManagementSerializer(SignalDetailSerializer):
+    trader_id = serializers.IntegerField(source="created_by_id", read_only=True)
+
+    class Meta(SignalDetailSerializer.Meta):
+        fields = (
+            "id", "title", "symbol", "market", "direction", "entry_price",
+            "stop_loss", "take_profit", "description", "image", "status",
+            "rejection_reason", "allowed_levels", "trader", "trader_id",
+            "reviewed_by", "result_price", "result_percent", "closed_at",
+            "created_at", "updated_at",
+        )
+
+
+class SignalEditSerializer(SignalCreateSerializer):
+    status = serializers.ChoiceField(choices=Signal._meta.get_field("status").choices, required=False)
+    result_price = serializers.DecimalField(max_digits=20, decimal_places=8, required=False, allow_null=True)
+    result_percent = serializers.DecimalField(max_digits=10, decimal_places=4, required=False, allow_null=True)
+
+    class Meta(SignalCreateSerializer.Meta):
+        fields = SignalCreateSerializer.Meta.fields + (
+            "status", "result_price", "result_percent",
+        )
+
+    def validate_status(self, value):
+        request = self.context.get("request")
+        if request and value != getattr(self.instance, "status", None):
+            from apps.accounts.models import User
+            if not request.user.has_platform_permission(User.Permission.SIGNAL_REVIEW):
+                raise serializers.ValidationError("Only a signal reviewer can change signal status.")
+            if value not in ("active", "successful", "failed", "cancelled"):
+                raise serializers.ValidationError(
+                    "Use the approve/reject endpoints for review decisions. Editing supports active, successful, failed or cancelled."
+                )
+        return value
+
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        request = self.context.get("request")
+        if request and any(key in attrs for key in ("result_price", "result_percent")):
+            from apps.accounts.models import User
+            if not request.user.has_platform_permission(User.Permission.SIGNAL_REVIEW):
+                raise serializers.ValidationError({"result": "Only a signal reviewer can set result values."})
+        return attrs
