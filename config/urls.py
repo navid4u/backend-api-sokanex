@@ -9,13 +9,10 @@ from django.contrib import admin
 from django.urls import path, include
 from django.views.decorators.cache import never_cache
 
-from rest_framework_simplejwt.views import (
-    TokenRefreshView,
-)
-
 from apps.accounts.views import (
     CustomTokenObtainPairView,
 )
+from apps.accounts.jwt import DeviceAwareTokenRefreshView
 
 from .views import (
     health_check,
@@ -73,7 +70,7 @@ urlpatterns = [
 
     path(
         "api/token/refresh/",
-        never_cache(TokenRefreshView.as_view()),
+        never_cache(DeviceAwareTokenRefreshView.as_view()),
         name="token-refresh",
     ),
 

@@ -347,6 +347,8 @@ REST_FRAMEWORK = {
         ),
         "otp_request": config("OTP_REQUEST_THROTTLE_RATE", default="3/10min"),
         "support_message": config("SUPPORT_MESSAGE_THROTTLE_RATE", default="30/minute"),
+        "market_quotes": config("MARKET_QUOTES_THROTTLE_RATE", default="60/minute"),
+        "market_news": config("MARKET_NEWS_THROTTLE_RATE", default="30/minute"),
     },
 }
 
@@ -359,7 +361,7 @@ SIMPLE_JWT = {
     "ACCESS_TOKEN_LIFETIME": timedelta(
         minutes=config(
             "JWT_ACCESS_MINUTES",
-            default=15,
+            default=30,
             cast=int,
         )
     ),
@@ -367,17 +369,15 @@ SIMPLE_JWT = {
     "REFRESH_TOKEN_LIFETIME": timedelta(
         days=config(
             "JWT_REFRESH_DAYS",
-            default=7,
+            default=30,
             cast=int,
         )
     ),
 
-    # Logout blacklisting is performed explicitly
-    # by LogoutSerializer.
-    "ROTATE_REFRESH_TOKENS": False,
-    "BLACKLIST_AFTER_ROTATION": False,
+    "ROTATE_REFRESH_TOKENS": True,
+    "BLACKLIST_AFTER_ROTATION": True,
 
-    "UPDATE_LAST_LOGIN": False,
+    "UPDATE_LAST_LOGIN": True,
 
     "ALGORITHM": "HS256",
     "SIGNING_KEY": SECRET_KEY,
@@ -438,6 +438,18 @@ MARKET_DATA_PROVIDER_URL = config("MARKET_DATA_PROVIDER_URL", default="")
 MARKET_DATA_API_KEY = config("MARKET_DATA_API_KEY", default="")
 MARKET_DATA_TIMEOUT_SECONDS = config("MARKET_DATA_TIMEOUT_SECONDS", default=8, cast=int)
 MARKET_DATA_CACHE_SECONDS = config("MARKET_DATA_CACHE_SECONDS", default=60, cast=int)
+MARKET_DATA_STALE_SECONDS = config("MARKET_DATA_STALE_SECONDS", default=86400, cast=int)
+MARKET_DATA_RETRY_COUNT = config("MARKET_DATA_RETRY_COUNT", default=1, cast=int)
+MARKET_CIRCUIT_BREAKER_FAILURES = config("MARKET_CIRCUIT_BREAKER_FAILURES", default=3, cast=int)
+MARKET_CIRCUIT_BREAKER_SECONDS = config("MARKET_CIRCUIT_BREAKER_SECONDS", default=60, cast=int)
+BRSAPI_API_KEY = config("BRSAPI_API_KEY", default="")
+BRSAPI_PRICES_IN_RIAL = config("BRSAPI_PRICES_IN_RIAL", default=False, cast=bool)
+TGJU_ENABLED = config("TGJU_ENABLED", default=False, cast=bool)
+TGJU_API_URL = config("TGJU_API_URL", default="https://call5.tgju.org/ajax.json")
+MARKET_HTTP_USER_AGENT = config("MARKET_HTTP_USER_AGENT", default="SokanexBackend/2.0 (+https://sokanex.com)")
+MARKET_NEWS_TIMEOUT_SECONDS = config("MARKET_NEWS_TIMEOUT_SECONDS", default=8, cast=int)
+MARKET_NEWS_MAX_BYTES = config("MARKET_NEWS_MAX_BYTES", default=2097152, cast=int)
+MARKET_NEWS_ITEMS_PER_SOURCE = config("MARKET_NEWS_ITEMS_PER_SOURCE", default=50, cast=int)
 ECONOMIC_CALENDAR_PROVIDER = config("ECONOMIC_CALENDAR_PROVIDER", default="")
 ECONOMIC_CALENDAR_API_KEY = config("ECONOMIC_CALENDAR_API_KEY", default="")
 CHANNEL_TICKET_TTL_SECONDS = config("CHANNEL_TICKET_TTL_SECONDS", default=60, cast=int)

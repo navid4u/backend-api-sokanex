@@ -23,3 +23,53 @@ class EconomicEvent(models.Model):
 
     class Meta:
         ordering = ["datetime", "id"]
+
+
+class NewsSource(models.Model):
+    class Language(models.TextChoices):
+        FA = "fa", "Persian"
+        EN = "en", "English"
+
+    name = models.CharField(max_length=150)
+    feed_url = models.URLField(max_length=500, unique=True)
+    language = models.CharField(max_length=2, choices=Language.choices, db_index=True)
+    is_active = models.BooleanField(default=True, db_index=True)
+    syndication_allowed = models.BooleanField(
+        default=False,
+        help_text="Confirm that this source permits headline/summary syndication.",
+    )
+    terms_url = models.URLField(max_length=500, blank=True)
+    fetch_interval_minutes = models.PositiveSmallIntegerField(default=5)
+    last_fetched_at = models.DateTimeField(null=True, blank=True)
+    last_error = models.CharField(max_length=500, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["language", "name", "id"]
+
+    def __str__(self):
+        return self.name
+
+
+class NewsArticle(models.Model):
+    stable_id = models.CharField(max_length=64, unique=True)
+    source = models.ForeignKey(NewsSource, on_delete=models.CASCADE, related_name="articles")
+    guid = models.CharField(max_length=500, blank=True)
+    title = models.CharField(max_length=500)
+    summary = models.TextField(blank=True)
+    url = models.URLField(max_length=1000)
+    canonical_url = models.URLField(max_length=1000, db_index=True)
+    published_at = models.DateTimeField(db_index=True)
+    fetched_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-published_at", "-id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["source", "canonical_url"], name="unique_news_source_canonical_url"
+            )
+        ]
+
+    def __str__(self):
+        return self.title

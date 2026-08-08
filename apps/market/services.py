@@ -1,49 +1,229 @@
+import hashlib
+import html
+import ipaddress
 import json
+import re
+import socket
+import xml.etree.ElementTree as ET
+from datetime import timedelta
+from email.utils import parsedate_to_datetime
+from html.parser import HTMLParser
 from urllib.error import HTTPError, URLError
-from urllib.parse import urlencode
+from urllib.parse import parse_qsl, urlencode, urljoin, urlsplit, urlunsplit
 from urllib.request import Request, urlopen
 
 from django.conf import settings
 from django.core.cache import cache
+from django.db import transaction
 from django.utils import timezone
-from rest_framework.exceptions import APIException
+from rest_framework.exceptions import APIException, ValidationError
+
+from .models import NewsArticle, NewsSource
+
+
+BASE_SYMBOLS = ("usd-irr", "gold-18k", "half-coin", "coin-emami", "car-index", "tedpix")
 
 
 class MarketProviderUnavailable(APIException):
     status_code = 503
     default_code = "PROVIDER_TIMEOUT"
-    default_detail = "Licensed market data provider is temporarily unavailable."
+    default_detail = "Licensed market data providers are temporarily unavailable."
+
+
+class _TextExtractor(HTMLParser):
+    def __init__(self):
+        super().__init__()
+        self.parts = []
+
+    def handle_data(self, data):
+        self.parts.append(data)
+
+
+def plain_text(value, limit=700):
+    parser = _TextExtractor()
+    parser.feed(html.unescape(value or ""))
+    return re.sub(r"\s+", " ", " ".join(parser.parts)).strip()[:limit]
+
+
+def canonical_https_url(value):
+    parsed = urlsplit((value or "").strip())
+    if parsed.scheme.lower() != "https" or not parsed.hostname:
+        raise ValueError("Only absolute HTTPS URLs are accepted.")
+    query = urlencode(sorted((key, val) for key, val in parse_qsl(parsed.query) if not key.lower().startswith("utm_")))
+    return urlunsplit(("https", parsed.netloc.lower(), parsed.path or "/", query, ""))
+
+
+def ensure_public_host(url):
+    hostname = urlsplit(url).hostname
+    for result in socket.getaddrinfo(hostname, 443, type=socket.SOCK_STREAM):
+        address = ipaddress.ip_address(result[4][0])
+        if not address.is_global:
+            raise ValueError("Feed host must resolve to a public address.")
+
+
+def _request_json(url, headers=None):
+    request = Request(url, headers={"Accept": "application/json", "User-Agent": settings.MARKET_HTTP_USER_AGENT, **(headers or {})})
+    last_error = None
+    for _ in range(settings.MARKET_DATA_RETRY_COUNT + 1):
+        try:
+            with urlopen(request, timeout=settings.MARKET_DATA_TIMEOUT_SECONDS) as response:
+                return json.loads(response.read().decode("utf-8"))
+        except (HTTPError, URLError, TimeoutError, ValueError) as exc:
+            last_error = exc
+    raise last_error
+
+
+def _number(value):
+    if value is None:
+        return None
+    normalized = str(value).translate(str.maketrans("۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩", "01234567890123456789"))
+    normalized = normalized.replace(",", "").replace("٬", "").strip()
+    try:
+        return float(normalized)
+    except ValueError:
+        return None
+
+
+def _walk(node):
+    if isinstance(node, dict):
+        yield node
+        for value in node.values():
+            yield from _walk(value)
+    elif isinstance(node, list):
+        for value in node:
+            yield from _walk(value)
+
+
+def _extract_rows(payload, aliases, source, rial_prices=False):
+    found = {}
+    reverse = {alias.lower(): symbol for symbol, values in aliases.items() for alias in values}
+    now = timezone.now().isoformat()
+    for row in _walk(payload):
+        keys = {str(key).lower(): value for key, value in row.items()}
+        identity = str(keys.get("symbol") or keys.get("name") or keys.get("key") or keys.get("title") or "").lower()
+        symbol = reverse.get(identity)
+        if not symbol:
+            for key in keys:
+                if key in reverse and not isinstance(keys[key], (dict, list)):
+                    symbol = reverse[key]
+                    row = {"price": keys[key]}
+                    keys = {"price": keys[key]}
+                    break
+        if not symbol or symbol in found:
+            continue
+        price = _number(keys.get("price") or keys.get("value") or keys.get("current") or keys.get("p"))
+        if price is None:
+            continue
+        if rial_prices:
+            price /= 10
+        change = _number(keys.get("change") or keys.get("d") or 0) or 0
+        if rial_prices:
+            change /= 10
+        found[symbol] = {
+            "symbol": symbol,
+            "name": keys.get("name_fa") or keys.get("title") or symbol,
+            "price": price,
+            "unit": "تومان" if symbol in {"usd-irr", "gold-18k", "half-coin", "coin-emami"} else keys.get("unit", ""),
+            "change": change,
+            "change_percent": _number(keys.get("change_percent") or keys.get("percent") or keys.get("dp") or 0) or 0,
+            "market_status": keys.get("market_status", "delayed"),
+            "source_timestamp": keys.get("source_timestamp") or keys.get("time") or now,
+            "source": source,
+        }
+    return found
 
 
 class MarketQuoteService:
-    cache_key = "market:v2:quotes"
+    fresh_cache_key = "market:v3:quotes:fresh"
+    stale_cache_key = "market:v3:quotes:last-known"
+    aliases = {
+        "usd-irr": {"usd-irr", "price_dollar_rl", "usd", "دلار"},
+        "gold-18k": {"gold-18k", "geram18", "geram_18", "طلای 18 عیار"},
+        "coin-emami": {"coin-emami", "sekee", "sekke_emami", "سکه امامی"},
+        "half-coin": {"half-coin", "nim", "نیم سکه"},
+        "car-index": {"car-index", "car_index"},
+        "tedpix": {"tedpix", "شاخص کل"},
+    }
 
     @classmethod
     def get_quotes(cls, symbols):
-        cached = cache.get(cls.cache_key)
-        if cached and all(symbol in cached["quotes"] for symbol in symbols):
-            return cls._response(cached, symbols, is_stale=False)
-        if not settings.MARKET_DATA_PROVIDER_URL or not settings.MARKET_DATA_API_KEY:
-            if cached:
-                return cls._response(cached, symbols, is_stale=True)
-            raise MarketProviderUnavailable("Market data provider is not configured.")
-        url = f"{settings.MARKET_DATA_PROVIDER_URL}?{urlencode({'symbols': ','.join(symbols)})}"
-        request = Request(url, headers={"Authorization": f"Bearer {settings.MARKET_DATA_API_KEY}", "Accept": "application/json"})
-        try:
-            with urlopen(request, timeout=settings.MARKET_DATA_TIMEOUT_SECONDS) as response:
-                payload = json.loads(response.read().decode("utf-8"))
-            rows = payload.get("results", payload if isinstance(payload, list) else [])
-            quotes = {str(row["symbol"]).lower(): row for row in rows}
+        fresh = cache.get(cls.fresh_cache_key)
+        if fresh and all(symbol in fresh["quotes"] for symbol in symbols):
+            return cls._response(fresh, symbols, False)
+
+        quotes = {}
+        provider_errors = []
+        providers = (
+            ("generic", cls._generic_provider), ("brsapi", cls._brsapi_provider),
+            ("tgju", cls._tgju_provider),
+        )
+        for provider_name, provider in providers:
+            try:
+                rows = cls._with_circuit_breaker(provider_name, provider)
+                quotes.update({key: value for key, value in rows.items() if key not in quotes})
+            except (HTTPError, URLError, TimeoutError, ValueError, KeyError, OSError) as exc:
+                provider_errors.append(type(exc).__name__)
+            if all(symbol in quotes for symbol in symbols):
+                break
+        if quotes:
             snapshot = {"updated_at": timezone.now().isoformat(), "quotes": quotes}
-            cache.set(cls.cache_key, snapshot, settings.MARKET_DATA_CACHE_SECONDS)
-            return cls._response(snapshot, symbols, is_stale=False)
-        except (HTTPError, URLError, TimeoutError, ValueError, KeyError) as exc:
-            if cached:
-                return cls._response(cached, symbols, is_stale=True)
-            raise MarketProviderUnavailable() from exc
+            cache.set(cls.fresh_cache_key, snapshot, settings.MARKET_DATA_CACHE_SECONDS)
+            cache.set(cls.stale_cache_key, snapshot, settings.MARKET_DATA_STALE_SECONDS)
+            return cls._response(snapshot, symbols, False)
+
+        stale = cache.get(cls.stale_cache_key)
+        if stale:
+            return cls._response(stale, symbols, True)
+        raise MarketProviderUnavailable()
+
+    @classmethod
+    def _with_circuit_breaker(cls, name, provider):
+        state_key = f"market:v3:circuit:{name}"
+        state = cache.get(state_key) or {"failures": 0, "opened_until": 0}
+        now = int(timezone.now().timestamp())
+        if state["opened_until"] > now:
+            return {}
+        try:
+            rows = provider()
+        except (HTTPError, URLError, TimeoutError, ValueError, KeyError, OSError):
+            failures = state["failures"] + 1
+            opened_until = now + settings.MARKET_CIRCUIT_BREAKER_SECONDS if failures >= settings.MARKET_CIRCUIT_BREAKER_FAILURES else 0
+            cache.set(state_key, {"failures": failures, "opened_until": opened_until}, settings.MARKET_CIRCUIT_BREAKER_SECONDS)
+            raise
+        if rows:
+            cache.delete(state_key)
+        return rows
+
+    @classmethod
+    def _generic_provider(cls):
+        if not settings.MARKET_DATA_PROVIDER_URL or not settings.MARKET_DATA_API_KEY:
+            return {}
+        url = f"{settings.MARKET_DATA_PROVIDER_URL}?{urlencode({'symbols': ','.join(BASE_SYMBOLS)})}"
+        payload = _request_json(url, {"Authorization": f"Bearer {settings.MARKET_DATA_API_KEY}"})
+        rows = payload if isinstance(payload, list) else payload.get("results", [])
+        return {str(row["symbol"]).lower(): {**row, "source": settings.MARKET_DATA_PROVIDER or "licensed-provider"} for row in rows}
+
+    @classmethod
+    def _brsapi_provider(cls):
+        if not settings.BRSAPI_API_KEY:
+            return {}
+        result = {}
+        for path in ("Gold_Currency.php", "Cryptocurrency.php", "Commodity.php"):
+            url = f"https://brsapi.ir/Api/Market/{path}?{urlencode({'key': settings.BRSAPI_API_KEY})}"
+            result.update(_extract_rows(_request_json(url), cls.aliases, "BRSAPI", settings.BRSAPI_PRICES_IN_RIAL))
+        return result
+
+    @classmethod
+    def _tgju_provider(cls):
+        if not settings.TGJU_ENABLED:
+            return {}
+        payload = _request_json(settings.TGJU_API_URL)
+        return _extract_rows(payload, cls.aliases, "TGJU", rial_prices=True)
 
     @staticmethod
     def _response(snapshot, symbols, is_stale):
+        updated = timezone.datetime.fromisoformat(snapshot["updated_at"])
+        age = max(0, int((timezone.now() - updated).total_seconds()))
         results = []
         for symbol in symbols:
             if symbol not in snapshot["quotes"]:
@@ -54,6 +234,78 @@ class MarketQuoteService:
                 "unit": row.get("unit", ""), "change": row.get("change", 0),
                 "change_percent": row.get("change_percent", 0),
                 "market_status": row.get("market_status", "delayed"),
-                "source_timestamp": row.get("source_timestamp"),
+                "source": row.get("source", "licensed-provider"),
+                "source_timestamp": row.get("source_timestamp"), "is_stale": is_stale,
+                "stale_age_seconds": age if is_stale else 0,
             })
-        return {"updated_at": snapshot["updated_at"], "is_stale": is_stale, "results": results}
+        return {"updated_at": snapshot["updated_at"], "is_stale": is_stale, "stale_age_seconds": age if is_stale else 0, "results": results}
+
+
+class MarketNewsService:
+    @classmethod
+    def refresh_due_sources(cls, language=None):
+        sources = NewsSource.objects.filter(is_active=True, syndication_allowed=True)
+        if language:
+            sources = sources.filter(language=language)
+        now = timezone.now()
+        for source in sources:
+            if source.last_fetched_at and source.last_fetched_at + timedelta(minutes=source.fetch_interval_minutes) > now:
+                continue
+            cls._refresh_source(source)
+
+    @classmethod
+    def _refresh_source(cls, source):
+        now = timezone.now()
+        try:
+            feed_url = canonical_https_url(source.feed_url)
+            ensure_public_host(feed_url)
+            request = Request(feed_url, headers={"User-Agent": settings.MARKET_HTTP_USER_AGENT, "Accept": "application/rss+xml, application/atom+xml, application/xml, text/xml"})
+            with urlopen(request, timeout=settings.MARKET_NEWS_TIMEOUT_SECONDS) as response:
+                final_url = canonical_https_url(response.geturl())
+                ensure_public_host(final_url)
+                document = response.read(settings.MARKET_NEWS_MAX_BYTES + 1)
+            if len(document) > settings.MARKET_NEWS_MAX_BYTES:
+                raise ValueError("Feed exceeds maximum response size.")
+            root = ET.fromstring(document)
+            entries = root.findall(".//item") or root.findall(".//{http://www.w3.org/2005/Atom}entry")
+            with transaction.atomic():
+                for entry in entries[: settings.MARKET_NEWS_ITEMS_PER_SOURCE]:
+                    cls._save_entry(source, entry, final_url, now)
+                NewsSource.objects.filter(pk=source.pk).update(last_fetched_at=now, last_error="")
+        except (ET.ParseError, HTTPError, URLError, TimeoutError, ValueError, OSError) as exc:
+            NewsSource.objects.filter(pk=source.pk).update(last_fetched_at=now, last_error=str(exc)[:500])
+
+    @staticmethod
+    def _value(entry, *names):
+        for name in names:
+            node = entry.find(name)
+            if node is not None:
+                if node.text:
+                    return node.text.strip()
+                if node.attrib.get("href"):
+                    return node.attrib["href"].strip()
+        return ""
+
+    @classmethod
+    def _save_entry(cls, source, entry, feed_url, fetched_at):
+        atom = "{http://www.w3.org/2005/Atom}"
+        title = plain_text(cls._value(entry, "title", f"{atom}title"), 500)
+        link = cls._value(entry, "link", f"{atom}link")
+        url = canonical_https_url(urljoin(feed_url, link))
+        guid = cls._value(entry, "guid", "id", f"{atom}id")
+        summary = plain_text(cls._value(entry, "description", "summary", f"{atom}summary", f"{atom}content"))
+        published_raw = cls._value(entry, "pubDate", "published", "updated", f"{atom}published", f"{atom}updated")
+        try:
+            published = parsedate_to_datetime(published_raw)
+            if timezone.is_naive(published):
+                published = timezone.make_aware(published)
+        except (TypeError, ValueError, OverflowError):
+            try:
+                published = timezone.datetime.fromisoformat(published_raw.replace("Z", "+00:00"))
+            except ValueError:
+                published = fetched_at
+        stable_id = hashlib.sha256((guid or url).encode("utf-8")).hexdigest()
+        NewsArticle.objects.update_or_create(
+            stable_id=stable_id,
+            defaults={"source": source, "guid": guid[:500], "title": title, "summary": summary, "url": url, "canonical_url": url, "published_at": published},
+        )

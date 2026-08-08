@@ -388,7 +388,7 @@ class UserProfile(models.Model):
 
 class SecuritySettings(models.Model):
     max_active_devices = models.PositiveSmallIntegerField(default=5)
-    session_lifetime_days = models.PositiveSmallIntegerField(default=7)
+    session_lifetime_days = models.PositiveSmallIntegerField(default=30)
     notify_new_login = models.BooleanField(default=True)
     require_verified_email_for_sensitive_actions = models.BooleanField(default=False)
     maintenance_message = models.CharField(max_length=300, blank=True)
