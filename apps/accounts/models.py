@@ -32,7 +32,6 @@ class User(AbstractUser):
         LANDING_MANAGE = "LANDING_MANAGE", "Manage landing page"
         USER_MANAGE = "USER_MANAGE", "Manage users"
         ROLE_MANAGE = "ROLE_MANAGE", "Manage custom roles"
-        LIVE_MANAGE = "LIVE_MANAGE", "Manage live events"
 
     phone = models.CharField(
         max_length=20,
@@ -95,13 +94,11 @@ class User(AbstractUser):
                 self.Permission.LANDING_MANAGE,
                 self.Permission.USER_MANAGE,
                 self.Permission.ROLE_MANAGE,
-                self.Permission.LIVE_MANAGE,
             },
             self.Role.EMPLOYEE: {
                 self.Permission.CONTENT_MANAGE,
                 self.Permission.CONTENT_VIEW_ALL,
                 self.Permission.SIGNAL_REVIEW,
-                self.Permission.LIVE_MANAGE,
             },
             self.Role.TRADER: {
                 self.Permission.SIGNAL_SUBMIT,

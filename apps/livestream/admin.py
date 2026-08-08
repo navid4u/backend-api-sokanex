@@ -1,12 +1,11 @@
 from django.contrib import admin
 from django.utils import timezone
 
-from .models import LiveChatMessage, LiveEvent, LivePresence, LiveRecording, SpeakRequest
+from .models import LiveChatMessage, LiveEvent, LivePresence, SpeakRequest
 
 admin.site.register(LivePresence)
 admin.site.register(SpeakRequest)
 admin.site.register(LiveChatMessage)
-admin.site.register(LiveRecording)
 
 
 @admin.register(LiveEvent)
@@ -18,8 +17,6 @@ class LiveEventAdmin(admin.ModelAdmin):
         "host",
         "starts_at",
         "ends_at",
-        "max_participants",
-        "viewer_display_offset",
         "is_active",
     )
 

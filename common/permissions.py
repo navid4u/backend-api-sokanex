@@ -82,14 +82,6 @@ class CanReviewSignals(BasePermission):
         )
 
 
-class CanManageLive(BasePermission):
-    def has_permission(self, request, view):
-        return (
-            request.user.is_authenticated
-            and request.user.has_platform_permission(User.Permission.LIVE_MANAGE)
-        )
-
-
 class CanManageLanding(BasePermission):
     def has_permission(self, request, view):
         return (
