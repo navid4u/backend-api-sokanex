@@ -87,7 +87,7 @@ class FrontendV2ContractTests(APITestCase):
         other = User.objects.create_user(username="other-v2", password="StrongPass123!")
         other_thread = SupportThread.objects.create(user=other)
         denied = self.client.get(f"/api/support/conversations/{other_thread.pk}/messages/")
-        self.assertEqual(denied.status_code, 404)
+        self.assertEqual(denied.status_code, 403)
 
     def test_quiz_attempt_does_not_expose_correct_answers(self):
         course = Course.objects.create(title="Course", instructor=self.admin, status=Course.Status.PUBLISHED)

@@ -1,4 +1,3 @@
-from django.conf import settings
 from django.core.management.base import BaseCommand
 
 from apps.accounts.models import User
@@ -9,7 +8,7 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         user, created = User.objects.get_or_create(
-            username=settings.SUPPORT_USERNAME,
+            username="support",
             defaults={"role": User.Role.EMPLOYEE, "is_active": True},
         )
         changed = []

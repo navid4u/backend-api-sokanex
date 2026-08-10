@@ -283,8 +283,8 @@ STATIC_ROOT = BASE_DIR / "staticfiles"
 
 MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
-FILE_UPLOAD_PERMISSIONS = 0o640
-FILE_UPLOAD_DIRECTORY_PERMISSIONS = 0o750
+FILE_UPLOAD_PERMISSIONS = 0o644
+FILE_UPLOAD_DIRECTORY_PERMISSIONS = 0o755
 
 
 # --------------------------------------------------
@@ -621,6 +621,14 @@ SPECTACULAR_SETTINGS = {
         "ChatMembershipRoleEnum": (
             "apps.chat.models."
             "RoomMembership.Role"
+        ),
+        "SupportConversationStatusEnum": (
+            "apps.chat.models."
+            "SupportThread.Status"
+        ),
+        "SupportConversationPriorityEnum": (
+            "apps.chat.models."
+            "SupportThread.Priority"
         ),
 
         "TransactionTypeEnum": (

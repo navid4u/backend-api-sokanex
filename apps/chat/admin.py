@@ -165,7 +165,8 @@ class SupportMessageInline(admin.TabularInline):
 
 @admin.register(SupportThread)
 class SupportThreadAdmin(admin.ModelAdmin):
-    list_display = ("id", "user", "assigned_to", "is_closed", "updated_at")
-    search_fields = ("user__username", "user__phone")
-    list_filter = ("is_closed",)
+    list_display = ("id", "user", "assigned_to", "status", "priority", "last_message_at")
+    search_fields = ("user__username", "user__first_name", "user__last_name", "user__phone", "subject")
+    list_filter = ("status", "priority")
+    readonly_fields = ("last_message_at", "closed_at", "created_at", "updated_at")
     inlines = (SupportMessageInline,)

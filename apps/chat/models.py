@@ -306,6 +306,17 @@ class PostReport(models.Model):
 
 
 class SupportThread(models.Model):
+    class Status(models.TextChoices):
+        OPEN = "open", "در حال پیگیری"
+        PENDING = "pending", "در انتظار پاسخ"
+        CLOSED = "closed", "بسته شده"
+
+    class Priority(models.TextChoices):
+        LOW = "low", "کم"
+        NORMAL = "normal", "عادی"
+        HIGH = "high", "زیاد"
+        URGENT = "urgent", "فوری"
+
     user = models.OneToOneField(
         settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="support_thread"
     )
@@ -314,12 +325,21 @@ class SupportThread(models.Model):
         related_name="assigned_support_threads",
     )
     is_closed = models.BooleanField(default=False)
+    status = models.CharField(max_length=12, choices=Status.choices, default=Status.OPEN)
+    priority = models.CharField(max_length=12, choices=Priority.choices, default=Priority.NORMAL)
+    subject = models.CharField(max_length=255, blank=True)
+    last_message_at = models.DateTimeField(null=True, blank=True, db_index=True)
+    closed_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     @property
     def slug(self):
         return "support"
+
+    class Meta:
+        ordering = ["-last_message_at", "-updated_at"]
+        indexes = [models.Index(fields=["status", "last_message_at"])]
 
 
 class SupportMessage(models.Model):
@@ -331,8 +351,12 @@ class SupportMessage(models.Model):
     text = models.TextField(blank=True)
     attachment = models.FileField(upload_to="chat/support/%Y/%m/", null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
     delivered_at = models.DateTimeField(null=True, blank=True)
+    is_read = models.BooleanField(default=False, db_index=True)
     read_at = models.DateTimeField(null=True, blank=True)
+    deleted_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         ordering = ["-created_at", "-id"]
+        indexes = [models.Index(fields=["thread", "is_read"])]

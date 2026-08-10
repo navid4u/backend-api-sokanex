@@ -162,6 +162,15 @@ class SocialUserSerializer(serializers.Serializer):
     access_level = serializers.IntegerField(read_only=True)
 
 
+class SupportUserSerializer(serializers.Serializer):
+    id = serializers.IntegerField(read_only=True)
+    username = serializers.CharField(read_only=True)
+    first_name = serializers.CharField(read_only=True)
+    last_name = serializers.CharField(read_only=True)
+    phone = serializers.CharField(read_only=True, allow_null=True)
+    avatar = serializers.ImageField(read_only=True, allow_null=True)
+
+
 class PostCommentSerializer(serializers.ModelSerializer):
     author = SocialUserSerializer(read_only=True)
 
@@ -229,22 +238,49 @@ class FollowSerializer(serializers.ModelSerializer):
 
 class SupportThreadSerializer(serializers.ModelSerializer):
     slug = serializers.CharField(read_only=True)
-    user = SocialUserSerializer(read_only=True)
+    user = SupportUserSerializer(read_only=True)
+    assigned_to = SupportUserSerializer(read_only=True)
+    status_display = serializers.CharField(source="get_status_display", read_only=True)
+    unread_count = serializers.SerializerMethodField()
+    last_message = serializers.SerializerMethodField()
 
     class Meta:
         model = SupportThread
-        fields = ("id", "slug", "user", "is_closed", "created_at", "updated_at")
+        fields = ("id", "slug", "user", "assigned_to", "status", "status_display", "priority", "subject", "unread_count", "last_message", "last_message_at", "created_at", "updated_at", "closed_at")
         read_only_fields = fields
+
+    def get_unread_count(self, obj) -> int:
+        request = self.context.get("request")
+        if not request:
+            return 0
+        annotated = getattr(obj, "unread_count_value", None)
+        if annotated is not None:
+            return annotated
+        return obj.messages.filter(is_read=False).exclude(sender=request.user).count()
+
+    def get_last_message(self, obj) -> dict | None:
+        messages = getattr(obj, "prefetched_latest_messages", None)
+        message = messages[0] if messages else obj.messages.order_by("-created_at", "-id").first()
+        if not message:
+            return None
+        return {"id": message.id, "text": message.text, "created_at": message.created_at}
+
+
+class SupportThreadUpdateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = SupportThread
+        fields = ("status", "priority", "subject")
 
 
 class SupportMessageSerializer(serializers.ModelSerializer):
-    sender = SocialUserSerializer(read_only=True)
+    sender = SupportUserSerializer(read_only=True)
+    sender_username = serializers.CharField(source="sender.username", read_only=True)
     is_mine = serializers.SerializerMethodField()
 
     class Meta:
         model = SupportMessage
-        fields = ("id", "sender", "text", "attachment", "is_mine", "created_at", "delivered_at", "read_at")
-        read_only_fields = ("id", "sender", "is_mine", "created_at", "delivered_at", "read_at")
+        fields = ("id", "sender", "sender_username", "text", "attachment", "is_mine", "is_read", "created_at", "updated_at", "delivered_at", "read_at")
+        read_only_fields = ("id", "sender", "sender_username", "is_mine", "is_read", "created_at", "updated_at", "delivered_at", "read_at")
 
     def get_is_mine(self, obj) -> bool:
         request = self.context.get("request")

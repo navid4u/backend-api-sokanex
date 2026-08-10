@@ -5586,16 +5586,60 @@ paths:
               schema:
                 $ref: '#/components/schemas/PaginatedSupportThreadList'
           description: ''
+  /api/support/conversations/{id}/:
+    get:
+      operationId: support_conversations_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - support
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SupportThread'
+          description: ''
+    patch:
+      operationId: support_conversations_partial_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - support
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedSupportThreadUpdateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedSupportThreadUpdateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedSupportThreadUpdateRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SupportThreadUpdate'
+          description: ''
   /api/support/conversations/{id}/messages/:
     get:
       operationId: support_conversations_messages_list
       parameters:
-      - name: cursor
-        required: false
-        in: query
-        description: The pagination cursor value.
-        schema:
-          type: string
       - in: path
         name: id
         schema:
@@ -5607,6 +5651,18 @@ paths:
         description: Which field to use when ordering the results.
         schema:
           type: string
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
       - name: search
         required: false
         in: query
@@ -5639,10 +5695,10 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/SupportMessageRequest'
-          application/x-www-form-urlencoded:
+          multipart/form-data:
             schema:
               $ref: '#/components/schemas/SupportMessageRequest'
-          multipart/form-data:
+          application/x-www-form-urlencoded:
             schema:
               $ref: '#/components/schemas/SupportMessageRequest'
       security:
@@ -8830,7 +8886,7 @@ components:
         notification_type:
           $ref: '#/components/schemas/NotificationTypeEnum'
         priority:
-          $ref: '#/components/schemas/PriorityEnum'
+          $ref: '#/components/schemas/NotificationPriorityEnum'
         action_label:
           type: string
           maxLength: 80
@@ -8876,6 +8932,18 @@ components:
       - message
       - title
       - updated_at
+    NotificationPriorityEnum:
+      enum:
+      - LOW
+      - NORMAL
+      - HIGH
+      - URGENT
+      type: string
+      description: |-
+        * `LOW` - Low
+        * `NORMAL` - Normal
+        * `HIGH` - High
+        * `URGENT` - Urgent
     NotificationRequest:
       type: object
       properties:
@@ -8889,7 +8957,7 @@ components:
         notification_type:
           $ref: '#/components/schemas/NotificationTypeEnum'
         priority:
-          $ref: '#/components/schemas/PriorityEnum'
+          $ref: '#/components/schemas/NotificationPriorityEnum'
         action_label:
           type: string
           maxLength: 80
@@ -10227,7 +10295,7 @@ components:
         notification_type:
           $ref: '#/components/schemas/NotificationTypeEnum'
         priority:
-          $ref: '#/components/schemas/PriorityEnum'
+          $ref: '#/components/schemas/NotificationPriorityEnum'
         action_label:
           type: string
           maxLength: 80
@@ -10430,6 +10498,16 @@ components:
       properties:
         status:
           $ref: '#/components/schemas/StatusE94Enum'
+    PatchedSupportThreadUpdateRequest:
+      type: object
+      properties:
+        status:
+          $ref: '#/components/schemas/SupportConversationStatusEnum'
+        priority:
+          $ref: '#/components/schemas/SupportConversationPriorityEnum'
+        subject:
+          type: string
+          maxLength: 255
     PatchedTraderPostRequest:
       type: object
       properties:
@@ -10841,18 +10919,6 @@ components:
         * `EVENING` - Evening
         * `NIGHT` - Night
         * `FLEXIBLE` - Flexible
-    PriorityEnum:
-      enum:
-      - LOW
-      - NORMAL
-      - HIGH
-      - URGENT
-      type: string
-      description: |-
-        * `LOW` - Low
-        * `NORMAL` - Normal
-        * `HIGH` - High
-        * `URGENT` - Urgent
     ProfileUpdateResponse:
       type: object
       properties:
@@ -12150,6 +12216,28 @@ components:
         * `pending` - Pending
         * `approved` - Approved
         * `rejected` - Rejected
+    SupportConversationPriorityEnum:
+      enum:
+      - low
+      - normal
+      - high
+      - urgent
+      type: string
+      description: |-
+        * `low` - کم
+        * `normal` - عادی
+        * `high` - زیاد
+        * `urgent` - فوری
+    SupportConversationStatusEnum:
+      enum:
+      - open
+      - pending
+      - closed
+      type: string
+      description: |-
+        * `open` - در حال پیگیری
+        * `pending` - در انتظار پاسخ
+        * `closed` - بسته شده
     SupportMessage:
       type: object
       properties:
@@ -12158,7 +12246,10 @@ components:
           readOnly: true
         sender:
           allOf:
-          - $ref: '#/components/schemas/SocialUser'
+          - $ref: '#/components/schemas/SupportUser'
+          readOnly: true
+        sender_username:
+          type: string
           readOnly: true
         text:
           type: string
@@ -12169,7 +12260,14 @@ components:
         is_mine:
           type: boolean
           readOnly: true
+        is_read:
+          type: boolean
+          readOnly: true
         created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
           type: string
           format: date-time
           readOnly: true
@@ -12188,8 +12286,11 @@ components:
       - delivered_at
       - id
       - is_mine
+      - is_read
       - read_at
       - sender
+      - sender_username
+      - updated_at
     SupportMessageRequest:
       type: object
       properties:
@@ -12210,11 +12311,39 @@ components:
           readOnly: true
         user:
           allOf:
-          - $ref: '#/components/schemas/SocialUser'
+          - $ref: '#/components/schemas/SupportUser'
           readOnly: true
-        is_closed:
-          type: boolean
+        assigned_to:
+          allOf:
+          - $ref: '#/components/schemas/SupportUser'
           readOnly: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/SupportConversationStatusEnum'
+          readOnly: true
+        status_display:
+          type: string
+          readOnly: true
+        priority:
+          allOf:
+          - $ref: '#/components/schemas/SupportConversationPriorityEnum'
+          readOnly: true
+        subject:
+          type: string
+          readOnly: true
+        unread_count:
+          type: integer
+          readOnly: true
+        last_message:
+          type: object
+          additionalProperties: {}
+          nullable: true
+          readOnly: true
+        last_message_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
         created_at:
           type: string
           format: date-time
@@ -12223,13 +12352,67 @@ components:
           type: string
           format: date-time
           readOnly: true
+        closed_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
       required:
+      - assigned_to
+      - closed_at
       - created_at
       - id
-      - is_closed
+      - last_message
+      - last_message_at
+      - priority
       - slug
+      - status
+      - status_display
+      - subject
+      - unread_count
       - updated_at
       - user
+    SupportThreadUpdate:
+      type: object
+      properties:
+        status:
+          $ref: '#/components/schemas/SupportConversationStatusEnum'
+        priority:
+          $ref: '#/components/schemas/SupportConversationPriorityEnum'
+        subject:
+          type: string
+          maxLength: 255
+    SupportUser:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        username:
+          type: string
+          readOnly: true
+        first_name:
+          type: string
+          readOnly: true
+        last_name:
+          type: string
+          readOnly: true
+        phone:
+          type: string
+          readOnly: true
+          nullable: true
+        avatar:
+          type: string
+          format: uri
+          nullable: true
+          readOnly: true
+      required:
+      - avatar
+      - first_name
+      - id
+      - last_name
+      - phone
+      - username
     TraderPost:
       type: object
       properties:

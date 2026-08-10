@@ -1,5 +1,5 @@
 from django.shortcuts import get_object_or_404
-from django.db.models import Count, Exists, OuterRef, Q
+from django.db.models import Count, Exists, OuterRef, Prefetch, Q
 
 from drf_spectacular.utils import (
     extend_schema,
@@ -18,11 +18,12 @@ from rest_framework.filters import (
     OrderingFilter,
     SearchFilter,
 )
+from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from rest_framework.pagination import CursorPagination
+from common.pagination import DefaultPagination
 from django.utils import timezone
 from django.core import signing
 from django.conf import settings
@@ -48,6 +49,7 @@ from .serializers import (
     TraderPostSerializer,
     SupportMessageSerializer,
     SupportThreadSerializer,
+    SupportThreadUpdateSerializer,
 )
 from .services import ChatService
 
@@ -551,18 +553,20 @@ class SupportMessageListCreateView(generics.ListCreateAPIView):
         serializer.save(thread=thread, sender=self.request.user)
 
 
-def support_staff(user):
-    return user.is_staff or user.role in (user.Role.EMPLOYEE, user.Role.ADMIN, user.Role.SUPER_ADMIN)
+def is_support_account(user):
+    return bool(user and user.is_authenticated and user.username == "support")
 
 
 def support_thread_for(user, pk):
     queryset = SupportThread.objects.select_related("user", "assigned_to")
-    return get_object_or_404(queryset, pk=pk) if support_staff(user) else get_object_or_404(queryset, pk=pk, user=user)
+    thread = get_object_or_404(queryset, pk=pk)
+    if not is_support_account(user) and thread.user_id != user.id:
+        raise PermissionDenied("You cannot access another user's support conversation.")
+    return thread
 
 
-class SupportCursorPagination(CursorPagination):
+class SupportPagination(DefaultPagination):
     page_size = 30
-    ordering = "-created_at"
 
 
 class SupportConversationView(APIView):
@@ -570,14 +574,53 @@ class SupportConversationView(APIView):
     serializer_class = SupportThreadSerializer
 
     def get(self, request):
-        thread, _ = SupportThread.objects.get_or_create(user=request.user)
+        if is_support_account(request.user):
+            raise PermissionDenied("The support account must use the conversations inbox.")
+        support_user = request.user.__class__.objects.filter(username="support", is_active=True).first()
+        if not support_user:
+            raise ValidationError("The support account is not configured. Run ensure_support_account.")
+        thread, _ = SupportThread.objects.get_or_create(
+            user=request.user,
+            defaults={"assigned_to": support_user},
+        )
+        if thread.assigned_to_id != support_user.id:
+            thread.assigned_to = support_user
+            thread.save(update_fields=["assigned_to", "updated_at"])
         return Response(SupportThreadSerializer(thread, context={"request": request}).data)
+
+
+class SupportConversationDetailView(generics.RetrieveUpdateAPIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = SupportThreadSerializer
+    queryset = SupportThread.objects.select_related("user", "assigned_to")
+    http_method_names = ["get", "patch", "head", "options"]
+
+    def get_object(self):
+        return support_thread_for(self.request.user, self.kwargs["pk"])
+
+    def get_serializer_class(self):
+        return SupportThreadUpdateSerializer if self.request.method == "PATCH" else SupportThreadSerializer
+
+    def patch(self, request, *args, **kwargs):
+        if not is_support_account(request.user):
+            raise PermissionDenied("Only the support account can update a ticket.")
+        thread = self.get_object()
+        serializer = SupportThreadUpdateSerializer(thread, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        updated = serializer.save()
+        if "status" in serializer.validated_data:
+            closed = updated.status == SupportThread.Status.CLOSED
+            updated.closed_at = timezone.now() if closed else None
+            updated.is_closed = closed
+            updated.save(update_fields=["closed_at", "is_closed", "updated_at"])
+        return Response(SupportThreadSerializer(updated, context={"request": request}).data)
 
 
 class SupportConversationMessageView(generics.ListCreateAPIView):
     permission_classes = [IsAuthenticated]
     serializer_class = SupportMessageSerializer
-    pagination_class = SupportCursorPagination
+    pagination_class = SupportPagination
+    parser_classes = [JSONParser, MultiPartParser, FormParser]
 
     def get_throttles(self):
         return [SupportMessageRateThrottle()] if self.request.method == "POST" else []
@@ -588,13 +631,22 @@ class SupportConversationMessageView(generics.ListCreateAPIView):
     def get_queryset(self):
         if getattr(self, "swagger_fake_view", False):
             return SupportMessage.objects.none()
-        return SupportMessage.objects.filter(thread=self.get_thread()).select_related("sender")
+        return SupportMessage.objects.filter(
+            thread=self.get_thread(), deleted_at__isnull=True
+        ).select_related("sender").order_by("-created_at", "-id")
 
     def perform_create(self, serializer):
         thread = self.get_thread()
-        if thread.is_closed:
-            raise serializers.ValidationError("This support conversation is closed.")
         message = serializer.save(thread=thread, sender=self.request.user, delivered_at=timezone.now())
+        if is_support_account(self.request.user):
+            if thread.status == SupportThread.Status.PENDING:
+                thread.status = SupportThread.Status.OPEN
+        elif thread.status == SupportThread.Status.CLOSED:
+            thread.status = SupportThread.Status.OPEN
+            thread.closed_at = None
+            thread.is_closed = False
+        thread.last_message_at = message.created_at
+        thread.save(update_fields=["status", "closed_at", "is_closed", "last_message_at", "updated_at"])
         payload = SupportMessageSerializer(message, context={"request": self.request}).data
         async_to_sync(get_channel_layer().group_send)(
             f"support_{thread.pk}", {"type": "support.event", "payload": {"type": "message.created", "data": payload}}
@@ -607,18 +659,47 @@ class SupportConversationReadView(APIView):
 
     def post(self, request, pk):
         thread = support_thread_for(request.user, pk)
-        SupportMessage.objects.filter(thread=thread, read_at__isnull=True).exclude(sender=request.user).update(read_at=timezone.now())
-        return Response({"read": True})
+        SupportMessage.objects.filter(
+            thread=thread, is_read=False, deleted_at__isnull=True
+        ).exclude(sender=request.user).update(is_read=True, read_at=timezone.now())
+        return Response({"unread_count": 0})
 
 
 class SupportQueueView(generics.ListAPIView):
     permission_classes = [IsAuthenticated]
     serializer_class = SupportThreadSerializer
+    pagination_class = SupportPagination
 
     def get_queryset(self):
-        if getattr(self, "swagger_fake_view", False) or not support_staff(self.request.user):
+        if getattr(self, "swagger_fake_view", False):
             return SupportThread.objects.none()
-        return SupportThread.objects.filter(is_closed=False).select_related("user", "assigned_to").order_by("updated_at")
+        if not is_support_account(self.request.user):
+            raise PermissionDenied("Only the support account can access the inbox.")
+        queryset = SupportThread.objects.select_related("user", "assigned_to").annotate(
+            unread_count_value=Count(
+                "messages",
+                filter=Q(messages__is_read=False) & ~Q(messages__sender=self.request.user),
+            )
+        ).prefetch_related(Prefetch(
+            "messages",
+            queryset=SupportMessage.objects.filter(deleted_at__isnull=True).select_related("sender").order_by("-created_at", "-id")[:1],
+            to_attr="prefetched_latest_messages",
+        ))
+        status_value = self.request.query_params.get("status")
+        if status_value:
+            queryset = queryset.filter(status=status_value)
+        search = self.request.query_params.get("search", "").strip()
+        if search:
+            query = (
+                Q(user__first_name__icontains=search)
+                | Q(user__last_name__icontains=search)
+                | Q(user__username__icontains=search)
+                | Q(user__phone__icontains=search)
+            )
+            if search.isdigit():
+                query |= Q(pk=int(search))
+            queryset = queryset.filter(query)
+        return queryset.order_by("-last_message_at", "-updated_at")
 
 
 class SupportTicketView(APIView):

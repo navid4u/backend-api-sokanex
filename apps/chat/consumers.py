@@ -39,4 +39,4 @@ class SupportConsumer(AsyncJsonWebsocketConsumer):
             thread = SupportThread.objects.get(pk=thread_id)
         except (User.DoesNotExist, SupportThread.DoesNotExist):
             return False
-        return thread.user_id == user.id or user.is_staff or user.role in (User.Role.EMPLOYEE, User.Role.ADMIN, User.Role.SUPER_ADMIN)
+        return thread.user_id == user.id or user.username == "support"
