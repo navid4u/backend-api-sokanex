@@ -12,7 +12,7 @@ class Command(BaseCommand):
             defaults={"role": User.Role.EMPLOYEE, "is_active": True},
         )
         changed = []
-        if user.has_usable_password():
+        if created:
             user.set_unusable_password()
             changed.append("password")
         if not user.is_active:
