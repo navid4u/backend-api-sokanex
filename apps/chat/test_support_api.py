@@ -152,3 +152,50 @@ class PrivateSupportAPITests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["count"], 1)
         self.assertEqual(response.data["results"][0]["id"], thread.id)
+
+    def test_legacy_support_operator_can_select_user_and_reply(self):
+        thread = SupportThread.objects.create(user=self.user, assigned_to=self.support)
+        self.authenticate(self.support)
+        detail = self.client.get(
+            reverse("support-thread"), {"user_id": self.user.id}
+        )
+        self.assertEqual(detail.status_code, status.HTTP_200_OK)
+        self.assertEqual(detail.data["id"], thread.id)
+        reply = self.client.post(
+            f'{reverse("support-messages")}?user_id={self.user.id}',
+            {"text": "legacy support reply", "sender": self.user.id},
+            format="multipart",
+        )
+        self.assertEqual(reply.status_code, status.HTTP_201_CREATED)
+        message = SupportMessage.objects.get(text="legacy support reply")
+        self.assertEqual(message.sender_id, self.support.id)
+        self.assertEqual(message.thread_id, thread.id)
+
+    def test_legacy_user_id_is_forbidden_for_users_and_admins(self):
+        for actor in (self.user, self.admin):
+            self.authenticate(actor)
+            detail = self.client.get(
+                reverse("support-thread"), {"user_id": self.other.id}
+            )
+            post = self.client.post(
+                f'{reverse("support-messages")}?user_id={self.other.id}',
+                {"text": "forbidden"},
+                format="json",
+            )
+            self.assertEqual(detail.status_code, status.HTTP_403_FORBIDDEN)
+            self.assertEqual(post.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertFalse(SupportMessage.objects.filter(text="forbidden").exists())
+
+    def test_legacy_messages_keep_multipart_attachment_support(self):
+        self.authenticate(self.user)
+        attachment = SimpleUploadedFile("legacy.txt", b"legacy", content_type="text/plain")
+        response = self.client.post(
+            reverse("support-messages"),
+            {"text": "with attachment", "attachment": attachment},
+            format="multipart",
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        message = SupportMessage.objects.get(text="with attachment")
+        self.assertTrue(bool(message.attachment))
+        self.assertEqual(message.sender_id, self.user.id)
+        self.assertIsNotNone(message.thread.last_message_at)

@@ -522,11 +522,16 @@ class SupportThreadView(APIView):
     def get_thread(self, request):
         user = request.user
         requested_user_id = request.query_params.get("user_id")
-        if requested_user_id and (user.is_staff or user.role in (user.Role.ADMIN, user.Role.SUPER_ADMIN, user.Role.EMPLOYEE)):
+        is_support_operator = user.username.lower() == "support"
+        if requested_user_id:
+            if not is_support_operator:
+                raise PermissionDenied("Only the support account can select another user.")
             target = get_object_or_404(user.__class__, pk=requested_user_id)
         else:
             target = user
-        thread, _ = SupportThread.objects.get_or_create(user=target)
+        support_user = user.__class__.objects.filter(username__iexact="support", is_active=True).first()
+        defaults = {"assigned_to": support_user} if support_user and target != support_user else {}
+        thread, _ = SupportThread.objects.get_or_create(user=target, defaults=defaults)
         return thread
 
     def get(self, request):
@@ -536,6 +541,7 @@ class SupportThreadView(APIView):
 class SupportMessageListCreateView(generics.ListCreateAPIView):
     permission_classes = [IsAuthenticated]
     serializer_class = SupportMessageSerializer
+    parser_classes = [JSONParser, MultiPartParser, FormParser]
 
     def get_thread(self):
         helper = SupportThreadView()
@@ -544,17 +550,36 @@ class SupportMessageListCreateView(generics.ListCreateAPIView):
     def get_queryset(self):
         if getattr(self, "swagger_fake_view", False):
             return SupportMessage.objects.none()
-        return SupportMessage.objects.filter(thread=self.get_thread()).select_related("sender")
+        return SupportMessage.objects.filter(
+            thread=self.get_thread(), deleted_at__isnull=True
+        ).select_related("sender").order_by("-created_at", "-id")
 
     def perform_create(self, serializer):
         thread = self.get_thread()
-        if thread.is_closed:
-            raise serializers.ValidationError("This support conversation is closed.")
-        serializer.save(thread=thread, sender=self.request.user)
+        message = serializer.save(
+            thread=thread,
+            sender=self.request.user,
+            delivered_at=timezone.now(),
+        )
+        update_support_thread_after_message(thread, self.request.user, message)
 
 
 def is_support_account(user):
     return bool(user and user.is_authenticated and user.username == "support")
+
+
+def update_support_thread_after_message(thread, sender, message):
+    if sender.username.lower() == "support":
+        if thread.status == SupportThread.Status.PENDING:
+            thread.status = SupportThread.Status.OPEN
+    elif thread.status == SupportThread.Status.CLOSED:
+        thread.status = SupportThread.Status.OPEN
+        thread.closed_at = None
+        thread.is_closed = False
+    thread.last_message_at = message.created_at
+    thread.save(update_fields=[
+        "status", "closed_at", "is_closed", "last_message_at", "updated_at"
+    ])
 
 
 def support_thread_for(user, pk):
@@ -638,15 +663,7 @@ class SupportConversationMessageView(generics.ListCreateAPIView):
     def perform_create(self, serializer):
         thread = self.get_thread()
         message = serializer.save(thread=thread, sender=self.request.user, delivered_at=timezone.now())
-        if is_support_account(self.request.user):
-            if thread.status == SupportThread.Status.PENDING:
-                thread.status = SupportThread.Status.OPEN
-        elif thread.status == SupportThread.Status.CLOSED:
-            thread.status = SupportThread.Status.OPEN
-            thread.closed_at = None
-            thread.is_closed = False
-        thread.last_message_at = message.created_at
-        thread.save(update_fields=["status", "closed_at", "is_closed", "last_message_at", "updated_at"])
+        update_support_thread_after_message(thread, self.request.user, message)
         payload = SupportMessageSerializer(message, context={"request": self.request}).data
         async_to_sync(get_channel_layer().group_send)(
             f"support_{thread.pk}", {"type": "support.event", "payload": {"type": "message.created", "data": payload}}
