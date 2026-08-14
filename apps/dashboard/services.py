@@ -158,6 +158,16 @@ class DashboardService:
                         User.Permission.LANDING_MANAGE
                     )
                 ),
+
+                "can_manage_internal_analysis": (
+                    user.is_superuser
+                    or user.role == User.Role.SUPER_ADMIN
+                    or user.has_platform_permission(User.Permission.INTERNAL_ANALYSIS_MANAGE)
+                    or (
+                        user.role in (User.Role.ADMIN, User.Role.EMPLOYEE)
+                        and user.has_platform_permission(User.Permission.CONTENT_MANAGE)
+                    )
+                ),
             },
 
             "finance": {

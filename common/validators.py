@@ -31,6 +31,12 @@ ALLOWED_VIDEO_CONTENT_TYPES = {
     "video/x-matroska",
 }
 
+ALLOWED_AUDIO_EXTENSIONS = {".mp3", ".m4a", ".wav", ".ogg", ".webm"}
+ALLOWED_AUDIO_CONTENT_TYPES = {
+    "audio/mpeg", "audio/mp4", "audio/x-m4a", "audio/wav", "audio/x-wav",
+    "audio/ogg", "audio/webm",
+}
+
 
 ALLOWED_ATTACHMENT_EXTENSIONS = {
     ".jpg",
@@ -215,5 +221,15 @@ def validate_attachment_upload(
         allowed_content_types=(
             ALLOWED_ATTACHMENT_CONTENT_TYPES
         ),
+        file_label=file_label,
+    )
+
+
+def validate_audio_upload(uploaded_file, *, max_size_mb=50, file_label="Audio"):
+    return validate_uploaded_file(
+        uploaded_file,
+        max_size=max_size_mb * 1024 * 1024,
+        allowed_extensions=ALLOWED_AUDIO_EXTENSIONS,
+        allowed_content_types=ALLOWED_AUDIO_CONTENT_TYPES,
         file_label=file_label,
     )

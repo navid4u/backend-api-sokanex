@@ -349,6 +349,7 @@ REST_FRAMEWORK = {
         "support_message": config("SUPPORT_MESSAGE_THROTTLE_RATE", default="30/minute"),
         "market_quotes": config("MARKET_QUOTES_THROTTLE_RATE", default="60/minute"),
         "market_news": config("MARKET_NEWS_THROTTLE_RATE", default="30/minute"),
+        "market_charts": config("MARKET_CHARTS_THROTTLE_RATE", default="60/minute"),
     },
 }
 
@@ -440,6 +441,15 @@ MARKET_DATA_TIMEOUT_SECONDS = config("MARKET_DATA_TIMEOUT_SECONDS", default=8, c
 MARKET_DATA_CACHE_SECONDS = config("MARKET_DATA_CACHE_SECONDS", default=60, cast=int)
 MARKET_DATA_STALE_SECONDS = config("MARKET_DATA_STALE_SECONDS", default=86400, cast=int)
 MARKET_DATA_RETRY_COUNT = config("MARKET_DATA_RETRY_COUNT", default=1, cast=int)
+MARKET_CHART_TIMEOUT_SECONDS = config("MARKET_CHART_TIMEOUT_SECONDS", default=6, cast=int)
+MARKET_CHART_CRYPTO_TTL = config("MARKET_CHART_CRYPTO_TTL", default=90, cast=int)
+MARKET_CHART_FOREX_TTL = config("MARKET_CHART_FOREX_TTL", default=600, cast=int)
+MARKET_CHART_STALE_TTL = config("MARKET_CHART_STALE_TTL", default=86400, cast=int)
+MARKET_CHART_ALLOWED_INTERVALS = ("5m", "15m", "1h", "4h", "1d")
+FOREX_CHART_PROVIDER_URL = config("FOREX_CHART_PROVIDER_URL", default="")
+FOREX_CHART_PROVIDER_KEY = config("FOREX_CHART_PROVIDER_KEY", default="")
+GOLD_CHART_PROVIDER_URL = config("GOLD_CHART_PROVIDER_URL", default="")
+GOLD_CHART_PROVIDER_KEY = config("GOLD_CHART_PROVIDER_KEY", default="")
 MARKET_CIRCUIT_BREAKER_FAILURES = config("MARKET_CIRCUIT_BREAKER_FAILURES", default=3, cast=int)
 MARKET_CIRCUIT_BREAKER_SECONDS = config("MARKET_CIRCUIT_BREAKER_SECONDS", default=60, cast=int)
 BRSAPI_API_KEY = config("BRSAPI_API_KEY", default="")
@@ -621,6 +631,14 @@ SPECTACULAR_SETTINGS = {
         "ChatMembershipRoleEnum": (
             "apps.chat.models."
             "RoomMembership.Role"
+        ),
+        "InternalAnalysisScopeEnum": (
+            "apps.content_channels.models."
+            "ChannelPost.Scope"
+        ),
+        "InternalAnalysisStatusEnum": (
+            "apps.content_channels.models."
+            "ChannelPost.Status"
         ),
         "SupportConversationStatusEnum": (
             "apps.chat.models."

@@ -2807,18 +2807,23 @@ paths:
         description: Which field to use when ordering the results.
         schema:
           type: string
-      - name: page
-        required: false
-        in: query
-        description: A page number within the paginated result set.
+      - in: query
+        name: page
         schema:
           type: integer
-      - name: page_size
-        required: false
-        in: query
-        description: Number of results to return per page.
+      - in: query
+        name: page_size
         schema:
           type: integer
+      - in: query
+        name: scope
+        schema:
+          type: string
+          enum:
+          - DOLLAR
+          - GOLD
+          - HOUSING
+          - STOCK
       - name: search
         required: false
         in: query
@@ -2834,23 +2839,93 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PaginatedChannelPostList'
+                $ref: '#/components/schemas/PaginatedInternalAnalysisPostList'
+          description: ''
+  /api/channels/internal-analysis/{id}/view/:
+    post:
+      operationId: channels_internal_analysis_view_create
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - channels
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/channels/internal-analysis/manage/:
+    get:
+      operationId: channels_internal_analysis_manage_list
+      parameters:
+      - in: query
+        name: is_pinned
+        schema:
+          type: boolean
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - in: query
+        name: page
+        schema:
+          type: integer
+      - in: query
+        name: page_size
+        schema:
+          type: integer
+      - in: query
+        name: scope
+        schema:
+          type: string
+          enum:
+          - DOLLAR
+          - GOLD
+          - HOUSING
+          - STOCK
+      - in: query
+        name: search
+        schema:
+          type: string
+      - in: query
+        name: status
+        schema:
+          type: string
+          enum:
+          - DRAFT
+          - PUBLISHED
+          - SCHEDULED
+      tags:
+      - channels
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedInternalAnalysisPostList'
           description: ''
     post:
-      operationId: channels_internal_analysis_create
+      operationId: channels_internal_analysis_manage_create
       tags:
       - channels
       requestBody:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/ChannelPostRequest'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/ChannelPostRequest'
+              $ref: '#/components/schemas/InternalAnalysisPostRequest'
           multipart/form-data:
             schema:
-              $ref: '#/components/schemas/ChannelPostRequest'
+              $ref: '#/components/schemas/InternalAnalysisPostRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/InternalAnalysisPostRequest'
         required: true
       security:
       - jwtAuth: []
@@ -2859,8 +2934,104 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ChannelPost'
+                $ref: '#/components/schemas/InternalAnalysisPost'
           description: ''
+  /api/channels/internal-analysis/manage/{id}/:
+    get:
+      operationId: channels_internal_analysis_manage_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - channels
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InternalAnalysisPost'
+          description: ''
+    put:
+      operationId: channels_internal_analysis_manage_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - channels
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InternalAnalysisPostRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/InternalAnalysisPostRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/InternalAnalysisPostRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InternalAnalysisPost'
+          description: ''
+    patch:
+      operationId: channels_internal_analysis_manage_partial_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - channels
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedInternalAnalysisPostRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedInternalAnalysisPostRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedInternalAnalysisPostRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InternalAnalysisPost'
+          description: ''
+    delete:
+      operationId: channels_internal_analysis_manage_destroy
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - channels
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
   /api/channels/posts/{id}/:
     get:
       operationId: channels_posts_retrieve
@@ -4641,6 +4812,59 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/PaginatedLiveEventListList'
+          description: ''
+  /api/market/charts/:
+    get:
+      operationId: market_charts_retrieve
+      parameters:
+      - in: query
+        name: interval
+        schema:
+          type: string
+          enum:
+          - 15m
+          - 1d
+          - 1h
+          - 4h
+          - 5m
+      - in: query
+        name: market
+        schema:
+          type: string
+          enum:
+          - crypto
+          - forex
+        required: true
+      - in: query
+        name: range
+        schema:
+          type: string
+          enum:
+          - 1d
+          - 30d
+          - 7d
+        required: true
+      - in: query
+        name: symbol
+        schema:
+          type: string
+        required: true
+      tags:
+      - market
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MarketChartSuccessResponse'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MarketChartUnavailableResponse'
           description: ''
   /api/market/economic-calendar/:
     get:
@@ -7156,6 +7380,7 @@ components:
         published_at:
           type: string
           format: date-time
+          nullable: true
         is_pinned:
           type: boolean
         signal:
@@ -7171,7 +7396,7 @@ components:
           nullable: true
         scope:
           oneOf:
-          - $ref: '#/components/schemas/ScopeEnum'
+          - $ref: '#/components/schemas/InternalAnalysisScopeEnum'
           - $ref: '#/components/schemas/BlankEnum'
         scope_display:
           type: string
@@ -7191,7 +7416,6 @@ components:
       - channel
       - created_at
       - id
-      - published_at
       - scope_display
       - signal_status
       - signal_status_display
@@ -7226,6 +7450,7 @@ components:
         published_at:
           type: string
           format: date-time
+          nullable: true
         is_pinned:
           type: boolean
         signal:
@@ -7233,11 +7458,10 @@ components:
           nullable: true
         scope:
           oneOf:
-          - $ref: '#/components/schemas/ScopeEnum'
+          - $ref: '#/components/schemas/InternalAnalysisScopeEnum'
           - $ref: '#/components/schemas/BlankEnum'
       required:
       - body
-      - published_at
       - title
     ChatRoom:
       type: object
@@ -7898,9 +8122,12 @@ components:
           type: boolean
         can_manage_landing:
           type: boolean
+        can_manage_internal_analysis:
+          type: boolean
       required:
       - can_manage_academy
       - can_manage_content
+      - can_manage_internal_analysis
       - can_manage_landing
       - can_manage_roles
       - can_manage_users
@@ -8143,6 +8370,142 @@ components:
         * `low` - Low
         * `medium` - Medium
         * `high` - High
+    InternalAnalysisPost:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        title:
+          type: string
+          maxLength: 250
+        body:
+          type: string
+        scope:
+          oneOf:
+          - $ref: '#/components/schemas/InternalAnalysisScopeEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        scope_display:
+          type: string
+          readOnly: true
+        status:
+          $ref: '#/components/schemas/InternalAnalysisStatusEnum'
+        status_display:
+          type: string
+          readOnly: true
+        image:
+          type: string
+          format: uri
+          nullable: true
+        video:
+          type: string
+          format: uri
+          nullable: true
+        audio:
+          type: string
+          format: uri
+          nullable: true
+        cover:
+          type: string
+          format: uri
+          nullable: true
+        is_pinned:
+          type: boolean
+        author:
+          type: integer
+          readOnly: true
+        author_name:
+          type: string
+          readOnly: true
+        published_at:
+          type: string
+          format: date-time
+          nullable: true
+        views_count:
+          type: integer
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - author
+      - author_name
+      - body
+      - created_at
+      - id
+      - scope_display
+      - status_display
+      - title
+      - updated_at
+      - views_count
+    InternalAnalysisPostRequest:
+      type: object
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 250
+        body:
+          type: string
+          minLength: 1
+        scope:
+          oneOf:
+          - $ref: '#/components/schemas/InternalAnalysisScopeEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        status:
+          $ref: '#/components/schemas/InternalAnalysisStatusEnum'
+        image:
+          type: string
+          format: binary
+          nullable: true
+        video:
+          type: string
+          format: binary
+          nullable: true
+        audio:
+          type: string
+          format: binary
+          nullable: true
+        cover:
+          type: string
+          format: binary
+          nullable: true
+        is_pinned:
+          type: boolean
+        published_at:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+      - body
+      - title
+    InternalAnalysisScopeEnum:
+      enum:
+      - DOLLAR
+      - GOLD
+      - STOCK
+      - HOUSING
+      type: string
+      description: |-
+        * `DOLLAR` - دلار
+        * `GOLD` - طلا
+        * `STOCK` - بورس
+        * `HOUSING` - مسکن
+    InternalAnalysisStatusEnum:
+      enum:
+      - DRAFT
+      - SCHEDULED
+      - PUBLISHED
+      type: string
+      description: |-
+        * `DRAFT` - پیش‌نویس
+        * `SCHEDULED` - زمان‌بندی‌شده
+        * `PUBLISHED` - منتشرشده
     JoinChatRoomResponse:
       type: object
       properties:
@@ -8752,6 +9115,31 @@ components:
           type: string
       required:
       - message
+    MarketChartSuccessResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        data:
+          type: object
+          additionalProperties: {}
+      required:
+      - data
+      - success
+    MarketChartUnavailableResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+        errors:
+          type: object
+          additionalProperties: {}
+      required:
+      - errors
+      - message
+      - success
     MediaTypeEnum:
       enum:
       - video
@@ -9345,6 +9733,29 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/EconomicEvent'
+    PaginatedInternalAnalysisPostList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/InternalAnalysisPost'
     PaginatedLandingSectionList:
       type: object
       required:
@@ -9991,6 +10402,7 @@ components:
         published_at:
           type: string
           format: date-time
+          nullable: true
         is_pinned:
           type: boolean
         signal:
@@ -9998,7 +10410,7 @@ components:
           nullable: true
         scope:
           oneOf:
-          - $ref: '#/components/schemas/ScopeEnum'
+          - $ref: '#/components/schemas/InternalAnalysisScopeEnum'
           - $ref: '#/components/schemas/BlankEnum'
     PatchedChatRoomWriteRequest:
       type: object
@@ -10144,6 +10556,44 @@ components:
             type: integer
             maximum: 5
             minimum: 1
+    PatchedInternalAnalysisPostRequest:
+      type: object
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 250
+        body:
+          type: string
+          minLength: 1
+        scope:
+          oneOf:
+          - $ref: '#/components/schemas/InternalAnalysisScopeEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        status:
+          $ref: '#/components/schemas/InternalAnalysisStatusEnum'
+        image:
+          type: string
+          format: binary
+          nullable: true
+        video:
+          type: string
+          format: binary
+          nullable: true
+        audio:
+          type: string
+          format: binary
+          nullable: true
+        cover:
+          type: string
+          format: binary
+          nullable: true
+        is_pinned:
+          type: boolean
+        published_at:
+          type: string
+          format: date-time
+          nullable: true
     PatchedLandingPageRequest:
       type: object
       properties:
@@ -10718,6 +11168,7 @@ components:
       - LANDING_MANAGE
       - USER_MANAGE
       - ROLE_MANAGE
+      - INTERNAL_ANALYSIS_MANAGE
       type: string
       description: |-
         * `CONTENT_MANAGE` - Manage content
@@ -10729,6 +11180,7 @@ components:
         * `LANDING_MANAGE` - Manage landing page
         * `USER_MANAGE` - Manage users
         * `ROLE_MANAGE` - Manage custom roles
+        * `INTERNAL_ANALYSIS_MANAGE` - Manage internal analysis
     PlatformRole:
       type: object
       properties:
@@ -11363,18 +11815,6 @@ components:
         * `LOW` - Low
         * `MEDIUM` - Medium
         * `HIGH` - High
-    ScopeEnum:
-      enum:
-      - dollar
-      - gold
-      - stock
-      - housing
-      type: string
-      description: |-
-        * `dollar` - Dollar
-        * `gold` - Gold
-        * `stock` - Stock
-        * `housing` - Housing
     SectionTypeEnum:
       enum:
       - HERO
@@ -12697,12 +13137,17 @@ components:
         profile_completion:
           type: integer
           readOnly: true
+        capabilities:
+          type: object
+          additionalProperties: {}
+          readOnly: true
         created_at:
           type: string
           format: date-time
           readOnly: true
       required:
       - access_level
+      - capabilities
       - created_at
       - custom_role
       - email

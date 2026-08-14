@@ -109,6 +109,8 @@ class DashboardCapabilitiesSerializer(
 
     can_manage_landing = serializers.BooleanField()
 
+    can_manage_internal_analysis = serializers.BooleanField()
+
 
 class DashboardFinanceSerializer(serializers.Serializer):
     connected = serializers.BooleanField()

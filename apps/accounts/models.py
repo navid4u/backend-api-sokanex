@@ -32,6 +32,7 @@ class User(AbstractUser):
         LANDING_MANAGE = "LANDING_MANAGE", "Manage landing page"
         USER_MANAGE = "USER_MANAGE", "Manage users"
         ROLE_MANAGE = "ROLE_MANAGE", "Manage custom roles"
+        INTERNAL_ANALYSIS_MANAGE = "INTERNAL_ANALYSIS_MANAGE", "Manage internal analysis"
 
     phone = models.CharField(
         max_length=20,

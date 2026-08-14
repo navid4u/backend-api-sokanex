@@ -1,5 +1,12 @@
 from django.conf import settings
 from django.db import models
+from uuid import uuid4
+from pathlib import Path
+
+
+def secure_channel_upload(instance, filename):
+    extension = Path(filename).suffix.lower()
+    return f"channels/uploads/{uuid4().hex}{extension}"
 
 
 class Channel(models.Model):
@@ -24,23 +31,30 @@ class ChannelMembership(models.Model):
 
 class ChannelPost(models.Model):
     class Scope(models.TextChoices):
-        DOLLAR = "dollar", "Dollar"
-        GOLD = "gold", "Gold"
-        STOCK = "stock", "Stock"
-        HOUSING = "housing", "Housing"
+        DOLLAR = "DOLLAR", "دلار"
+        GOLD = "GOLD", "طلا"
+        STOCK = "STOCK", "بورس"
+        HOUSING = "HOUSING", "مسکن"
+
+    class Status(models.TextChoices):
+        DRAFT = "DRAFT", "پیش‌نویس"
+        SCHEDULED = "SCHEDULED", "زمان‌بندی‌شده"
+        PUBLISHED = "PUBLISHED", "منتشرشده"
 
     channel = models.ForeignKey(Channel, on_delete=models.CASCADE, related_name="posts")
     title = models.CharField(max_length=250)
     body = models.TextField()
-    image = models.ImageField(upload_to="channels/images/%Y/%m/", null=True, blank=True)
-    video = models.FileField(upload_to="channels/videos/%Y/%m/", null=True, blank=True)
-    audio = models.FileField(upload_to="channels/audio/%Y/%m/", null=True, blank=True)
-    cover = models.ImageField(upload_to="channels/covers/%Y/%m/", null=True, blank=True)
+    image = models.ImageField(upload_to=secure_channel_upload, null=True, blank=True)
+    video = models.FileField(upload_to=secure_channel_upload, null=True, blank=True)
+    audio = models.FileField(upload_to=secure_channel_upload, null=True, blank=True)
+    cover = models.ImageField(upload_to=secure_channel_upload, null=True, blank=True)
     author = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="channel_posts")
     signal = models.ForeignKey("signals.Signal", on_delete=models.SET_NULL, null=True, blank=True, related_name="channel_posts")
     scope = models.CharField(max_length=20, choices=Scope.choices, blank=True)
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.PUBLISHED, db_index=True)
     is_pinned = models.BooleanField(default=False)
-    published_at = models.DateTimeField()
+    published_at = models.DateTimeField(null=True, blank=True, db_index=True)
+    views_count = models.PositiveIntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

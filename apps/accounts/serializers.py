@@ -109,6 +109,7 @@ class UserSerializer(serializers.ModelSerializer):
         allow_null=True,
     )
     profile_completion = serializers.SerializerMethodField()
+    capabilities = serializers.SerializerMethodField()
 
     class Meta:
         model = User
@@ -125,6 +126,7 @@ class UserSerializer(serializers.ModelSerializer):
             "custom_role",
             "is_verified",
             "profile_completion",
+            "capabilities",
             "created_at",
         )
         read_only_fields = (
@@ -147,6 +149,21 @@ class UserSerializer(serializers.ModelSerializer):
             profile.preferred_markets, profile.trading_frequency,
         )
         return round(sum(bool(value) for value in tracked) * 100 / len(tracked))
+
+    def get_capabilities(self, obj) -> dict:
+        explicit = obj.has_platform_permission(User.Permission.INTERNAL_ANALYSIS_MANAGE)
+        fallback = (
+            obj.role in (User.Role.ADMIN, User.Role.EMPLOYEE)
+            and obj.has_platform_permission(User.Permission.CONTENT_MANAGE)
+        )
+        return {
+            "can_manage_internal_analysis": bool(
+                obj.is_superuser
+                or obj.role == User.Role.SUPER_ADMIN
+                or explicit
+                or fallback
+            )
+        }
 
 
 class CustomTokenObtainPairSerializer(

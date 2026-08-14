@@ -7,9 +7,11 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
+from drf_spectacular.utils import OpenApiParameter, extend_schema, inline_serializer
 
 from .models import EconomicEvent, NewsArticle
 from .serializers import EconomicEventSerializer, NewsArticleSerializer
+from .chart_services import MarketChartService, MarketChartUnavailable
 from .services import BASE_SYMBOLS, MarketNewsService, MarketQuoteService
 from common.serializers import EmptySerializer
 
@@ -27,6 +29,50 @@ class QuoteView(APIView):
         if len(symbols) > 20:
             raise serializers.ValidationError({"symbols": "Provide at most 20 comma-separated symbols."})
         return Response(MarketQuoteService.get_quotes(symbols))
+
+
+class MarketChartView(APIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = EmptySerializer
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "market_charts"
+
+    @extend_schema(
+        parameters=[
+            OpenApiParameter("market", str, required=True, enum=["crypto", "forex"]),
+            OpenApiParameter("symbol", str, required=True),
+            OpenApiParameter("range", str, required=True, enum=["1d", "7d", "30d"]),
+            OpenApiParameter("interval", str, required=False, enum=["5m", "15m", "1h", "4h", "1d"]),
+        ],
+        responses={
+            200: inline_serializer(
+                name="MarketChartSuccessResponse",
+                fields={"success": serializers.BooleanField(), "data": serializers.DictField()},
+            ),
+            503: inline_serializer(
+                name="MarketChartUnavailableResponse",
+                fields={
+                    "success": serializers.BooleanField(), "message": serializers.CharField(),
+                    "errors": serializers.DictField(),
+                },
+            ),
+        },
+    )
+    def get(self, request):
+        try:
+            data = MarketChartService.get_chart(
+                request.query_params.get("market"),
+                request.query_params.get("symbol"),
+                request.query_params.get("range"),
+                request.query_params.get("interval"),
+            )
+        except MarketChartUnavailable:
+            return Response({
+                "success": False,
+                "message": "Market data is temporarily unavailable",
+                "errors": {"source": ["No market provider is currently available."]},
+            }, status=503)
+        return Response({"success": True, "data": data})
 
 
 class MarketNewsView(APIView):

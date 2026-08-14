@@ -124,6 +124,21 @@ class IsEmployee(BasePermission):
         )
 
 
+class CanManageInternalAnalysis(BasePermission):
+    def has_permission(self, request, view):
+        user = request.user
+        if not user.is_authenticated:
+            return False
+        if user.is_superuser or user.role == User.Role.SUPER_ADMIN:
+            return True
+        if user.has_platform_permission(User.Permission.INTERNAL_ANALYSIS_MANAGE):
+            return True
+        return (
+            user.role in (User.Role.ADMIN, User.Role.EMPLOYEE)
+            and user.has_platform_permission(User.Permission.CONTENT_MANAGE)
+        )
+
+
 class IsSignalOwnerOrEmployee(BasePermission):
     """
     Allows the signal owner or authorized employees
