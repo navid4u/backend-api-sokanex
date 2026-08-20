@@ -26,6 +26,10 @@ def populate_support_metadata(apps, schema_editor):
 
 class Migration(migrations.Migration):
 
+    # PostgreSQL cannot create the indexes below in the same transaction as
+    # the data migration because the updates leave pending trigger events.
+    atomic = False
+
     dependencies = [
         ('chat', '0004_supportmessage_delivered_at_supportmessage_read_at'),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
