@@ -79,9 +79,10 @@ class NotificationListCreateView(
         return queryset
 
     def perform_create(self, serializer):
-        serializer.save(
+        notification = serializer.save(
             created_by=self.request.user
         )
+        NotificationService.queue_sms(notification)
 
 
 class NotificationUnreadCountView(APIView):

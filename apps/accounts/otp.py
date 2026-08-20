@@ -1,10 +1,7 @@
 import hashlib
 import hmac
-import json
 import secrets
 from datetime import timedelta
-from urllib.error import HTTPError, URLError
-from urllib.request import Request, urlopen
 
 from django.conf import settings
 from django.db import transaction
@@ -12,6 +9,7 @@ from django.utils import timezone
 from rest_framework.exceptions import APIException, Throttled, ValidationError
 
 from apps.activity.services import ActivityService
+from common.sms import PayamitoPatternService, SMSProviderError
 
 from .models import OTPChallenge
 
@@ -23,33 +21,15 @@ class OTPProviderError(APIException):
 
 
 class PayamitoService:
-    endpoint = "https://rest.payamak-panel.com/api/SendSMS/SendOTP"
-
     @classmethod
     def send_otp(cls, phone, code):
-        if not settings.PAYAMITO_ENABLED:
-            raise OTPProviderError()
-        payload = json.dumps({
-            "username": settings.PAYAMITO_USERNAME,
-            "password": settings.PAYAMITO_API_KEY,
-            "to": phone,
-            "from": settings.PAYAMITO_FROM_NUMBER,
-            "code": code,
-        }).encode()
-        request = Request(
-            cls.endpoint,
-            data=payload,
-            method="POST",
-            headers={"Accept": "application/json", "Content-Type": "application/json"},
-        )
         try:
-            with urlopen(request, timeout=settings.PAYAMITO_TIMEOUT_SECONDS) as response:
-                result = json.loads(response.read().decode())
-        except (HTTPError, URLError, TimeoutError, ValueError) as exc:
+            result = PayamitoPatternService.send(
+                phone, settings.PAYAMITO_OTP_BODY_ID, [code]
+            )
+        except SMSProviderError as exc:
             raise OTPProviderError() from exc
-        if result.get("RetStatus") != 1:
-            raise OTPProviderError()
-        return {"value": result.get("Value"), "status": result.get("StrRetStatus", "")}
+        return {"value": result["message_id"], "status": result["status"]}
 
 
 class OTPService:

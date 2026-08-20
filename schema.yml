@@ -9278,6 +9278,18 @@ components:
         action_label:
           type: string
           maxLength: 80
+        allowed_levels:
+          type: array
+          items:
+            type: integer
+            maximum: 5
+            minimum: 1
+        send_sms:
+          type: boolean
+        sms_summary:
+          type: object
+          additionalProperties: {}
+          readOnly: true
         image:
           type: string
           format: uri
@@ -9318,6 +9330,7 @@ components:
       - id
       - is_read
       - message
+      - sms_summary
       - title
       - updated_at
     NotificationPriorityEnum:
@@ -9349,6 +9362,14 @@ components:
         action_label:
           type: string
           maxLength: 80
+        allowed_levels:
+          type: array
+          items:
+            type: integer
+            maximum: 5
+            minimum: 1
+        send_sms:
+          type: boolean
         image:
           type: string
           format: binary
@@ -10749,6 +10770,14 @@ components:
         action_label:
           type: string
           maxLength: 80
+        allowed_levels:
+          type: array
+          items:
+            type: integer
+            maximum: 5
+            minimum: 1
+        send_sms:
+          type: boolean
         image:
           type: string
           format: binary

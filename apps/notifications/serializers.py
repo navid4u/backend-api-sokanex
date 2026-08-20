@@ -1,11 +1,13 @@
+from django.db.models import Count
 from rest_framework import serializers
 
 from apps.accounts.models import User
+from common.content_access import AllowedLevelsSerializerMixin
 
 from .models import Notification
 
 
-class NotificationSerializer(
+class NotificationSerializer(AllowedLevelsSerializerMixin,
     serializers.ModelSerializer
 ):
 
@@ -16,6 +18,7 @@ class NotificationSerializer(
         read_only=True,
         allow_null=True,
     )
+    sms_summary = serializers.SerializerMethodField()
 
     class Meta:
         model = Notification
@@ -27,6 +30,9 @@ class NotificationSerializer(
             "notification_type",
             "priority",
             "action_label",
+            "allowed_levels",
+            "send_sms",
+            "sms_summary",
             "image",
             "expires_at",
             "recipient",
@@ -45,7 +51,30 @@ class NotificationSerializer(
             "is_read",
             "created_at",
             "updated_at",
+            "sms_summary",
         )
+
+    def get_sms_summary(self, obj) -> dict:
+        annotated = all(
+            hasattr(obj, field)
+            for field in ("sms_total", "sms_sent", "sms_failed", "sms_pending")
+        )
+        if annotated:
+            return {
+                "total": obj.sms_total,
+                "sent": obj.sms_sent,
+                "failed": obj.sms_failed,
+                "pending": obj.sms_pending,
+            }
+        counts = {"SENT": 0, "FAILED": 0, "PENDING": 0}
+        for row in obj.sms_deliveries.values("status").annotate(total=Count("id")):
+            counts[row["status"]] = row["total"]
+        return {
+            "total": sum(counts.values()),
+            "sent": counts["SENT"],
+            "failed": counts["FAILED"],
+            "pending": counts["PENDING"],
+        }
 
     def validate_target_role(self, value):
         if (
@@ -75,6 +104,7 @@ class NotificationSerializer(
             "target_role",
             getattr(instance, "target_role", ""),
         )
+        allowed_levels = attrs.get("allowed_levels")
         if (
             recipient
             and target_role
@@ -84,6 +114,14 @@ class NotificationSerializer(
                     "Choose either a recipient or "
                     "a target role, not both."
                 )
+            )
+        if recipient and allowed_levels is not None:
+            raise serializers.ValidationError(
+                "Choose either a recipient or access levels, not both."
+            )
+        if target_role and allowed_levels is not None:
+            raise serializers.ValidationError(
+                "Choose either a target role or access levels, not both."
             )
 
         return attrs

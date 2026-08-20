@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import Notification, NotificationRead
+from .models import Notification, NotificationRead, NotificationSMSDelivery
 
 
 @admin.register(Notification)
@@ -56,26 +56,34 @@ class NotificationReadAdmin(admin.ModelAdmin):
         "user",
         "read_at",
     )
-    list_filter = (
-        "read_at",
-    )
+    list_filter = ("read_at",)
     search_fields = (
         "notification__title",
         "user__username",
         "user__email",
     )
-    list_select_related = (
-        "notification",
-        "user",
-    )
+    list_select_related = ("notification", "user")
+    readonly_fields = ("notification", "user", "read_at")
+    ordering = ("-read_at",)
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(NotificationSMSDelivery)
+class NotificationSMSDeliveryAdmin(admin.ModelAdmin):
+    list_display = ("id", "notification", "user", "phone", "status", "attempts", "sent_at")
+    list_filter = ("status", "created_at", "sent_at")
+    search_fields = ("notification__title", "user__username", "phone", "provider_message_id")
     readonly_fields = (
-        "notification",
-        "user",
-        "read_at",
+        "notification", "user", "phone", "status", "attempts", "provider_message_id",
+        "provider_code", "error_message", "sent_at", "created_at", "updated_at",
     )
-    ordering = (
-        "-read_at",
-    )
+    list_select_related = ("notification", "user")
+    ordering = ("-created_at",)
 
     def has_add_permission(self, request):
         return False

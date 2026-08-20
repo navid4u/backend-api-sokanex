@@ -1,8 +1,9 @@
 from django.conf import settings
 from django.db import models
+from common.content_access import LevelRestrictedContent
 
 
-class Notification(models.Model):
+class Notification(LevelRestrictedContent, models.Model):
 
     class Type(models.TextChoices):
         INFO = "INFO", "Information"
@@ -33,6 +34,7 @@ class Notification(models.Model):
     )
     priority = models.CharField(max_length=20, choices=Priority.choices, default=Priority.NORMAL)
     action_label = models.CharField(max_length=80, blank=True)
+    send_sms = models.BooleanField(default=False)
     image = models.ImageField(upload_to="notifications/images/", null=True, blank=True)
     expires_at = models.DateTimeField(null=True, blank=True)
 
@@ -139,3 +141,33 @@ class NotificationRead(models.Model):
             f"{self.user} - "
             f"{self.notification}"
         )
+
+
+class NotificationSMSDelivery(models.Model):
+    class Status(models.TextChoices):
+        PENDING = "PENDING", "Pending"
+        SENT = "SENT", "Sent"
+        FAILED = "FAILED", "Failed"
+
+    notification = models.ForeignKey(
+        Notification, on_delete=models.CASCADE, related_name="sms_deliveries"
+    )
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
+        related_name="notification_sms_deliveries",
+    )
+    phone = models.CharField(max_length=20)
+    status = models.CharField(max_length=10, choices=Status.choices, default=Status.PENDING, db_index=True)
+    provider_message_id = models.CharField(max_length=100, blank=True)
+    provider_code = models.CharField(max_length=50, blank=True)
+    error_message = models.CharField(max_length=500, blank=True)
+    attempts = models.PositiveSmallIntegerField(default=0)
+    sent_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(
+            fields=["notification", "user"], name="unique_notification_sms_per_user"
+        )]
+        indexes = [models.Index(fields=["status", "attempts", "created_at"])]

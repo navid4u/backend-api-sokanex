@@ -7,7 +7,10 @@ def payamito_configuration_check(app_configs, **kwargs):
     if not settings.PAYAMITO_ENABLED:
         return []
     missing = [
-        name for name in ("PAYAMITO_USERNAME", "PAYAMITO_API_KEY", "PAYAMITO_FROM_NUMBER")
+        name for name in (
+            "PAYAMITO_USERNAME", "PAYAMITO_API_KEY", "PAYAMITO_OTP_BODY_ID",
+            "PAYAMITO_NOTIFICATION_BODY_ID",
+        )
         if not getattr(settings, name, "")
     ]
     if not missing:
