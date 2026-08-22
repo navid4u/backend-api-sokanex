@@ -11,24 +11,37 @@ class SMSProviderError(Exception):
         self.provider_code = str(provider_code)
 
 
-class PayamitoPatternService:
-    endpoint = "https://rest.payamak-panel.com/api/SendSMS/BaseServiceNumber"
+def render_sms_template(template, **context):
+    try:
+        return str(template).format(**context)
+    except (KeyError, IndexError, ValueError) as exc:
+        raise SMSProviderError(
+            "The configured SMS message template is invalid.",
+            provider_code="invalid_template",
+        ) from exc
+
+
+class PayamitoSMSService:
+    endpoint = "https://rest.payamak-panel.com/api/SendSMS/SendSMS"
 
     @classmethod
-    def send(cls, phone, body_id, variables):
+    def send(cls, phone, text):
         if not settings.PAYAMITO_ENABLED:
             raise SMSProviderError("Payamito is disabled.", provider_code="disabled")
-        if not body_id:
-            raise SMSProviderError("Payamito pattern body ID is missing.", provider_code="missing_body_id")
-        clean_variables = [str(value).replace(";", " ").strip() for value in variables]
-        if any("http://" in value.lower() or "https://" in value.lower() for value in clean_variables):
-            raise SMSProviderError("Links are not allowed in service-pattern variables.", provider_code="-10")
+        if not settings.PAYAMITO_FROM_NUMBER:
+            raise SMSProviderError(
+                "Payamito sender number is missing.", provider_code="missing_sender"
+            )
+        clean_text = str(text).strip()
+        if not clean_text:
+            raise SMSProviderError("SMS text cannot be empty.", provider_code="empty_text")
         payload = json.dumps({
             "username": settings.PAYAMITO_USERNAME,
             "password": settings.PAYAMITO_API_KEY,
-            "text": ";".join(clean_variables),
+            "text": clean_text,
             "to": phone,
-            "bodyId": int(body_id),
+            "from": str(settings.PAYAMITO_FROM_NUMBER),
+            "isFlash": False,
         }).encode("utf-8")
         request = Request(
             cls.endpoint,
@@ -49,3 +62,7 @@ class PayamitoPatternService:
                 provider_code=value or ret_status,
             )
         return {"message_id": value, "status": result.get("StrRetStatus", "Ok")}
+
+
+# Backward-compatible import name for integrations that imported the old class.
+PayamitoPatternService = PayamitoSMSService

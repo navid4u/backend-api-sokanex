@@ -14,7 +14,7 @@ from .models import (
     NotificationSMSDelivery,
 )
 from apps.accounts.models import User
-from common.sms import PayamitoPatternService, SMSProviderError
+from common.sms import PayamitoSMSService, SMSProviderError, render_sms_template
 
 
 class NotificationService:
@@ -149,10 +149,12 @@ class NotificationService:
         for delivery in queryset.order_by("created_at")[:limit]:
             delivery.attempts += 1
             try:
-                result = PayamitoPatternService.send(
+                result = PayamitoSMSService.send(
                     delivery.phone,
-                    settings.PAYAMITO_NOTIFICATION_BODY_ID,
-                    [delivery.notification.title],
+                    render_sms_template(
+                        settings.PAYAMITO_NOTIFICATION_MESSAGE_TEMPLATE,
+                        title=delivery.notification.title
+                    ),
                 )
                 delivery.status = NotificationSMSDelivery.Status.SENT
                 delivery.provider_message_id = result["message_id"]

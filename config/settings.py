@@ -432,10 +432,16 @@ CORS_ALLOW_CREDENTIALS = False
 PAYAMITO_ENABLED = config("PAYAMITO_ENABLED", default=False, cast=bool)
 PAYAMITO_USERNAME = config("PAYAMITO_USERNAME", default="")
 PAYAMITO_API_KEY = config("PAYAMITO_API_KEY", default="")
-PAYAMITO_FROM_NUMBER = config("PAYAMITO_FROM_NUMBER", default="")
+PAYAMITO_FROM_NUMBER = config("PAYAMITO_FROM_NUMBER", default="9981803296")
 PAYAMITO_TIMEOUT_SECONDS = config("PAYAMITO_TIMEOUT_SECONDS", default=15, cast=int)
-PAYAMITO_OTP_BODY_ID = config("PAYAMITO_OTP_BODY_ID", default=0, cast=int)
-PAYAMITO_NOTIFICATION_BODY_ID = config("PAYAMITO_NOTIFICATION_BODY_ID", default=0, cast=int)
+PAYAMITO_OTP_MESSAGE_TEMPLATE = config(
+    "PAYAMITO_OTP_MESSAGE_TEMPLATE",
+    default="کد ورود شما به سوکانکس: {code}\nاین کد تا ۲ دقیقه معتبر است.",
+)
+PAYAMITO_NOTIFICATION_MESSAGE_TEMPLATE = config(
+    "PAYAMITO_NOTIFICATION_MESSAGE_TEMPLATE",
+    default="اعلان جدید سوکانکس: {title}\nبرای مشاهده جزئیات وارد سوکانکس شوید.",
+)
 PAYAMITO_SMS_RETRY_LIMIT = config("PAYAMITO_SMS_RETRY_LIMIT", default=3, cast=int)
 PAYAMITO_SMS_SEND_INLINE = config("PAYAMITO_SMS_SEND_INLINE", default=False, cast=bool)
 MARKET_DATA_PROVIDER = config("MARKET_DATA_PROVIDER", default="")

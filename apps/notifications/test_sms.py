@@ -15,8 +15,9 @@ from .services import NotificationService
     PAYAMITO_ENABLED=True,
     PAYAMITO_USERNAME="api-user",
     PAYAMITO_API_KEY="api-key",
-    PAYAMITO_OTP_BODY_ID=101,
-    PAYAMITO_NOTIFICATION_BODY_ID=202,
+    PAYAMITO_FROM_NUMBER="9981803296",
+    PAYAMITO_OTP_MESSAGE_TEMPLATE="Login code: {code}",
+    PAYAMITO_NOTIFICATION_MESSAGE_TEMPLATE="New notification: {title}",
     PAYAMITO_SMS_RETRY_LIMIT=3,
     PAYAMITO_SMS_SEND_INLINE=True,
 )
@@ -36,7 +37,7 @@ class NotificationSMSTests(APITestCase):
         )
         self.client.force_authenticate(self.employee)
 
-    @patch("apps.notifications.services.PayamitoPatternService.send")
+    @patch("apps.notifications.services.PayamitoSMSService.send")
     def test_create_notification_targets_selected_levels_and_sends_title(self, send):
         send.return_value = {"message_id": "1234567890123456", "status": "Ok"}
         with self.captureOnCommitCallbacks(execute=True):
@@ -51,9 +52,9 @@ class NotificationSMSTests(APITestCase):
         delivery = NotificationSMSDelivery.objects.get()
         self.assertEqual(delivery.user_id, self.level_2.id)
         self.assertEqual(delivery.status, NotificationSMSDelivery.Status.SENT)
-        send.assert_called_once_with("09120000002", 202, ["Gold alert"])
+        send.assert_called_once_with("09120000002", "New notification: Gold alert")
 
-    @patch("apps.notifications.services.PayamitoPatternService.send")
+    @patch("apps.notifications.services.PayamitoSMSService.send")
     def test_sms_failure_does_not_rollback_notification_and_can_retry(self, send):
         send.side_effect = SMSProviderError("temporary", provider_code="6")
         with self.captureOnCommitCallbacks(execute=True):
@@ -72,7 +73,7 @@ class NotificationSMSTests(APITestCase):
         self.assertEqual(delivery.status, NotificationSMSDelivery.Status.SENT)
         self.assertEqual(delivery.attempts, 2)
 
-    @patch("apps.notifications.services.PayamitoPatternService.send")
+    @patch("apps.notifications.services.PayamitoSMSService.send")
     def test_send_sms_false_creates_no_delivery(self, send):
         response = self.client.post(reverse("notification-list-create"), {
             "title": "In app only", "message": "Details", "allowed_levels": [1],

@@ -9,7 +9,7 @@ from django.utils import timezone
 from rest_framework.exceptions import APIException, Throttled, ValidationError
 
 from apps.activity.services import ActivityService
-from common.sms import PayamitoPatternService, SMSProviderError
+from common.sms import PayamitoSMSService, SMSProviderError, render_sms_template
 
 from .models import OTPChallenge
 
@@ -24,8 +24,9 @@ class PayamitoService:
     @classmethod
     def send_otp(cls, phone, code):
         try:
-            result = PayamitoPatternService.send(
-                phone, settings.PAYAMITO_OTP_BODY_ID, [code]
+            result = PayamitoSMSService.send(
+                phone,
+                render_sms_template(settings.PAYAMITO_OTP_MESSAGE_TEMPLATE, code=code),
             )
         except SMSProviderError as exc:
             raise OTPProviderError() from exc
