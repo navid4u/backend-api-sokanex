@@ -440,7 +440,13 @@ PAYAMITO_OTP_MESSAGE_TEMPLATE = config(
 )
 PAYAMITO_NOTIFICATION_MESSAGE_TEMPLATE = config(
     "PAYAMITO_NOTIFICATION_MESSAGE_TEMPLATE",
-    default="اعلان جدید سوکانکس: {title}\nبرای مشاهده جزئیات وارد سوکانکس شوید.",
+    default="{title}\n{message}\n{target_url}",
+).replace("\\n", "\n")
+PAYAMITO_NOTIFICATION_LINK_BASE_URL = config(
+    "PAYAMITO_NOTIFICATION_LINK_BASE_URL", default="https://app.sokanex.com"
+)
+PAYAMITO_NOTIFICATION_SMS_MAX_LENGTH = config(
+    "PAYAMITO_NOTIFICATION_SMS_MAX_LENGTH", default=500, cast=int
 )
 PAYAMITO_SMS_RETRY_LIMIT = config("PAYAMITO_SMS_RETRY_LIMIT", default=3, cast=int)
 PAYAMITO_SMS_SEND_INLINE = config("PAYAMITO_SMS_SEND_INLINE", default=False, cast=bool)

@@ -1,3 +1,7 @@
+import html
+import re
+from urllib.parse import urljoin
+
 from django.db.models import (
     Count,
     Exists,
@@ -5,8 +9,10 @@ from django.db.models import (
     Q,
 )
 from django.conf import settings
+from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.utils import timezone
+from django.utils.html import strip_tags
 
 from .models import (
     Notification,
@@ -15,9 +21,64 @@ from .models import (
 )
 from apps.accounts.models import User
 from common.sms import PayamitoSMSService, SMSProviderError, render_sms_template
+from common.phone import normalize_iran_phone
 
 
 class NotificationService:
+
+    @staticmethod
+    def _notification_url(target_url):
+        target_url = (target_url or "").strip()
+        if not target_url:
+            return ""
+        if target_url.startswith("/"):
+            base_url = settings.PAYAMITO_NOTIFICATION_LINK_BASE_URL.rstrip("/") + "/"
+            return urljoin(base_url, target_url.lstrip("/"))
+        return target_url
+
+    @staticmethod
+    def _clean_message(message):
+        plain_text = html.unescape(strip_tags(message or ""))
+        return re.sub(r"\s+", " ", plain_text).strip()
+
+    @staticmethod
+    def _without_blank_lines(value):
+        return "\n".join(line.strip() for line in value.splitlines() if line.strip())
+
+    @classmethod
+    def notification_sms_text(cls, notification):
+        title = cls._without_blank_lines(strip_tags(notification.title or "")).strip()
+        message = cls._clean_message(notification.message)
+        target_url = cls._notification_url(notification.target_url)
+        template = settings.PAYAMITO_NOTIFICATION_MESSAGE_TEMPLATE
+        max_length = max(int(settings.PAYAMITO_NOTIFICATION_SMS_MAX_LENGTH), 1)
+
+        def render(current_message):
+            return cls._without_blank_lines(render_sms_template(
+                template,
+                title=title,
+                message=current_message,
+                target_url=target_url,
+            ))
+
+        text = render(message)
+        if len(text) <= max_length:
+            return text
+
+        # Only message is shortened. If title + URL alone exceed the configured
+        # ceiling, they remain intact as required.
+        fixed_text = render("")
+        available = max(max_length - len(fixed_text) - 1, 0)
+        if not available:
+            return fixed_text
+        shortened = message[:available].rstrip()
+        if len(shortened) < len(message) and available > 1:
+            shortened = shortened[:-1].rstrip() + "…"
+        text = render(shortened)
+        while len(text) > max_length and shortened:
+            shortened = shortened[:-1].rstrip(" …")
+            text = render((shortened + "…") if shortened else "")
+        return text
 
     @staticmethod
     def visible_notifications(user):
@@ -127,10 +188,15 @@ class NotificationService:
     def queue_sms(cls, notification):
         if not notification.send_sms:
             return 0
-        deliveries = [
-            NotificationSMSDelivery(notification=notification, user=user, phone=user.phone)
-            for user in cls.target_users(notification).iterator()
-        ]
+        deliveries = []
+        for user in cls.target_users(notification).iterator():
+            try:
+                phone = normalize_iran_phone(user.phone)
+            except (TypeError, ValueError, ValidationError):
+                continue
+            deliveries.append(NotificationSMSDelivery(
+                notification=notification, user=user, phone=phone
+            ))
         NotificationSMSDelivery.objects.bulk_create(deliveries, ignore_conflicts=True)
         # Production defaults to a durable outbox processed by the retry command.
         # Inline delivery is useful only for small/local installations and tests.
@@ -151,10 +217,7 @@ class NotificationService:
             try:
                 result = PayamitoSMSService.send(
                     delivery.phone,
-                    render_sms_template(
-                        settings.PAYAMITO_NOTIFICATION_MESSAGE_TEMPLATE,
-                        title=delivery.notification.title
-                    ),
+                    NotificationService.notification_sms_text(delivery.notification),
                 )
                 delivery.status = NotificationSMSDelivery.Status.SENT
                 delivery.provider_message_id = result["message_id"]
