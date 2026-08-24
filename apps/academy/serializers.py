@@ -22,6 +22,9 @@ class CourseListSerializer(
         source="sessions.count",
         read_only=True,
     )
+    is_enrolled = serializers.SerializerMethodField()
+    is_purchased = serializers.SerializerMethodField()
+    can_access_content = serializers.SerializerMethodField()
 
     class Meta:
         model = Course
@@ -51,6 +54,9 @@ class CourseListSerializer(
             "ends_at",
             "allowed_levels",
             "sessions_count",
+            "is_enrolled",
+            "is_purchased",
+            "can_access_content",
             "created_at",
             "updated_at",
         )
@@ -60,6 +66,29 @@ class CourseListSerializer(
             obj.instructor.get_full_name().strip()
             or obj.instructor.username
         )
+
+    def _access_state(self, obj):
+        request = self.context.get("request")
+        user = getattr(request, "user", None)
+        if not user or not user.is_authenticated:
+            return False, False, False
+        manages = (
+            user.has_platform_permission("ACADEMY_MANAGE")
+            or obj.instructor_id == user.id
+        )
+        enrolled = obj.enrollments.filter(user=user).exists()
+        purchased = obj.purchases.filter(user=user).exists()
+        can_access = manages or (enrolled and (obj.is_free or purchased))
+        return enrolled, purchased, can_access
+
+    def get_is_enrolled(self, obj) -> bool:
+        return self._access_state(obj)[0]
+
+    def get_is_purchased(self, obj) -> bool:
+        return self._access_state(obj)[1]
+
+    def get_can_access_content(self, obj) -> bool:
+        return self._access_state(obj)[2]
 
 
 class CourseWriteSerializer(
@@ -223,6 +252,18 @@ class CourseSessionSerializer(serializers.ModelSerializer):
 
     def get_is_locked(self, obj) -> bool:
         return bool(self.get_lock_reason(obj))
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        if self.get_is_locked(instance):
+            data.update({
+                "video_url": "",
+                "video_file": None,
+                "audio_file": None,
+                "text": "",
+                "image": None,
+            })
+        return data
 
     def validate_audio_file(self, value):
         allowed = {"audio/mpeg", "audio/mp4", "audio/wav", "audio/ogg", "audio/webm"}

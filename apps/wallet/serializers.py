@@ -134,3 +134,4 @@ class UpgradePlanSerializer(serializers.ModelSerializer):
     class Meta:
         model = UpgradePlan
         fields = ("level", "title", "description", "price_irt", "active", "features", "sort_order")
+        read_only_fields = ("level",)

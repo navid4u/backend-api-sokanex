@@ -61,13 +61,21 @@ def visible_courses(user):
 
 
 def session_lock_reason(session, user):
-    if session.is_preview or manageable_courses(user).filter(pk=session.course_id).exists():
+    if manageable_courses(user).filter(pk=session.course_id).exists():
+        return ""
+    enrollment = CourseEnrollment.objects.filter(user=user, course=session.course).first()
+    if not session.course.is_free:
+        purchased = CoursePurchase.objects.filter(user=user, course=session.course).exists()
+        if not purchased or not enrollment:
+            return "Purchase and enroll in this course to access its content."
+    elif not session.is_preview and not enrollment:
+        return "Enroll in this course to access its content."
+    if session.is_preview:
         return ""
     now = timezone.now()
     unlock_at = session.unlock_at or session.available_at
     if unlock_at and unlock_at > now:
         return "This session is not available yet."
-    enrollment = CourseEnrollment.objects.filter(user=user, course=session.course).first()
     if enrollment:
         weekly_limit = session.course.weekly_session_limit
         monthly_limit = session.course.monthly_session_limit
@@ -459,6 +467,10 @@ class SessionMediaStreamView(APIView):
         if payload.get("session_id") != pk:
             raise PermissionDenied("Ticket does not match this session.")
         session = get_object_or_404(CourseSession, pk=pk)
+        user = get_object_or_404(User, pk=payload.get("user_id"), is_active=True)
+        reason = session_lock_reason(session, user)
+        if reason:
+            raise PermissionDenied(detail={"code": "SESSION_LOCKED", "lock_reason": reason})
         media_field = session.video_file if payload.get("media") == "video" else session.audio_file
         if not media_field:
             from rest_framework.exceptions import NotFound

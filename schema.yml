@@ -2467,6 +2467,97 @@ paths:
               schema:
                 $ref: '#/components/schemas/PaymentProvider'
           description: ''
+  /api/admin/platform/upgrade-plans/:
+    get:
+      operationId: admin_platform_upgrade_plans_list
+      parameters:
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      tags:
+      - admin
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/UpgradePlan'
+          description: ''
+  /api/admin/platform/upgrade-plans/{id}/:
+    put:
+      operationId: admin_platform_upgrade_plans_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - admin
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpgradePlanRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/UpgradePlanRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/UpgradePlanRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UpgradePlan'
+          description: ''
+    patch:
+      operationId: admin_platform_upgrade_plans_partial_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - admin
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedUpgradePlanRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedUpgradePlanRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedUpgradePlanRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UpgradePlan'
+          description: ''
   /api/articles/:
     get:
       operationId: articles_list
@@ -8424,6 +8515,15 @@ components:
         sessions_count:
           type: integer
           readOnly: true
+        is_enrolled:
+          type: boolean
+          readOnly: true
+        is_purchased:
+          type: boolean
+          readOnly: true
+        can_access_content:
+          type: boolean
+          readOnly: true
         created_at:
           type: string
           format: date-time
@@ -8433,10 +8533,13 @@ components:
           format: date-time
           readOnly: true
       required:
+      - can_access_content
       - created_at
       - id
       - instructor
       - instructor_name
+      - is_enrolled
+      - is_purchased
       - sessions_count
       - title
       - updated_at
@@ -11960,6 +12063,28 @@ components:
           nullable: true
         visibility:
           $ref: '#/components/schemas/VisibilityEnum'
+    PatchedUpgradePlanRequest:
+      type: object
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 120
+        description:
+          type: string
+        price_irt:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        active:
+          type: boolean
+        features: {}
+        sort_order:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
     PatchedUpgradeRequestReviewRequest:
       type: object
       properties:
@@ -14205,9 +14330,7 @@ components:
       properties:
         level:
           type: integer
-          maximum: 9223372036854775807
-          minimum: 0
-          format: int64
+          readOnly: true
         title:
           type: string
           maxLength: 120
@@ -14228,6 +14351,30 @@ components:
           format: int64
       required:
       - level
+      - title
+    UpgradePlanRequest:
+      type: object
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 120
+        description:
+          type: string
+        price_irt:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        active:
+          type: boolean
+        features: {}
+        sort_order:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+      required:
       - title
     UpgradeRequest:
       type: object

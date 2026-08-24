@@ -6,7 +6,7 @@ from rest_framework.test import APITestCase
 
 from apps.accounts.models import User
 from apps.academy.models import Course, CourseEnrollment, CoursePurchase
-from .models import LedgerEntry, Payment, PaymentProvider
+from .models import LedgerEntry, Payment, PaymentProvider, UpgradePlan
 from .services import WalletService
 
 
@@ -64,3 +64,28 @@ class BillingV2Tests(APITestCase):
         self.assertTrue(CoursePurchase.objects.filter(user=self.user, course=course).exists())
         self.assertTrue(CourseEnrollment.objects.filter(user=self.user, course=course).exists())
 
+    def test_only_platform_manager_can_manage_upgrade_prices(self):
+        plan = UpgradePlan.objects.get(level=2)
+        denied = self.client.patch(
+            f"/api/admin/platform/upgrade-plans/{plan.pk}/",
+            {"price_irt": 900000},
+            format="json",
+        )
+        self.assertEqual(denied.status_code, 403)
+
+        manager = User.objects.create_user(
+            username="platform-manager",
+            password="pass",
+            role=User.Role.SUPER_ADMIN,
+        )
+        self.client.force_authenticate(manager)
+        listing = self.client.get("/api/admin/platform/upgrade-plans/")
+        updated = self.client.patch(
+            f"/api/admin/platform/upgrade-plans/{plan.pk}/",
+            {"price_irt": 900000, "active": True},
+            format="json",
+        )
+        self.assertEqual(listing.status_code, 200)
+        self.assertEqual(updated.status_code, 200)
+        plan.refresh_from_db()
+        self.assertEqual(plan.price_irt, 900000)

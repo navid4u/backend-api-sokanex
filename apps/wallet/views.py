@@ -153,6 +153,19 @@ class UpgradePlanListView(generics.ListAPIView):
     pagination_class = None
 
 
+class AdminUpgradePlanListView(generics.ListAPIView):
+    permission_classes = [CanManagePlatform]
+    serializer_class = UpgradePlanSerializer
+    queryset = UpgradePlan.objects.order_by("sort_order", "level")
+    pagination_class = None
+
+
+class AdminUpgradePlanUpdateView(generics.UpdateAPIView):
+    permission_classes = [CanManagePlatform]
+    serializer_class = UpgradePlanSerializer
+    queryset = UpgradePlan.objects.all()
+
+
 class PaymentCreateView(generics.GenericAPIView):
     permission_classes = [IsAuthenticated]
     serializer_class = PaymentCreateSerializer
