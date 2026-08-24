@@ -198,6 +198,58 @@ paths:
               schema:
                 $ref: '#/components/schemas/CourseEnrollment'
           description: ''
+  /api/academy/courses/{slug}/purchase/:
+    post:
+      operationId: academy_courses_purchase_create
+      parameters:
+      - in: path
+        name: slug
+        schema:
+          type: string
+        required: true
+      tags:
+      - academy
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CoursePurchaseRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CoursePurchaseRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CoursePurchaseRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CoursePurchase'
+          description: ''
+  /api/academy/courses/{slug}/purchase-status/:
+    get:
+      operationId: academy_courses_purchase_status_retrieve
+      parameters:
+      - in: path
+        name: slug
+        schema:
+          type: string
+        required: true
+      tags:
+      - academy
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CoursePurchase'
+          description: ''
   /api/academy/courses/{slug}/sessions/:
     get:
       operationId: academy_courses_sessions_list
@@ -1798,6 +1850,7 @@ paths:
           - ADMIN
           - EMPLOYEE
           - SUPER_ADMIN
+          - SUPPORT
           - TRADER
           - USER
         description: |-
@@ -1805,6 +1858,7 @@ paths:
           * `ADMIN` - Admin
           * `TRADER` - Trader
           * `EMPLOYEE` - Employee
+          * `SUPPORT` - Support
           * `USER` - User
       - name: search
         required: false
@@ -2170,6 +2224,248 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/UserActivity'
+          description: ''
+  /api/admin/platform/content/:
+    get:
+      operationId: admin_platform_content_list
+      parameters:
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      tags:
+      - admin
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/SystemContent'
+          description: ''
+  /api/admin/platform/content/{key}/:
+    put:
+      operationId: admin_platform_content_update
+      parameters:
+      - in: path
+        name: key
+        schema:
+          type: string
+        required: true
+      tags:
+      - admin
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SystemContentRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/SystemContentRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/SystemContentRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SystemContent'
+          description: ''
+    patch:
+      operationId: admin_platform_content_partial_update
+      parameters:
+      - in: path
+        name: key
+        schema:
+          type: string
+        required: true
+      tags:
+      - admin
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedSystemContentRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedSystemContentRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedSystemContentRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SystemContent'
+          description: ''
+  /api/admin/platform/financial-settings/:
+    get:
+      operationId: admin_platform_financial_settings_retrieve
+      tags:
+      - admin
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FinancialSettings'
+          description: ''
+    put:
+      operationId: admin_platform_financial_settings_update
+      tags:
+      - admin
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FinancialSettingsRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/FinancialSettingsRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/FinancialSettingsRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FinancialSettings'
+          description: ''
+    patch:
+      operationId: admin_platform_financial_settings_partial_update
+      tags:
+      - admin
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedFinancialSettingsRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedFinancialSettingsRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedFinancialSettingsRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FinancialSettings'
+          description: ''
+  /api/admin/platform/payment-providers/:
+    get:
+      operationId: admin_platform_payment_providers_list
+      parameters:
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      tags:
+      - admin
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PaymentProvider'
+          description: ''
+  /api/admin/platform/payment-providers/{id}/:
+    put:
+      operationId: admin_platform_payment_providers_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - admin
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PaymentProviderRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PaymentProviderRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PaymentProviderRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentProvider'
+          description: ''
+    patch:
+      operationId: admin_platform_payment_providers_partial_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - admin
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedPaymentProviderRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedPaymentProviderRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedPaymentProviderRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentProvider'
           description: ''
   /api/articles/:
     get:
@@ -2565,6 +2861,87 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/PaginatedArticleListList'
+          description: ''
+  /api/billing/payments/:
+    post:
+      operationId: billing_payments_create
+      tags:
+      - billing
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PaymentCreateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PaymentCreateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PaymentCreateRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentCreate'
+          description: ''
+  /api/billing/payments/verify/:
+    post:
+      operationId: billing_payments_verify_create
+      tags:
+      - billing
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PaymentVerifyRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PaymentVerifyRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PaymentVerifyRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentVerify'
+          description: ''
+  /api/billing/upgrade-plans/:
+    get:
+      operationId: billing_upgrade_plans_list
+      parameters:
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      tags:
+      - billing
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/UpgradePlan'
           description: ''
   /api/brokers/:
     get:
@@ -3522,18 +3899,18 @@ paths:
     get:
       operationId: chat_social_feed_list
       parameters:
+      - name: cursor
+        required: false
+        in: query
+        description: The pagination cursor value.
+        schema:
+          type: string
       - name: ordering
         required: false
         in: query
         description: Which field to use when ordering the results.
         schema:
           type: string
-      - name: page
-        required: false
-        in: query
-        description: A page number within the paginated result set.
-        schema:
-          type: integer
       - name: page_size
         required: false
         in: query
@@ -3943,6 +4320,26 @@ paths:
               schema:
                 $ref: '#/components/schemas/PaginatedTraderPostList'
           description: ''
+  /api/chat/social/users/{user_id}/:
+    get:
+      operationId: chat_social_users_retrieve
+      parameters:
+      - in: path
+        name: user_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - chat
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SocialUser'
+          description: ''
   /api/chat/social/users/{user_id}/follow/:
     post:
       operationId: chat_social_users_follow_create
@@ -3978,6 +4375,73 @@ paths:
       responses:
         '204':
           description: No response body
+  /api/chat/social/users/{user_id}/posts/:
+    get:
+      operationId: chat_social_users_posts_list
+      parameters:
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - in: path
+        name: user_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - chat
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedTraderPostList'
+          description: ''
+  /api/chat/social/users/top-contributors/:
+    get:
+      operationId: chat_social_users_top_contributors_list
+      parameters:
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      tags:
+      - chat
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/SocialUser'
+          description: ''
   /api/chat/support/:
     get:
       operationId: chat_support_retrieve
@@ -5105,6 +5569,21 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/NotificationUnreadCountResponse'
+          description: ''
+  /api/platform/settings/public/:
+    get:
+      operationId: platform_settings_public_retrieve
+      tags:
+      - platform
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublicPlatformSettings'
           description: ''
   /api/signals/:
     get:
@@ -6427,6 +6906,111 @@ paths:
               schema:
                 $ref: '#/components/schemas/Wallet'
           description: ''
+  /api/wallet/bank-cards/:
+    get:
+      operationId: wallet_bank_cards_list
+      parameters:
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      tags:
+      - wallet
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedBankCardList'
+          description: ''
+    post:
+      operationId: wallet_bank_cards_create
+      tags:
+      - wallet
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BankCardRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/BankCardRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/BankCardRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BankCard'
+          description: ''
+  /api/wallet/bank-cards/{id}/:
+    delete:
+      operationId: wallet_bank_cards_destroy
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - wallet
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/wallet/deposits/:
+    post:
+      operationId: wallet_deposits_create
+      tags:
+      - wallet
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PaymentCreateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PaymentCreateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PaymentCreateRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentCreate'
+          description: ''
   /api/wallet/transactions/:
     get:
       operationId: wallet_transactions_list
@@ -6506,6 +7090,70 @@ paths:
               schema:
                 $ref: '#/components/schemas/PaginatedTransactionList'
           description: ''
+  /api/wallet/withdrawals/:
+    get:
+      operationId: wallet_withdrawals_list
+      parameters:
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      tags:
+      - wallet
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedWithdrawalList'
+          description: ''
+    post:
+      operationId: wallet_withdrawals_create
+      tags:
+      - wallet
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WithdrawalRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/WithdrawalRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/WithdrawalRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Withdrawal'
+          description: ''
 components:
   schemas:
     ActivityTypeEnum:
@@ -6557,6 +7205,13 @@ components:
           - $ref: '#/components/schemas/RequestedLevelEnum'
           minimum: 0
           maximum: 9223372036854775807
+        plan:
+          type: integer
+          readOnly: true
+          nullable: true
+        price_snapshot_irt:
+          type: integer
+          readOnly: true
         message:
           type: string
         status:
@@ -6587,6 +7242,8 @@ components:
       - admin_note
       - created_at
       - id
+      - plan
+      - price_snapshot_irt
       - requested_level
       - reviewed_at
       - reviewed_by
@@ -6965,6 +7622,46 @@ components:
           type: boolean
       required:
       - name
+    BankCard:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        title:
+          type: string
+          maxLength: 100
+        card_last4:
+          type: string
+          readOnly: true
+        iban:
+          type: string
+          maxLength: 26
+        is_verified:
+          type: boolean
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - card_last4
+      - created_at
+      - id
+      - is_verified
+    BankCardRequest:
+      type: object
+      properties:
+        title:
+          type: string
+          maxLength: 100
+        card_number:
+          type: string
+          writeOnly: true
+          minLength: 1
+        iban:
+          type: string
+          maxLength: 26
     BlankEnum:
       enum:
       - ''
@@ -7559,6 +8256,14 @@ components:
           type: boolean
       required:
       - name
+    CodeEnum:
+      enum:
+      - ZARINPAL
+      - IDPAY
+      type: string
+      description: |-
+        * `ZARINPAL` - Zarinpal
+        * `IDPAY` - IDPay
     ContentStatusEnum:
       enum:
       - DRAFT
@@ -7678,6 +8383,18 @@ components:
         learning_outcomes: {}
         enrollment_open:
           type: boolean
+        is_free:
+          type: boolean
+        price:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        currency:
+          type: string
+          maxLength: 3
+        purchase_required:
+          type: boolean
         weekly_session_limit:
           type: integer
           maximum: 9223372036854775807
@@ -7723,6 +8440,32 @@ components:
       - sessions_count
       - title
       - updated_at
+    CoursePurchase:
+      type: object
+      properties:
+        payment_method:
+          $ref: '#/components/schemas/PaymentMethodEnum'
+        provider:
+          type: string
+        idempotency_key:
+          type: string
+          maxLength: 120
+      required:
+      - payment_method
+    CoursePurchaseRequest:
+      type: object
+      properties:
+        payment_method:
+          $ref: '#/components/schemas/PaymentMethodEnum'
+        provider:
+          type: string
+          minLength: 1
+        idempotency_key:
+          type: string
+          minLength: 1
+          maxLength: 120
+      required:
+      - payment_method
     CourseSession:
       type: object
       properties:
@@ -7931,6 +8674,18 @@ components:
         learning_outcomes: {}
         enrollment_open:
           type: boolean
+        is_free:
+          type: boolean
+        price:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        currency:
+          type: string
+          maxLength: 3
+        purchase_required:
+          type: boolean
         weekly_session_limit:
           type: integer
           maximum: 9223372036854775807
@@ -8009,6 +8764,19 @@ components:
         prerequisites: {}
         learning_outcomes: {}
         enrollment_open:
+          type: boolean
+        is_free:
+          type: boolean
+        price:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        currency:
+          type: string
+          minLength: 1
+          maxLength: 3
+        purchase_required:
           type: boolean
         weekly_session_limit:
           type: integer
@@ -8120,6 +8888,8 @@ components:
           type: boolean
         can_manage_roles:
           type: boolean
+        can_manage_platform:
+          type: boolean
         can_manage_landing:
           type: boolean
         can_manage_internal_analysis:
@@ -8129,6 +8899,7 @@ components:
       - can_manage_content
       - can_manage_internal_analysis
       - can_manage_landing
+      - can_manage_platform
       - can_manage_roles
       - can_manage_users
       - can_review_signals
@@ -8330,6 +9101,58 @@ components:
         * `MASTER` - Master
         * `DOCTORATE` - Doctorate
         * `OTHER` - Other
+    FinancialSettings:
+      type: object
+      properties:
+        minimum_deposit_irt:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        minimum_withdrawal_irt:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        maximum_withdrawal_irt:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        withdrawal_fee_irt:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - updated_at
+    FinancialSettingsRequest:
+      type: object
+      properties:
+        minimum_deposit_irt:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        minimum_withdrawal_irt:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        maximum_withdrawal_irt:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        withdrawal_fee_irt:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
     Follow:
       type: object
       properties:
@@ -8778,7 +9601,8 @@ components:
           format: date-time
           nullable: true
         status:
-          $ref: '#/components/schemas/LiveEventStatusEnum'
+          type: string
+          readOnly: true
         viewer_count:
           type: integer
           readOnly: true
@@ -8795,15 +9619,14 @@ components:
         is_live_now:
           type: boolean
           readOnly: true
+        status_message:
+          type: string
+          readOnly: true
         description:
           type: string
-        stream_url:
-          oneOf:
-          - type: string
-            format: uri
-            maxLength: 500
-          - type: string
-            maxLength: 0
+        external_url:
+          type: string
+          readOnly: true
         provider_join_url:
           oneOf:
           - type: string
@@ -8832,10 +9655,13 @@ components:
           readOnly: true
       required:
       - created_at
+      - external_url
       - host
       - id
       - is_live_now
       - starts_at
+      - status
+      - status_message
       - title
       - updated_at
       - viewer_count
@@ -8867,7 +9693,8 @@ components:
           format: date-time
           nullable: true
         status:
-          $ref: '#/components/schemas/LiveEventStatusEnum'
+          type: string
+          readOnly: true
         viewer_count:
           type: integer
           readOnly: true
@@ -8884,11 +9711,16 @@ components:
         is_live_now:
           type: boolean
           readOnly: true
+        status_message:
+          type: string
+          readOnly: true
       required:
       - host
       - id
       - is_live_now
       - starts_at
+      - status
+      - status_message
       - title
       - viewer_count
     LiveEventStatusEnum:
@@ -8925,6 +9757,13 @@ components:
           format: uri
           nullable: true
         stream_url:
+          oneOf:
+          - type: string
+            format: uri
+            maxLength: 500
+          - type: string
+            maxLength: 0
+        external_url:
           oneOf:
           - type: string
             format: uri
@@ -8998,6 +9837,13 @@ components:
           format: binary
           nullable: true
         stream_url:
+          oneOf:
+          - type: string
+            format: uri
+            maxLength: 500
+          - type: string
+            maxLength: 0
+        external_url:
           oneOf:
           - type: string
             format: uri
@@ -9179,7 +10025,7 @@ components:
           type: boolean
           readOnly: true
         can_delete:
-          type: string
+          type: boolean
           readOnly: true
         created_at:
           type: string
@@ -9212,6 +10058,11 @@ components:
     MonthlyIncomeRangeEnum:
       enum:
       - NO_INCOME
+      - UNDER_10M_IRT
+      - 10M_30M_IRT
+      - 30M_60M_IRT
+      - 60M_100M_IRT
+      - OVER_100M_IRT
       - UNDER_500
       - '500_1000'
       - '1000_3000'
@@ -9222,12 +10073,17 @@ components:
       type: string
       description: |-
         * `NO_INCOME` - No income
-        * `UNDER_500` - Under 500
-        * `500_1000` - 500 to 1,000
-        * `1000_3000` - 1,000 to 3,000
-        * `3000_5000` - 3,000 to 5,000
-        * `5000_10000` - 5,000 to 10,000
-        * `OVER_10000` - Over 10,000
+        * `UNDER_10M_IRT` - Under 10M IRT
+        * `10M_30M_IRT` - 10M to 30M IRT
+        * `30M_60M_IRT` - 30M to 60M IRT
+        * `60M_100M_IRT` - 60M to 100M IRT
+        * `OVER_100M_IRT` - Over 100M IRT
+        * `UNDER_500` - Legacy: under 500
+        * `500_1000` - Legacy: 500 to 1,000
+        * `1000_3000` - Legacy: 1,000 to 3,000
+        * `3000_5000` - Legacy: 3,000 to 5,000
+        * `5000_10000` - Legacy: 5,000 to 10,000
+        * `OVER_10000` - Legacy: over 10,000
         * `PREFER_NOT_TO_SAY` - Prefer not to say
     NewsArticle:
       type: object
@@ -9547,6 +10403,29 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Badge'
+    PaginatedBankCardList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/BankCard'
     PaginatedBrokerConnectionList:
       type: object
       required:
@@ -10079,22 +10958,18 @@ components:
     PaginatedTraderPostList:
       type: object
       required:
-      - count
       - results
       properties:
-        count:
-          type: integer
-          example: 123
         next:
           type: string
           nullable: true
           format: uri
-          example: http://api.example.org/accounts/?page=4
+          example: http://api.example.org/accounts/?cursor=cD00ODY%3D"
         previous:
           type: string
           nullable: true
           format: uri
-          example: http://api.example.org/accounts/?page=2
+          example: http://api.example.org/accounts/?cursor=cj0xJnA9NDg3
         results:
           type: array
           items:
@@ -10214,6 +11089,29 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/VideoList'
+    PaginatedWithdrawalList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Withdrawal'
     PatchedAdminUserWriteRequest:
       type: object
       properties:
@@ -10551,6 +11449,19 @@ components:
         learning_outcomes: {}
         enrollment_open:
           type: boolean
+        is_free:
+          type: boolean
+        price:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        currency:
+          type: string
+          minLength: 1
+          maxLength: 3
+        purchase_required:
+          type: boolean
         weekly_session_limit:
           type: integer
           maximum: 9223372036854775807
@@ -10577,6 +11488,29 @@ components:
             type: integer
             maximum: 5
             minimum: 1
+    PatchedFinancialSettingsRequest:
+      type: object
+      properties:
+        minimum_deposit_irt:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        minimum_withdrawal_irt:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        maximum_withdrawal_irt:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        withdrawal_fee_irt:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
     PatchedInternalAnalysisPostRequest:
       type: object
       properties:
@@ -10715,6 +11649,13 @@ components:
             maxLength: 500
           - type: string
             maxLength: 0
+        external_url:
+          oneOf:
+          - type: string
+            format: uri
+            maxLength: 500
+          - type: string
+            maxLength: 0
         provider_join_url:
           oneOf:
           - type: string
@@ -10797,6 +11738,18 @@ components:
           maxLength: 500
         is_active:
           type: boolean
+    PatchedPaymentProviderRequest:
+      type: object
+      properties:
+        is_active:
+          type: boolean
+        sandbox:
+          type: boolean
+        sort_order:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
     PatchedPlatformRoleRequest:
       type: object
       properties:
@@ -10987,6 +11940,11 @@ components:
         subject:
           type: string
           maxLength: 255
+    PatchedSystemContentRequest:
+      type: object
+      properties:
+        value:
+          type: string
     PatchedTraderPostRequest:
       type: object
       properties:
@@ -11035,6 +11993,7 @@ components:
           - $ref: '#/components/schemas/BlankEnum'
         country:
           type: string
+          minLength: 1
           maxLength: 100
         city:
           type: string
@@ -11068,6 +12027,7 @@ components:
           - $ref: '#/components/schemas/BlankEnum'
         income_currency:
           type: string
+          minLength: 1
           maxLength: 10
         income_sources: {}
         financial_dependents:
@@ -11186,6 +12146,133 @@ components:
             type: integer
             maximum: 5
             minimum: 1
+    PaymentCreate:
+      type: object
+      properties:
+        provider:
+          $ref: '#/components/schemas/ProviderEnum'
+        amount_irt:
+          type: integer
+          minimum: 1
+        purpose:
+          $ref: '#/components/schemas/PurposeEnum'
+        idempotency_key:
+          type: string
+          maxLength: 120
+        metadata: {}
+      required:
+      - amount_irt
+      - idempotency_key
+      - provider
+      - purpose
+    PaymentCreateRequest:
+      type: object
+      properties:
+        provider:
+          $ref: '#/components/schemas/ProviderEnum'
+        amount_irt:
+          type: integer
+          minimum: 1
+        purpose:
+          $ref: '#/components/schemas/PurposeEnum'
+        idempotency_key:
+          type: string
+          minLength: 1
+          maxLength: 120
+        metadata: {}
+      required:
+      - amount_irt
+      - idempotency_key
+      - provider
+      - purpose
+    PaymentMethodEnum:
+      enum:
+      - WALLET
+      - GATEWAY
+      type: string
+      description: |-
+        * `WALLET` - WALLET
+        * `GATEWAY` - GATEWAY
+    PaymentProvider:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        code:
+          allOf:
+          - $ref: '#/components/schemas/CodeEnum'
+          readOnly: true
+        title:
+          type: string
+          readOnly: true
+        is_active:
+          type: boolean
+        sandbox:
+          type: boolean
+        sort_order:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        merchant_configured:
+          type: boolean
+          readOnly: true
+        api_key_configured:
+          type: boolean
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - api_key_configured
+      - code
+      - id
+      - merchant_configured
+      - title
+      - updated_at
+    PaymentProviderRequest:
+      type: object
+      properties:
+        is_active:
+          type: boolean
+        sandbox:
+          type: boolean
+        sort_order:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+    PaymentVerify:
+      type: object
+      properties:
+        payment_id:
+          type: string
+          format: uuid
+        authority:
+          type: string
+          maxLength: 120
+        status:
+          type: string
+      required:
+      - authority
+      - payment_id
+    PaymentVerifyRequest:
+      type: object
+      properties:
+        payment_id:
+          type: string
+          format: uuid
+        authority:
+          type: string
+          minLength: 1
+          maxLength: 120
+        status:
+          type: string
+      required:
+      - authority
+      - payment_id
     PlatformPermissionEnum:
       enum:
       - CONTENT_MANAGE
@@ -11198,6 +12285,8 @@ components:
       - USER_MANAGE
       - ROLE_MANAGE
       - INTERNAL_ANALYSIS_MANAGE
+      - SUPPORT_MANAGE
+      - PLATFORM_SETTINGS_MANAGE
       type: string
       description: |-
         * `CONTENT_MANAGE` - Manage content
@@ -11210,6 +12299,8 @@ components:
         * `USER_MANAGE` - Manage users
         * `ROLE_MANAGE` - Manage custom roles
         * `INTERNAL_ANALYSIS_MANAGE` - Manage internal analysis
+        * `SUPPORT_MANAGE` - Manage support conversations
+        * `PLATFORM_SETTINGS_MANAGE` - Manage platform settings
     PlatformRole:
       type: object
       properties:
@@ -11410,6 +12501,14 @@ components:
       required:
       - message
       - user
+    ProviderEnum:
+      enum:
+      - ZARINPAL
+      - IDPAY
+      type: string
+      description: |-
+        * `ZARINPAL` - Zarinpal
+        * `IDPAY` - IDPay
     PublicLandingPage:
       type: object
       properties:
@@ -11483,6 +12582,40 @@ components:
       - sections
       - site_key
       - updated_at
+    PublicPlatformSettings:
+      type: object
+      properties:
+        site_name:
+          type: string
+          maxLength: 120
+        support_email:
+          oneOf:
+          - type: string
+            format: email
+            maxLength: 254
+          - type: string
+            maxLength: 0
+        support_phone:
+          type: string
+          maxLength: 30
+        maintenance_mode:
+          type: boolean
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - updated_at
+    PurposeEnum:
+      enum:
+      - WALLET_DEPOSIT
+      - COURSE_PURCHASE
+      - LEVEL_UPGRADE
+      type: string
+      description: |-
+        * `WALLET_DEPOSIT` - Wallet deposit
+        * `COURSE_PURCHASE` - Course purchase
+        * `LEVEL_UPGRADE` - Level upgrade
     QuizAttempt:
       type: object
       properties:
@@ -12610,12 +13743,17 @@ components:
         access_level:
           type: integer
           readOnly: true
+        posts_count:
+          type: integer
+          readOnly: true
+          default: 0
       required:
       - access_level
       - avatar
       - first_name
       - id
       - last_name
+      - posts_count
       - username
     SpeakRequest:
       type: object
@@ -12882,6 +14020,39 @@ components:
       - last_name
       - phone
       - username
+    SystemContent:
+      type: object
+      properties:
+        key:
+          type: string
+          readOnly: true
+          pattern: ^[-a-zA-Z0-9_]+$
+        section:
+          type: string
+          readOnly: true
+        label:
+          type: string
+          readOnly: true
+        value:
+          type: string
+        multiline:
+          type: boolean
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - key
+      - label
+      - multiline
+      - section
+      - updated_at
+    SystemContentRequest:
+      type: object
+      properties:
+        value:
+          type: string
     TraderPost:
       type: object
       properties:
@@ -13029,6 +14200,35 @@ components:
       description: |-
         * `CREDIT` - Credit
         * `DEBIT` - Debit
+    UpgradePlan:
+      type: object
+      properties:
+        level:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        title:
+          type: string
+          maxLength: 120
+        description:
+          type: string
+        price_irt:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        active:
+          type: boolean
+        features: {}
+        sort_order:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+      required:
+      - level
+      - title
     UpgradeRequest:
       type: object
       properties:
@@ -13042,6 +14242,13 @@ components:
           - $ref: '#/components/schemas/RequestedLevelEnum'
           minimum: 0
           maximum: 9223372036854775807
+        plan:
+          type: integer
+          readOnly: true
+          nullable: true
+        price_snapshot_irt:
+          type: integer
+          readOnly: true
         message:
           type: string
         status:
@@ -13072,6 +14279,8 @@ components:
       - admin_note
       - created_at
       - id
+      - plan
+      - price_snapshot_irt
       - requested_level
       - reviewed_at
       - reviewed_by
@@ -13520,6 +14729,7 @@ components:
       - ADMIN
       - TRADER
       - EMPLOYEE
+      - SUPPORT
       - USER
       type: string
       description: |-
@@ -13527,6 +14737,7 @@ components:
         * `ADMIN` - Admin
         * `TRADER` - Trader
         * `EMPLOYEE` - Employee
+        * `SUPPORT` - Support
         * `USER` - User
     UserRoleUpdateResponse:
       type: object
@@ -13927,9 +15138,7 @@ components:
           type: integer
           readOnly: true
         balance:
-          type: string
-          format: decimal
-          pattern: ^-?\d{0,12}(?:\.\d{0,8})?$
+          type: integer
           readOnly: true
         currency:
           type: string
@@ -13943,6 +15152,63 @@ components:
       - currency
       - id
       - updated_at
+    Withdrawal:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        bank_card:
+          type: integer
+        amount_irt:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        status:
+          allOf:
+          - $ref: '#/components/schemas/WithdrawalStatusEnum'
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - amount_irt
+      - bank_card
+      - created_at
+      - id
+      - status
+      - updated_at
+    WithdrawalRequest:
+      type: object
+      properties:
+        bank_card:
+          type: integer
+        amount_irt:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+      required:
+      - amount_irt
+      - bank_card
+    WithdrawalStatusEnum:
+      enum:
+      - PENDING
+      - APPROVED
+      - REJECTED
+      - PAID
+      type: string
+      description: |-
+        * `PENDING` - Pending
+        * `APPROVED` - Approved
+        * `REJECTED` - Rejected
+        * `PAID` - Paid
   securitySchemes:
     jwtAuth:
       type: http

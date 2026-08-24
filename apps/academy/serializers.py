@@ -41,6 +41,10 @@ class CourseListSerializer(
             "prerequisites",
             "learning_outcomes",
             "enrollment_open",
+            "is_free",
+            "price",
+            "currency",
+            "purchase_required",
             "weekly_session_limit",
             "monthly_session_limit",
             "starts_at",
@@ -86,6 +90,10 @@ class CourseWriteSerializer(
             "prerequisites",
             "learning_outcomes",
             "enrollment_open",
+            "is_free",
+            "price",
+            "currency",
+            "purchase_required",
             "weekly_session_limit",
             "monthly_session_limit",
             "starts_at",
@@ -115,6 +123,18 @@ class CourseWriteSerializer(
             max_size_mb=8,
             file_label="Course cover image",
         )
+
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        is_free = attrs.get("is_free", getattr(self.instance, "is_free", True))
+        price = attrs.get("price", getattr(self.instance, "price", 0))
+        if is_free and price:
+            raise serializers.ValidationError({"price": "A free course must have zero price."})
+        if not is_free and price <= 0:
+            raise serializers.ValidationError({"price": "A paid course needs a positive price."})
+        attrs["purchase_required"] = not is_free
+        attrs["currency"] = "IRT"
+        return attrs
 
 
 class CourseSessionSerializer(serializers.ModelSerializer):
@@ -312,6 +332,7 @@ class CourseEnrollmentSerializer(serializers.ModelSerializer):
             "id", "course", "enrolled_at", "completed_at", "completed_sessions", "total_sessions",
             "weekly_used", "weekly_limit", "monthly_used", "monthly_limit", "next_session", "locked_reason",
         )
+
         read_only_fields = fields
 
     def get_completed_sessions(self, obj) -> int:
@@ -338,6 +359,12 @@ class CourseEnrollmentSerializer(serializers.ModelSerializer):
             return ""
         from .views import session_lock_reason
         return session_lock_reason(obj.course.sessions.get(pk=session_id), obj.user)
+
+
+class CoursePurchaseSerializer(serializers.Serializer):
+    payment_method = serializers.ChoiceField(choices=("WALLET", "GATEWAY"))
+    provider = serializers.CharField(required=False)
+    idempotency_key = serializers.CharField(max_length=120, required=False)
 
 
 class SessionProgressSerializer(serializers.ModelSerializer):

@@ -19,6 +19,7 @@ from apps.signals.models import (
 )
 from apps.videos.models import Video
 from apps.wallet.models import Wallet
+from apps.wallet.services import WalletService
 
 
 class DashboardAPITests(APITestCase):
@@ -48,13 +49,11 @@ class DashboardAPITests(APITestCase):
             role=User.Role.SUPER_ADMIN,
         )
 
-        Wallet.objects.update_or_create(
+        wallet, _ = Wallet.objects.update_or_create(
             user=self.customer,
-            defaults={
-                "balance": Decimal("1250.50000000"),
-                "currency": "USDT",
-            },
+            defaults={"currency": "IRT"},
         )
+        WalletService.post(wallet, 1250, "TEST_OPENING_BALANCE")
 
         self.approved_signal = Signal.objects.create(
             title="Approved BTC signal",
@@ -164,11 +163,11 @@ class DashboardAPITests(APITestCase):
         )
         self.assertEqual(
             data["stats"]["wallet_balance"],
-            "1250.50000000",
+            "1250.00000000",
         )
         self.assertEqual(
             data["stats"]["wallet_currency"],
-            "USDT",
+            "IRT",
         )
         self.assertEqual(
             data["stats"]["signals"],

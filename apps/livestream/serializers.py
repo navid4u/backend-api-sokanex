@@ -24,6 +24,8 @@ class LiveEventListSerializer(
     is_live_now = (
         serializers.SerializerMethodField()
     )
+    status = serializers.SerializerMethodField()
+    status_message = serializers.SerializerMethodField()
 
     class Meta:
         model = LiveEvent
@@ -40,19 +42,33 @@ class LiveEventListSerializer(
             "allowed_levels",
             "host",
             "is_live_now",
+            "status_message",
         )
 
     def get_is_live_now(self, obj) -> bool:
         now = timezone.now()
 
         return (
-            obj.status == LiveEvent.Status.LIVE
+            self.get_status(obj) == LiveEvent.Status.LIVE
             and obj.starts_at <= now
             and (
                 obj.ends_at is None
                 or obj.ends_at >= now
             )
         )
+
+    def get_status(self, obj) -> str:
+        if obj.status in (LiveEvent.Status.CANCELLED, LiveEvent.Status.DISABLED):
+            return obj.status
+        now = timezone.now()
+        if now < obj.starts_at:
+            return LiveEvent.Status.SCHEDULED
+        if obj.ends_at and now > obj.ends_at:
+            return LiveEvent.Status.ENDED
+        return LiveEvent.Status.LIVE
+
+    def get_status_message(self, obj) -> str:
+        return "لایو در حال انجام است" if self.get_status(obj) == LiveEvent.Status.LIVE else "لایو هنوز شروع نشده است" if self.get_status(obj) == LiveEvent.Status.SCHEDULED else ""
 
 
 class LiveEventDetailSerializer(
@@ -67,7 +83,7 @@ class LiveEventDetailSerializer(
             LiveEventListSerializer.Meta.fields
             + (
                 "description",
-                "stream_url",
+                "external_url",
                 "provider_join_url",
                 "ended_at",
                 "replay_url",
@@ -75,6 +91,13 @@ class LiveEventDetailSerializer(
                 "updated_at",
             )
         )
+
+    external_url = serializers.SerializerMethodField()
+
+    def get_external_url(self, obj) -> str:
+        if self.get_status(obj) != LiveEvent.Status.LIVE:
+            return ""
+        return obj.external_url or obj.stream_url
 
 
 class LiveEventWriteSerializer(
@@ -92,6 +115,7 @@ class LiveEventWriteSerializer(
             "description",
             "thumbnail",
             "stream_url",
+            "external_url",
             "provider_join_url",
             "ended_at",
             "replay_url",

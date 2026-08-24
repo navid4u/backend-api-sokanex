@@ -39,6 +39,7 @@ class LiveEvent(LevelRestrictedContent):
         max_length=500,
         blank=True,
     )
+    external_url = models.URLField(max_length=500, blank=True)
 
     replay_url = models.URLField(
         max_length=500,

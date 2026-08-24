@@ -24,6 +24,7 @@ from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from common.pagination import DefaultPagination
+from rest_framework.pagination import CursorPagination
 from django.utils import timezone
 from django.core import signing
 from django.conf import settings
@@ -50,6 +51,7 @@ from .serializers import (
     SupportMessageSerializer,
     SupportThreadSerializer,
     SupportThreadUpdateSerializer,
+    SocialUserSerializer,
 )
 from .services import ChatService
 
@@ -389,6 +391,15 @@ class SocialFeedView(generics.ListCreateAPIView):
     filter_backends = [SearchFilter, OrderingFilter]
     search_fields = ["text", "author__username", "author__first_name", "author__last_name"]
     ordering_fields = ["created_at", "updated_at"]
+    ordering = ["-created_at", "-id"]
+
+    class Pagination(CursorPagination):
+        page_size = 20
+        page_size_query_param = "page_size"
+        max_page_size = 100
+        ordering = ("-created_at", "-id")
+
+    pagination_class = Pagination
 
     def get_queryset(self):
         queryset = social_posts_for(self.request.user)
@@ -421,9 +432,49 @@ class SocialPostDetailView(generics.RetrieveUpdateDestroyAPIView):
         instance.save(update_fields=["is_deleted", "updated_at"])
 
 
+class TopContributorsView(generics.ListAPIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = SocialUserSerializer
+    pagination_class = None
+
+    def get_queryset(self):
+        if getattr(self, "swagger_fake_view", False):
+            from apps.accounts.models import User
+            return User.objects.none()
+        limit = min(max(int(self.request.query_params.get("limit", 10)), 1), 50)
+        return self.request.user.__class__.objects.filter(is_active=True).annotate(
+            posts_count=Count("social_posts", filter=Q(social_posts__is_deleted=False))
+        ).order_by("-posts_count", "id")[:limit]
+
+
+class SocialUserDetailView(generics.RetrieveAPIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = SocialUserSerializer
+    lookup_url_kwarg = "user_id"
+
+    def get_queryset(self):
+        return self.request.user.__class__.objects.filter(is_active=True).annotate(
+            posts_count=Count("social_posts", filter=Q(social_posts__is_deleted=False))
+        )
+
+
+class SocialUserPostListView(generics.ListAPIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = TraderPostSerializer
+    filter_backends = [OrderingFilter]
+    ordering_fields = ["created_at", "updated_at"]
+    ordering = ["-created_at", "-id"]
+
+    def get_queryset(self):
+        return social_posts_for(self.request.user).filter(
+            author_id=self.kwargs["user_id"]
+        )
+
+
 class PostCommentListCreateView(generics.ListCreateAPIView):
     permission_classes = [IsAuthenticated]
     serializer_class = PostCommentSerializer
+    ordering = ["created_at", "id"]
 
     def get_post(self):
         return get_object_or_404(social_posts_for(self.request.user), pk=self.kwargs["pk"])
@@ -522,7 +573,7 @@ class SupportThreadView(APIView):
     def get_thread(self, request):
         user = request.user
         requested_user_id = request.query_params.get("user_id")
-        is_support_operator = user.username.lower() == "support"
+        is_support_operator = is_support_account(user)
         if requested_user_id:
             if not is_support_operator:
                 raise PermissionDenied("Only the support account can select another user.")
@@ -552,20 +603,36 @@ class SupportMessageListCreateView(generics.ListCreateAPIView):
             return SupportMessage.objects.none()
         return SupportMessage.objects.filter(
             thread=self.get_thread(), deleted_at__isnull=True
-        ).select_related("sender").order_by("-created_at", "-id")
+        ).select_related("sender").order_by("created_at", "id")
 
     def perform_create(self, serializer):
         thread = self.get_thread()
+        key = self.request.headers.get("Idempotency-Key", "").strip()
+        if key:
+            existing = SupportMessage.objects.filter(
+                thread=thread, sender=self.request.user, idempotency_key=key
+            ).first()
+            if existing:
+                serializer.instance = existing
+                return
         message = serializer.save(
             thread=thread,
             sender=self.request.user,
             delivered_at=timezone.now(),
+            idempotency_key=key,
         )
         update_support_thread_after_message(thread, self.request.user, message)
 
 
 def is_support_account(user):
-    return bool(user and user.is_authenticated and user.username == "support")
+    return bool(
+        user and user.is_authenticated and (
+            user.is_superuser
+            or user.role == user.Role.SUPER_ADMIN
+            or user.username.lower() == "support"
+            or user.has_platform_permission(user.Permission.SUPPORT_MANAGE)
+        )
+    )
 
 
 def update_support_thread_after_message(thread, sender, message):
@@ -658,11 +725,22 @@ class SupportConversationMessageView(generics.ListCreateAPIView):
             return SupportMessage.objects.none()
         return SupportMessage.objects.filter(
             thread=self.get_thread(), deleted_at__isnull=True
-        ).select_related("sender").order_by("-created_at", "-id")
+        ).select_related("sender").order_by("created_at", "id")
 
     def perform_create(self, serializer):
         thread = self.get_thread()
-        message = serializer.save(thread=thread, sender=self.request.user, delivered_at=timezone.now())
+        key = self.request.headers.get("Idempotency-Key", "").strip()
+        if key:
+            existing = SupportMessage.objects.filter(
+                thread=thread, sender=self.request.user, idempotency_key=key
+            ).first()
+            if existing:
+                serializer.instance = existing
+                return
+        message = serializer.save(
+            thread=thread, sender=self.request.user, delivered_at=timezone.now(),
+            idempotency_key=key,
+        )
         update_support_thread_after_message(thread, self.request.user, message)
         payload = SupportMessageSerializer(message, context={"request": self.request}).data
         async_to_sync(get_channel_layer().group_send)(
@@ -716,7 +794,7 @@ class SupportQueueView(generics.ListAPIView):
             if search.isdigit():
                 query |= Q(pk=int(search))
             queryset = queryset.filter(query)
-        return queryset.order_by("-last_message_at", "-updated_at")
+        return queryset.order_by("-updated_at", "-id")
 
 
 class SupportTicketView(APIView):

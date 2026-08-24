@@ -16,6 +16,8 @@ from .views import (
     QuizManagementCreateView,
     SessionMediaTicketView,
     SessionMediaStreamView,
+    CoursePurchaseView,
+    CoursePurchaseStatusView,
 )
 
 
@@ -29,6 +31,8 @@ urlpatterns = [
     path("quizzes/manage/<int:pk>/", QuizManagementView.as_view(), name="academy-quiz-detail"),
     path("enrollments/", MyEnrollmentListView.as_view(), name="academy-my-enrollments"),
     path("courses/<str:slug>/enroll/", EnrollCourseView.as_view(), name="academy-course-enroll"),
+    path("courses/<str:slug>/purchase/", CoursePurchaseView.as_view(), name="academy-course-purchase"),
+    path("courses/<str:slug>/purchase-status/", CoursePurchaseStatusView.as_view(), name="academy-course-purchase-status"),
     path("sessions/<int:pk>/progress/", SessionProgressView.as_view(), name="academy-session-progress"),
     path(
         "courses/manage/",

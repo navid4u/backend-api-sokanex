@@ -49,7 +49,7 @@ class PrivateSupportAPITests(APITestCase):
 
     def test_only_exact_support_account_can_access_inbox(self):
         self.conversation()
-        for forbidden_user in (self.user, self.admin):
+        for forbidden_user in (self.user,):
             self.authenticate(forbidden_user)
             response = self.client.get(reverse("support-queue"))
             self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
@@ -57,6 +57,8 @@ class PrivateSupportAPITests(APITestCase):
         response = self.client.get(reverse("support-queue"))
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["count"], 1)
+        self.authenticate(self.admin)
+        self.assertEqual(self.client.get(reverse("support-queue")).status_code, status.HTTP_200_OK)
 
     def test_user_cannot_read_or_post_to_another_conversation(self):
         conversation_id = self.conversation().data["id"]
@@ -171,20 +173,31 @@ class PrivateSupportAPITests(APITestCase):
         self.assertEqual(message.sender_id, self.support.id)
         self.assertEqual(message.thread_id, thread.id)
 
-    def test_legacy_user_id_is_forbidden_for_users_and_admins(self):
-        for actor in (self.user, self.admin):
-            self.authenticate(actor)
-            detail = self.client.get(
-                reverse("support-thread"), {"user_id": self.other.id}
-            )
-            post = self.client.post(
-                f'{reverse("support-messages")}?user_id={self.other.id}',
-                {"text": "forbidden"},
-                format="json",
-            )
-            self.assertEqual(detail.status_code, status.HTTP_403_FORBIDDEN)
-            self.assertEqual(post.status_code, status.HTTP_403_FORBIDDEN)
+    def test_legacy_user_id_is_forbidden_for_users_but_allowed_for_superadmin(self):
+        self.authenticate(self.user)
+        detail = self.client.get(
+            reverse("support-thread"), {"user_id": self.other.id}
+        )
+        post = self.client.post(
+            f'{reverse("support-messages")}?user_id={self.other.id}',
+            {"text": "forbidden"},
+            format="json",
+        )
+        self.assertEqual(detail.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(post.status_code, status.HTTP_403_FORBIDDEN)
         self.assertFalse(SupportMessage.objects.filter(text="forbidden").exists())
+
+        self.authenticate(self.admin)
+        detail = self.client.get(
+            reverse("support-thread"), {"user_id": self.other.id}
+        )
+        post = self.client.post(
+            f'{reverse("support-messages")}?user_id={self.other.id}',
+            {"text": "superadmin reply"},
+            format="json",
+        )
+        self.assertEqual(detail.status_code, status.HTTP_200_OK)
+        self.assertEqual(post.status_code, status.HTTP_201_CREATED)
 
     def test_legacy_messages_keep_multipart_attachment_support(self):
         self.authenticate(self.user)

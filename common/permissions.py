@@ -139,6 +139,20 @@ class CanManageInternalAnalysis(BasePermission):
         )
 
 
+class CanManageSupport(BasePermission):
+    def has_permission(self, request, view):
+        return request.user.is_authenticated and request.user.has_platform_permission(
+            User.Permission.SUPPORT_MANAGE
+        )
+
+
+class CanManagePlatform(BasePermission):
+    def has_permission(self, request, view):
+        return request.user.is_authenticated and request.user.has_platform_permission(
+            User.Permission.PLATFORM_SETTINGS_MANAGE
+        )
+
+
 class IsSignalOwnerOrEmployee(BasePermission):
     """
     Allows the signal owner or authorized employees

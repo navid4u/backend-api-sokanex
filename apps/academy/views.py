@@ -21,7 +21,7 @@ from apps.accounts.models import User
 from common.content_access import restrict_queryset_for_user
 from common.permissions import CanTeachAcademy
 
-from .models import Course, CourseEnrollment, CourseSession, SessionProgress, Quiz, QuizAttempt
+from .models import Course, CourseEnrollment, CoursePurchase, CourseSession, SessionProgress, Quiz, QuizAttempt
 from .serializers import (
     CourseListSerializer,
     CourseSessionSerializer,
@@ -31,9 +31,13 @@ from .serializers import (
     QuizAttemptSerializer,
     QuizPublicSerializer,
     QuizWriteSerializer,
+    CoursePurchaseSerializer,
 )
 from apps.activity.models import UserActivity
 from apps.activity.services import ActivityService
+from apps.wallet.models import Payment, PaymentProvider
+from apps.wallet.providers import ADAPTERS, PaymentProviderError
+from apps.wallet.services import WalletService
 
 
 def can_manage_all_academy(user):
@@ -234,6 +238,8 @@ class EnrollCourseView(APIView):
     @extend_schema(request=None, responses=CourseEnrollmentSerializer)
     def post(self, request, slug):
         course = get_object_or_404(visible_courses(request.user), slug=slug, enrollment_open=True)
+        if not course.is_free or course.purchase_required:
+            raise PermissionDenied("Purchase this course before enrollment.")
         enrollment, created = CourseEnrollment.objects.get_or_create(
             user=request.user, course=course
         )
@@ -246,6 +252,66 @@ class EnrollCourseView(APIView):
             target_url=f"/academy/courses/{course.slug}",
         )
         return Response(CourseEnrollmentSerializer(enrollment, context={"request": request}).data)
+
+
+class CoursePurchaseView(generics.GenericAPIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = CoursePurchaseSerializer
+
+    @transaction.atomic
+    def post(self, request, slug):
+        course = get_object_or_404(
+            Course.objects.select_for_update().filter(status=Course.Status.PUBLISHED),
+            slug=slug, enrollment_open=True,
+        )
+        serializer = CoursePurchaseSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        if CoursePurchase.objects.filter(user=request.user, course=course).exists():
+            raise serializers.ValidationError({"course": "This course was already purchased."})
+        if course.is_free:
+            enrollment, _ = CourseEnrollment.objects.get_or_create(user=request.user, course=course)
+            return Response({"status": "ENROLLED", "enrollment_id": enrollment.pk})
+        method = serializer.validated_data["payment_method"]
+        if method == "WALLET":
+            wallet = WalletService.get_wallet(request.user)
+            if WalletService.balance_irt(wallet) < course.price:
+                raise serializers.ValidationError({"wallet": "Insufficient wallet balance."})
+            ledger = WalletService.post(wallet, course.price, "COURSE_PURCHASE", credit_wallet=False, counterparty="COURSE_REVENUE", metadata={"course": course.slug})
+            purchase = CoursePurchase.objects.create(user=request.user, course=course, amount_irt=course.price, payment_method=method, ledger_transaction=ledger)
+            enrollment = CourseEnrollment.objects.create(user=request.user, course=course)
+            return Response({"status": "PURCHASED", "purchase_id": purchase.pk, "enrollment_id": enrollment.pk})
+        provider = get_object_or_404(PaymentProvider, code=serializer.validated_data.get("provider"), is_active=True)
+        key = serializer.validated_data.get("idempotency_key")
+        if not key:
+            raise serializers.ValidationError({"idempotency_key": "Required for gateway payments."})
+        payment, created = Payment.objects.get_or_create(
+            user=request.user, idempotency_key=key,
+            defaults={"provider": provider, "amount_irt": course.price, "purpose": Payment.Purpose.COURSE_PURCHASE, "metadata": {"course_slug": course.slug}},
+        )
+        if created:
+            callback = f"{settings.PAYMENT_CALLBACK_BASE_URL.rstrip('/')}/api/billing/payments/verify/"
+            try:
+                authority, payment_url = ADAPTERS[provider.code].create(payment, callback)
+            except PaymentProviderError as exc:
+                raise serializers.ValidationError({"provider": str(exc)})
+            payment.authority, payment.status = authority, Payment.Status.PENDING
+            payment.metadata = {**payment.metadata, "payment_url": payment_url}
+            payment.save(update_fields=["authority", "status", "metadata", "updated_at"])
+        return Response({"status": payment.status, "payment_id": payment.pk, "payment_url": payment.metadata.get("payment_url")})
+
+
+class CoursePurchaseStatusView(generics.GenericAPIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = CoursePurchaseSerializer
+
+    def get(self, request, slug):
+        course = get_object_or_404(Course, slug=slug)
+        purchase = CoursePurchase.objects.filter(user=request.user, course=course).select_related("payment").first()
+        enrollment = CourseEnrollment.objects.filter(user=request.user, course=course).first()
+        return Response({
+            "purchased": bool(purchase), "enrolled": bool(enrollment),
+            "payment_status": purchase.payment.status if purchase and purchase.payment_id else None,
+        })
 
 
 class MyEnrollmentListView(generics.ListAPIView):

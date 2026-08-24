@@ -82,6 +82,7 @@ INSTALLED_APPS = [
     "apps.academy",
     "apps.market",
     "apps.content_channels",
+    "apps.platform_settings",
     "landing",
 ]
 
@@ -450,6 +451,12 @@ PAYAMITO_NOTIFICATION_SMS_MAX_LENGTH = config(
 )
 PAYAMITO_SMS_RETRY_LIMIT = config("PAYAMITO_SMS_RETRY_LIMIT", default=3, cast=int)
 PAYAMITO_SMS_SEND_INLINE = config("PAYAMITO_SMS_SEND_INLINE", default=False, cast=bool)
+PAYMENT_PROVIDER_TIMEOUT_SECONDS = config("PAYMENT_PROVIDER_TIMEOUT_SECONDS", default=15, cast=int)
+PAYMENT_PROVIDER_RETRY_LIMIT = config("PAYMENT_PROVIDER_RETRY_LIMIT", default=1, cast=int)
+PAYMENT_CALLBACK_BASE_URL = config("PAYMENT_CALLBACK_BASE_URL", default="https://api.sokanex.com")
+ZARINPAL_MERCHANT_ID = config("ZARINPAL_MERCHANT_ID", default="")
+IDPAY_API_KEY = config("IDPAY_API_KEY", default="")
+IDPAY_SANDBOX = config("IDPAY_SANDBOX", default=False, cast=bool)
 MARKET_DATA_PROVIDER = config("MARKET_DATA_PROVIDER", default="")
 MARKET_DATA_PROVIDER_URL = config("MARKET_DATA_PROVIDER_URL", default="")
 MARKET_DATA_API_KEY = config("MARKET_DATA_API_KEY", default="")

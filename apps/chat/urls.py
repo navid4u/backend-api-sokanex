@@ -18,6 +18,9 @@ from .views import (
     SocialPostDetailView,
     SupportMessageListCreateView,
     SupportThreadView,
+    TopContributorsView,
+    SocialUserDetailView,
+    SocialUserPostListView,
 )
 
 
@@ -27,6 +30,9 @@ urlpatterns = [
     path("social/feed/", SocialFeedView.as_view(), name="social-feed"),
     path("social/saved/", SavedPostListView.as_view(), name="social-saved"),
     path("social/following/", FollowingListView.as_view(), name="social-following"),
+    path("social/users/top-contributors/", TopContributorsView.as_view(), name="social-top-contributors"),
+    path("social/users/<int:user_id>/", SocialUserDetailView.as_view(), name="social-user-detail"),
+    path("social/users/<int:user_id>/posts/", SocialUserPostListView.as_view(), name="social-user-posts"),
     path("social/users/<int:user_id>/follow/", FollowUserView.as_view(), name="social-follow-user"),
     path("social/posts/<int:pk>/", SocialPostDetailView.as_view(), name="social-post-detail"),
     path("social/posts/<int:pk>/comments/", PostCommentListCreateView.as_view(), name="social-post-comments"),

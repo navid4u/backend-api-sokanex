@@ -356,7 +356,13 @@ class SupportMessage(models.Model):
     is_read = models.BooleanField(default=False, db_index=True)
     read_at = models.DateTimeField(null=True, blank=True)
     deleted_at = models.DateTimeField(null=True, blank=True)
+    idempotency_key = models.CharField(max_length=120, blank=True)
 
     class Meta:
         ordering = ["-created_at", "-id"]
         indexes = [models.Index(fields=["thread", "is_read"])]
+        constraints = [models.UniqueConstraint(
+            fields=["thread", "sender", "idempotency_key"],
+            condition=~models.Q(idempotency_key=""),
+            name="unique_support_message_idempotency",
+        )]

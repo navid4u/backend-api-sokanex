@@ -14,7 +14,7 @@ class LiveEventService:
                 is_active=True
             )
             .exclude(
-                status=LiveEvent.Status.CANCELLED
+                status__in=[LiveEvent.Status.CANCELLED, LiveEvent.Status.DISABLED]
             )
             .select_related(
                 "host",
@@ -39,7 +39,6 @@ class LiveEventService:
         return (
             LiveEventService.public_events(user)
             .filter(
-                status=LiveEvent.Status.LIVE,
                 starts_at__lte=now,
             )
             .filter(
@@ -53,7 +52,6 @@ class LiveEventService:
         return (
             LiveEventService.public_events(user)
             .filter(
-                status=LiveEvent.Status.SCHEDULED,
                 starts_at__gte=timezone.now(),
             )
         )

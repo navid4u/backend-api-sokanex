@@ -9,7 +9,7 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         user, created = User.objects.get_or_create(
             username="support",
-            defaults={"role": User.Role.EMPLOYEE, "is_active": True},
+            defaults={"role": User.Role.SUPPORT, "is_active": True},
         )
         changed = []
         if created:
@@ -18,9 +18,18 @@ class Command(BaseCommand):
         if not user.is_active:
             user.is_active = True
             changed.append("is_active")
-        if user.role not in (User.Role.EMPLOYEE, User.Role.ADMIN, User.Role.SUPER_ADMIN):
-            user.role = User.Role.EMPLOYEE
+        if user.role != User.Role.SUPPORT:
+            user.role = User.Role.SUPPORT
             changed.append("role")
+        if user.custom_role_id is not None:
+            user.custom_role = None
+            changed.append("custom_role")
+        if user.is_staff:
+            user.is_staff = False
+            changed.append("is_staff")
+        if user.is_superuser:
+            user.is_superuser = False
+            changed.append("is_superuser")
         if changed:
             user.save(update_fields=[*changed, "updated_at"])
         self.stdout.write(self.style.SUCCESS("Support account created." if created else "Support account verified."))

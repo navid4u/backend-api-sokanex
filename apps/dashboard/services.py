@@ -68,7 +68,7 @@ class DashboardService:
             "user": user,
 
             "stats": {
-                "wallet_balance": str(wallet.balance),
+                "wallet_balance": str(WalletService.balance_irt(wallet)),
 
                 "wallet_currency": wallet.currency,
 
@@ -156,6 +156,12 @@ class DashboardService:
                 "can_manage_landing": (
                     user.has_platform_permission(
                         User.Permission.LANDING_MANAGE
+                    )
+                ),
+
+                "can_manage_platform": (
+                    user.has_platform_permission(
+                        User.Permission.PLATFORM_SETTINGS_MANAGE
                     )
                 ),
 

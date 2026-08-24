@@ -116,9 +116,26 @@ class UserService:
         )
 
         if status == UpgradeRequest.Status.APPROVED:
+            if locked_request.price_snapshot_irt and locked_request.hold_ledger_transaction_id:
+                from apps.wallet.models import LedgerEntry, LedgerTransaction
+                capture = LedgerTransaction.objects.create(
+                    kind="UPGRADE_CAPTURE", metadata={"upgrade_request_id": locked_request.pk}
+                )
+                LedgerEntry.objects.bulk_create([
+                    LedgerEntry(transaction=capture, account_code="UPGRADE_HOLD", direction=LedgerEntry.Direction.DEBIT, amount_irt=locked_request.price_snapshot_irt),
+                    LedgerEntry(transaction=capture, account_code="UPGRADE_REVENUE", direction=LedgerEntry.Direction.CREDIT, amount_irt=locked_request.price_snapshot_irt),
+                ])
             UserService.update_access_level(
                 locked_request.user,
                 locked_request.requested_level,
+            )
+        elif locked_request.price_snapshot_irt and locked_request.hold_ledger_transaction_id:
+            from apps.wallet.services import WalletService
+            WalletService.post(
+                WalletService.get_wallet(locked_request.user),
+                locked_request.price_snapshot_irt, "UPGRADE_RELEASE",
+                credit_wallet=True, counterparty="UPGRADE_HOLD",
+                metadata={"upgrade_request_id": locked_request.pk},
             )
 
         return locked_request

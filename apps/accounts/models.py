@@ -13,6 +13,7 @@ class User(AbstractUser):
         ADMIN = "ADMIN", "Admin"
         TRADER = "TRADER", "Trader"
         EMPLOYEE = "EMPLOYEE", "Employee"
+        SUPPORT = "SUPPORT", "Support"
         USER = "USER", "User"
 
     class AccessLevel(models.IntegerChoices):
@@ -33,6 +34,8 @@ class User(AbstractUser):
         USER_MANAGE = "USER_MANAGE", "Manage users"
         ROLE_MANAGE = "ROLE_MANAGE", "Manage custom roles"
         INTERNAL_ANALYSIS_MANAGE = "INTERNAL_ANALYSIS_MANAGE", "Manage internal analysis"
+        SUPPORT_MANAGE = "SUPPORT_MANAGE", "Manage support conversations"
+        PLATFORM_SETTINGS_MANAGE = "PLATFORM_SETTINGS_MANAGE", "Manage platform settings"
 
     phone = models.CharField(
         max_length=20,
@@ -84,6 +87,10 @@ class User(AbstractUser):
     def has_platform_permission(self, permission):
         if self.is_superuser or self.role == self.Role.SUPER_ADMIN:
             return True
+
+        # SUPPORT is a fixed, isolated role. Custom roles must never expand it.
+        if self.role == self.Role.SUPPORT:
+            return permission == self.Permission.SUPPORT_MANAGE
 
         system_permissions = {
             self.Role.ADMIN: {
@@ -176,6 +183,12 @@ class UpgradeRequest(models.Model):
     requested_level = models.PositiveSmallIntegerField(
         choices=[(level, f"Level {level}") for level in range(2, 6)],
     )
+    plan = models.ForeignKey("wallet.UpgradePlan", null=True, blank=True, on_delete=models.PROTECT)
+    price_snapshot_irt = models.PositiveBigIntegerField(default=0)
+    hold_ledger_transaction = models.ForeignKey(
+        "wallet.LedgerTransaction", null=True, blank=True, on_delete=models.PROTECT,
+        related_name="upgrade_holds",
+    )
     message = models.TextField(blank=True)
     status = models.CharField(
         max_length=20,
@@ -236,12 +249,17 @@ class UserProfile(models.Model):
 
     class IncomeRange(models.TextChoices):
         NO_INCOME = "NO_INCOME", "No income"
-        UNDER_500 = "UNDER_500", "Under 500"
-        FROM_500_TO_1000 = "500_1000", "500 to 1,000"
-        FROM_1000_TO_3000 = "1000_3000", "1,000 to 3,000"
-        FROM_3000_TO_5000 = "3000_5000", "3,000 to 5,000"
-        FROM_5000_TO_10000 = "5000_10000", "5,000 to 10,000"
-        OVER_10000 = "OVER_10000", "Over 10,000"
+        UNDER_10M_IRT = "UNDER_10M_IRT", "Under 10M IRT"
+        FROM_10M_TO_30M_IRT = "10M_30M_IRT", "10M to 30M IRT"
+        FROM_30M_TO_60M_IRT = "30M_60M_IRT", "30M to 60M IRT"
+        FROM_60M_TO_100M_IRT = "60M_100M_IRT", "60M to 100M IRT"
+        OVER_100M_IRT = "OVER_100M_IRT", "Over 100M IRT"
+        UNDER_500 = "UNDER_500", "Legacy: under 500"
+        FROM_500_TO_1000 = "500_1000", "Legacy: 500 to 1,000"
+        FROM_1000_TO_3000 = "1000_3000", "Legacy: 1,000 to 3,000"
+        FROM_3000_TO_5000 = "3000_5000", "Legacy: 3,000 to 5,000"
+        FROM_5000_TO_10000 = "5000_10000", "Legacy: 5,000 to 10,000"
+        OVER_10000 = "OVER_10000", "Legacy: over 10,000"
         PREFER_NOT_TO_SAY = "PREFER_NOT_TO_SAY", "Prefer not to say"
 
     class RiskTolerance(models.TextChoices):
@@ -275,7 +293,7 @@ class UserProfile(models.Model):
         choices=Gender.choices,
         blank=True,
     )
-    country = models.CharField(max_length=100, blank=True)
+    country = models.CharField(max_length=2, default="IR")
     city = models.CharField(max_length=100, blank=True)
     address = models.CharField(max_length=500, blank=True)
     postal_code = models.CharField(max_length=30, blank=True)
@@ -297,7 +315,7 @@ class UserProfile(models.Model):
         choices=IncomeRange.choices,
         blank=True,
     )
-    income_currency = models.CharField(max_length=10, blank=True)
+    income_currency = models.CharField(max_length=10, default="IRT")
     income_sources = models.JSONField(default=list, blank=True)
     financial_dependents = models.PositiveSmallIntegerField(
         null=True,

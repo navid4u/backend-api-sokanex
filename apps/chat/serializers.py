@@ -118,7 +118,7 @@ class MessageSerializer(
             "updated_at",
         )
 
-    def get_can_delete(self, obj):
+    def get_can_delete(self, obj) -> bool:
         request = self.context.get("request")
 
         if (
@@ -160,6 +160,7 @@ class SocialUserSerializer(serializers.Serializer):
     last_name = serializers.CharField(read_only=True)
     avatar = serializers.ImageField(read_only=True)
     access_level = serializers.IntegerField(read_only=True)
+    posts_count = serializers.IntegerField(read_only=True, default=0)
 
 
 class SupportUserSerializer(serializers.Serializer):

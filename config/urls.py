@@ -124,6 +124,8 @@ urlpatterns = [
     path("api/market/", include("apps.market.urls")),
     path("api/channels/", include("apps.content_channels.urls")),
     path("api/support/", include("apps.chat.support_urls")),
+    path("api/", include("apps.platform_settings.urls")),
+    path("api/", include("apps.wallet.billing_urls")),
 ]
 
 

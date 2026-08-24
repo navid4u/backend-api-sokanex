@@ -597,6 +597,7 @@ class UserCustomRoleUpdateSerializer(serializers.Serializer):
 
 
 class UserProfileDetailsSerializer(serializers.ModelSerializer):
+    country = serializers.CharField(required=False, max_length=100)
     username = serializers.CharField(
         source="user.username",
         read_only=True,
@@ -742,7 +743,6 @@ class UserProfileDetailsSerializer(serializers.ModelSerializer):
     def get_profile_completion(self, obj) -> int:
         tracked_fields = (
             "birth_date",
-            "country",
             "city",
             "education_level",
             "occupation",
@@ -774,6 +774,8 @@ class UpgradeRequestSerializer(serializers.ModelSerializer):
             "id",
             "request_type",
             "requested_level",
+            "plan",
+            "price_snapshot_irt",
             "message",
             "status",
             "admin_note",
@@ -784,6 +786,8 @@ class UpgradeRequestSerializer(serializers.ModelSerializer):
         )
         read_only_fields = (
             "id",
+            "plan",
+            "price_snapshot_irt",
             "status",
             "admin_note",
             "reviewed_by",
@@ -826,8 +830,24 @@ class UpgradeRequestSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         try:
             with transaction.atomic():
+                from apps.wallet.models import UpgradePlan
+                from apps.wallet.services import WalletService
+                user = self.context["request"].user
+                plan = UpgradePlan.objects.select_for_update().get(
+                    level=validated_data["requested_level"], active=True
+                )
+                hold = None
+                if plan.price_irt:
+                    wallet = WalletService.get_wallet(user)
+                    if WalletService.balance_irt(wallet) < plan.price_irt:
+                        raise serializers.ValidationError({"plan": "Insufficient wallet balance."})
+                    hold = WalletService.post(
+                        wallet, plan.price_irt, "UPGRADE_HOLD", credit_wallet=False,
+                        counterparty="UPGRADE_HOLD", metadata={"level": plan.level},
+                    )
                 return UpgradeRequest.objects.create(
-                    user=self.context["request"].user,
+                    user=user, plan=plan, price_snapshot_irt=plan.price_irt,
+                    hold_ledger_transaction=hold,
                     **validated_data,
                 )
         except IntegrityError:
@@ -1025,6 +1045,18 @@ class SecuritySettingsSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("Must be between 1 and 90.")
         return value
 
+    def validate_country(self, value):
+        value = value.strip().upper()
+        value = {"IRAN": "IR", "IRAN, ISLAMIC REPUBLIC OF": "IR"}.get(value, value)
+        if len(value) != 2 or not value.isalpha():
+            raise serializers.ValidationError("Use an ISO-3166 alpha-2 country code.")
+        return value
+
+    def validate_income_currency(self, value):
+        value = value.strip().upper()
+        if len(value) < 3 or len(value) > 10 or not value.isalpha():
+            raise serializers.ValidationError("Enter a valid currency code.")
+        return value
 
 class OTPRequestSerializer(serializers.Serializer):
     phone = serializers.CharField()

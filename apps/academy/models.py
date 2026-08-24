@@ -48,6 +48,10 @@ class Course(LevelRestrictedContent):
     prerequisites = models.JSONField(default=list, blank=True)
     learning_outcomes = models.JSONField(default=list, blank=True)
     enrollment_open = models.BooleanField(default=True)
+    is_free = models.BooleanField(default=True)
+    price = models.PositiveBigIntegerField(default=0)
+    currency = models.CharField(max_length=3, default="IRT")
+    purchase_required = models.BooleanField(default=False)
     weekly_session_limit = models.PositiveIntegerField(null=True, blank=True)
     monthly_session_limit = models.PositiveIntegerField(null=True, blank=True)
     starts_at = models.DateTimeField(null=True, blank=True)
@@ -145,6 +149,23 @@ class CourseEnrollment(models.Model):
             models.UniqueConstraint(fields=["user", "course"], name="unique_course_enrollment")
         ]
         ordering = ["-enrolled_at"]
+
+
+class CoursePurchase(models.Model):
+    class Method(models.TextChoices):
+        WALLET = "WALLET", "Wallet"
+        GATEWAY = "GATEWAY", "Gateway"
+
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="course_purchases")
+    course = models.ForeignKey(Course, on_delete=models.PROTECT, related_name="purchases")
+    amount_irt = models.PositiveBigIntegerField()
+    payment_method = models.CharField(max_length=10, choices=Method.choices)
+    ledger_transaction = models.ForeignKey("wallet.LedgerTransaction", null=True, blank=True, on_delete=models.PROTECT)
+    payment = models.OneToOneField("wallet.Payment", null=True, blank=True, on_delete=models.PROTECT, related_name="course_purchase")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["user", "course"], name="unique_course_purchase")]
 
 
 class SessionProgress(models.Model):
