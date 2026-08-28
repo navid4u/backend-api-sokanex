@@ -9,9 +9,11 @@ from django_filters.rest_framework import (
 from drf_spectacular.utils import (
     extend_schema,
     inline_serializer,
+    OpenApiExample,
 )
 from common.throttles import (
     LoginRateThrottle,
+    RegistrationOTPRequestThrottle,
     RegisterRateThrottle,
 )
 from rest_framework import (
@@ -67,6 +69,14 @@ from .serializers import (
     UserDeviceSerializer,
     OTPRequestSerializer,
     OTPVerifySerializer,
+    RegistrationOTPRequestSerializer,
+    RegistrationOTPRequestResponseSerializer,
+    RegistrationOTPUserSerializer,
+    RegistrationOTPVerifySerializer,
+    RegistrationOTPVerifyResponseSerializer,
+    FinancialPersonalityResultSerializer,
+    FinancialPersonalityCurrentResponseSerializer,
+    FinancialPersonalitySubmitSerializer,
     BrokerConnectionSerializer,
     BrokerConnectionReviewSerializer,
 )
@@ -79,10 +89,12 @@ from .models import (
     UserDevice,
     UserProfile,
     BrokerConnection,
+    FinancialPersonalityAssessment,
+    OTPChallenge,
 )
 from django.utils import timezone
 from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken, OutstandingToken
-from .services import UserService
+from .services import FinancialPersonalityService, ProfileCompletionService, UserService
 from apps.activity.models import UserActivity
 from apps.activity.services import ActivityService
 from .authentication import issue_login_tokens
@@ -293,6 +305,207 @@ class OTPVerifyView(APIView):
         session = issue_login_tokens(user, request)
         session["user"] = UserSerializer(user, context={"request": request}).data
         return success_response(data=session, message="ورود موفق بود.")
+
+
+class RegistrationOTPRequestView(generics.GenericAPIView):
+    permission_classes = [AllowAny]
+    serializer_class = RegistrationOTPRequestSerializer
+    throttle_classes = [RegistrationOTPRequestThrottle]
+
+    @method_decorator(never_cache)
+    def dispatch(self, *args, **kwargs):
+        return super().dispatch(*args, **kwargs)
+
+    @extend_schema(
+        request=RegistrationOTPRequestSerializer,
+        responses={
+            200: RegistrationOTPRequestResponseSerializer,
+            400: inline_serializer(
+                name="RegistrationOTPRequestError",
+                fields={"success": serializers.BooleanField(), "errors": serializers.JSONField()},
+            ),
+            429: inline_serializer(
+                name="RegistrationOTPThrottleError",
+                fields={"success": serializers.BooleanField(), "errors": serializers.JSONField()},
+            ),
+        },
+        examples=[
+            OpenApiExample(
+                "Registration OTP request",
+                value={"phone": "09121234567"},
+                request_only=True,
+            ),
+            OpenApiExample(
+                "Registration OTP sent",
+                value={
+                    "success": True,
+                    "message": "کد تأیید ارسال شد.",
+                    "expires_in": 120,
+                    "resend_after": 60,
+                },
+                response_only=True,
+                status_codes=["200"],
+            ),
+        ],
+    )
+    def post(self, request):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        OTPService.request_code(
+            serializer.validated_data["phone"],
+            request,
+            purpose=OTPChallenge.Purpose.REGISTRATION_LOGIN,
+            cooldown_seconds=60,
+        )
+        return Response({
+            "success": True,
+            "message": "کد تأیید ارسال شد.",
+            "expires_in": 120,
+            "resend_after": 60,
+        })
+
+
+class RegistrationOTPVerifyView(generics.GenericAPIView):
+    permission_classes = [AllowAny]
+    serializer_class = RegistrationOTPVerifySerializer
+
+    @method_decorator(never_cache)
+    def dispatch(self, *args, **kwargs):
+        return super().dispatch(*args, **kwargs)
+
+    @extend_schema(
+        request=RegistrationOTPVerifySerializer,
+        responses={
+            200: RegistrationOTPVerifyResponseSerializer,
+            400: inline_serializer(
+                name="RegistrationOTPInvalidError",
+                fields={
+                    "success": serializers.BooleanField(),
+                    "errors": serializers.JSONField(),
+                    "error_code": serializers.CharField(),
+                },
+            ),
+            403: inline_serializer(
+                name="RegistrationOTPInactiveError",
+                fields={
+                    "success": serializers.BooleanField(),
+                    "errors": serializers.JSONField(),
+                    "error_code": serializers.CharField(),
+                },
+            ),
+            409: inline_serializer(
+                name="RegistrationOTPConflictError",
+                fields={
+                    "success": serializers.BooleanField(),
+                    "errors": serializers.JSONField(),
+                    "error_code": serializers.CharField(),
+                },
+            ),
+        },
+        examples=[
+            OpenApiExample(
+                "Verify registration OTP",
+                value={"phone": "09121234567", "code": "1234"},
+                request_only=True,
+            ),
+        ],
+    )
+    def post(self, request):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        user, created = OTPService.verify_registration_login(
+            serializer.validated_data["phone"], serializer.validated_data["code"]
+        )
+        session = issue_login_tokens(user, request, record_login=not created)
+        if created:
+            ActivityService.record(
+                user,
+                UserActivity.Type.REGISTER,
+                "Account registered",
+                ip_address=ActivityService.client_ip(request),
+            )
+        profile_status = ProfileCompletionService.status(user)
+        return Response({
+            "success": True,
+            "access": session["access"],
+            "refresh": session["refresh"],
+            "device_id": session["device_id"],
+            "created": created,
+            **profile_status,
+            "user": RegistrationOTPUserSerializer(user).data,
+        })
+
+
+class FinancialPersonalityCurrentView(generics.GenericAPIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = FinancialPersonalityResultSerializer
+
+    @extend_schema(
+        responses={200: FinancialPersonalityCurrentResponseSerializer},
+        examples=[
+            OpenApiExample(
+                "Personality test not completed",
+                value={"completed": False, "personality_type": None},
+                response_only=True,
+            )
+        ],
+    )
+    def get(self, request):
+        assessment = FinancialPersonalityAssessment.objects.filter(
+            user=request.user, is_current=True
+        ).first()
+        if not assessment:
+            return Response({"completed": False, "personality_type": None})
+        return Response({"completed": True, **self.get_serializer(assessment).data})
+
+
+class FinancialPersonalitySubmitView(generics.GenericAPIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = FinancialPersonalitySubmitSerializer
+
+    @extend_schema(
+        request=FinancialPersonalitySubmitSerializer,
+        responses={
+            201: FinancialPersonalityCurrentResponseSerializer,
+            400: inline_serializer(
+                name="FinancialPersonalityValidationError",
+                fields={"success": serializers.BooleanField(), "errors": serializers.JSONField()},
+            ),
+            401: inline_serializer(
+                name="FinancialPersonalityAuthenticationError",
+                fields={"success": serializers.BooleanField(), "errors": serializers.JSONField()},
+            ),
+        },
+        examples=[
+            OpenApiExample(
+                "Twenty answers",
+                value={
+                    "answers": [
+                        {"question_id": question_id, "option_id": "a"}
+                        for question_id in range(1, 21)
+                    ]
+                },
+                request_only=True,
+            )
+        ],
+    )
+    def post(self, request):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        assessment = FinancialPersonalityService.submit(
+            request.user, serializer.validated_data["answers"]
+        )
+        ActivityService.record(
+            request.user,
+            UserActivity.Type.PERSONALITY_TEST_COMPLETED,
+            "Financial personality test completed",
+            target_type="financial_personality_assessment",
+            target_id=assessment.pk,
+        )
+        return Response(
+            {"completed": True, **FinancialPersonalityResultSerializer(assessment).data},
+            status=status.HTTP_201_CREATED,
+        )
 
 class LogoutView(
     generics.GenericAPIView

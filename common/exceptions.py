@@ -70,12 +70,17 @@ def custom_exception_handler(
             ),
         )
 
+    payload = {
+        "success": False,
+        "message": "Request Failed",
+        "errors": response.data,
+    }
+    machine_code = getattr(exc, "machine_code", None)
+    if machine_code:
+        payload["error_code"] = machine_code
+
     return Response(
-        {
-            "success": False,
-            "message": "Request Failed",
-            "errors": response.data,
-        },
+        payload,
         status=response.status_code,
         headers=response.headers,
     )

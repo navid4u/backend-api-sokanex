@@ -18,6 +18,7 @@ class UserActivity(models.Model):
         DELETE = "DELETE", "Content deleted"
         SOCIAL = "SOCIAL", "Social activity"
         SECURITY = "SECURITY", "Security activity"
+        PERSONALITY_TEST_COMPLETED = "PERSONALITY_TEST_COMPLETED", "Personality test completed"
 
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,

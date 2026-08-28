@@ -61,3 +61,15 @@ class SupportMessageRateThrottle(SimpleRateThrottle):
         if not request.user or not request.user.is_authenticated:
             return None
         return self.cache_format % {"scope": self.scope, "ident": request.user.pk}
+
+
+class RegistrationOTPRequestThrottle(SimpleRateThrottle):
+    scope = "registration_otp_request"
+
+    def get_cache_key(self, request, view):
+        ip_address = self.get_ident(request)
+        phone = str(request.data.get("phone", "")).strip()
+        return self.cache_format % {
+            "scope": self.scope,
+            "ident": f"{ip_address}:{phone}",
+        }

@@ -1084,6 +1084,109 @@ paths:
               schema:
                 $ref: '#/components/schemas/OTPVerify'
           description: ''
+  /api/accounts/auth/registration/request/:
+    post:
+      operationId: accounts_auth_registration_request_create
+      tags:
+      - accounts
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegistrationOTPRequestRequest'
+            examples:
+              RegistrationOTPRequest:
+                value:
+                  phone: 09121234567
+                summary: Registration OTP request
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/RegistrationOTPRequestRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/RegistrationOTPRequestRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RegistrationOTPRequestResponse'
+              examples:
+                RegistrationOTPSent:
+                  value:
+                    success: true
+                    message: کد تأیید ارسال شد.
+                    expires_in: 120
+                    resend_after: 60
+                  summary: Registration OTP sent
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RegistrationOTPRequestError'
+          description: ''
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RegistrationOTPThrottleError'
+          description: ''
+  /api/accounts/auth/registration/verify/:
+    post:
+      operationId: accounts_auth_registration_verify_create
+      tags:
+      - accounts
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegistrationOTPVerifyRequest'
+            examples:
+              VerifyRegistrationOTP:
+                value:
+                  phone: 09121234567
+                  code: '1234'
+                summary: Verify registration OTP
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/RegistrationOTPVerifyRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/RegistrationOTPVerifyRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RegistrationOTPVerifyResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RegistrationOTPInvalidError'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RegistrationOTPInactiveError'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RegistrationOTPConflictError'
+          description: ''
   /api/accounts/badges/:
     get:
       operationId: accounts_badges_list
@@ -1397,6 +1500,109 @@ paths:
       responses:
         '200':
           description: No response body
+  /api/accounts/personality-test/:
+    get:
+      operationId: accounts_personality_test_retrieve
+      tags:
+      - accounts
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FinancialPersonalityCurrentResponse'
+              examples:
+                PersonalityTestNotCompleted:
+                  value:
+                    completed: false
+                    personality_type: null
+                  summary: Personality test not completed
+          description: ''
+  /api/accounts/personality-test/submit/:
+    post:
+      operationId: accounts_personality_test_submit_create
+      tags:
+      - accounts
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FinancialPersonalitySubmitRequest'
+            examples:
+              TwentyAnswers:
+                value:
+                  answers:
+                  - question_id: 1
+                    option_id: a
+                  - question_id: 2
+                    option_id: a
+                  - question_id: 3
+                    option_id: a
+                  - question_id: 4
+                    option_id: a
+                  - question_id: 5
+                    option_id: a
+                  - question_id: 6
+                    option_id: a
+                  - question_id: 7
+                    option_id: a
+                  - question_id: 8
+                    option_id: a
+                  - question_id: 9
+                    option_id: a
+                  - question_id: 10
+                    option_id: a
+                  - question_id: 11
+                    option_id: a
+                  - question_id: 12
+                    option_id: a
+                  - question_id: 13
+                    option_id: a
+                  - question_id: 14
+                    option_id: a
+                  - question_id: 15
+                    option_id: a
+                  - question_id: 16
+                    option_id: a
+                  - question_id: 17
+                    option_id: a
+                  - question_id: 18
+                    option_id: a
+                  - question_id: 19
+                    option_id: a
+                  - question_id: 20
+                    option_id: a
+                summary: Twenty answers
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/FinancialPersonalitySubmitRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/FinancialPersonalitySubmitRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FinancialPersonalityCurrentResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FinancialPersonalityValidationError'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FinancialPersonalityAuthenticationError'
+          description: ''
   /api/accounts/profile/:
     get:
       operationId: accounts_profile_retrieve
@@ -7263,6 +7469,7 @@ components:
       - DELETE
       - SOCIAL
       - SECURITY
+      - PERSONALITY_TEST_COMPLETED
       type: string
       description: |-
         * `REGISTER` - Registration
@@ -7279,6 +7486,7 @@ components:
         * `DELETE` - Content deleted
         * `SOCIAL` - Social activity
         * `SECURITY` - Security activity
+        * `PERSONALITY_TEST_COMPLETED` - Personality test completed
     AdminUpgradeRequest:
       type: object
       properties:
@@ -9204,6 +9412,79 @@ components:
         * `MASTER` - Master
         * `DOCTORATE` - Doctorate
         * `OTHER` - Other
+    FinancialPersonalityAnswerRequest:
+      type: object
+      properties:
+        question_id:
+          type: integer
+          maximum: 20
+          minimum: 1
+        option_id:
+          $ref: '#/components/schemas/OptionIdEnum'
+      required:
+      - option_id
+      - question_id
+    FinancialPersonalityAuthenticationError:
+      type: object
+      properties:
+        success:
+          type: boolean
+        errors: {}
+      required:
+      - errors
+      - success
+    FinancialPersonalityCurrentResponse:
+      type: object
+      properties:
+        personality_type:
+          type: string
+        title:
+          type: string
+          readOnly: true
+        subtitle:
+          type: string
+          readOnly: true
+        color:
+          type: string
+          readOnly: true
+        scores:
+          type: object
+          additionalProperties: {}
+          readOnly: true
+        completed_at:
+          type: string
+          format: date-time
+        version:
+          type: integer
+        completed:
+          type: boolean
+      required:
+      - color
+      - completed
+      - completed_at
+      - personality_type
+      - scores
+      - subtitle
+      - title
+      - version
+    FinancialPersonalitySubmitRequest:
+      type: object
+      properties:
+        answers:
+          type: array
+          items:
+            $ref: '#/components/schemas/FinancialPersonalityAnswerRequest'
+      required:
+      - answers
+    FinancialPersonalityValidationError:
+      type: object
+      properties:
+        success:
+          type: boolean
+        errors: {}
+      required:
+      - errors
+      - success
     FinancialSettings:
       type: object
       properties:
@@ -10417,6 +10698,18 @@ components:
       required:
       - code
       - phone
+    OptionIdEnum:
+      enum:
+      - a
+      - b
+      - c
+      - d
+      type: string
+      description: |-
+        * `a` - a
+        * `b` - b
+        * `c` - c
+        * `d` - d
     OrderTypeEnum:
       enum:
       - market
@@ -13068,6 +13361,184 @@ components:
           type: string
       required:
       - password
+    RegistrationOTPConflictError:
+      type: object
+      properties:
+        success:
+          type: boolean
+        errors: {}
+        error_code:
+          type: string
+      required:
+      - error_code
+      - errors
+      - success
+    RegistrationOTPInactiveError:
+      type: object
+      properties:
+        success:
+          type: boolean
+        errors: {}
+        error_code:
+          type: string
+      required:
+      - error_code
+      - errors
+      - success
+    RegistrationOTPInvalidError:
+      type: object
+      properties:
+        success:
+          type: boolean
+        errors: {}
+        error_code:
+          type: string
+      required:
+      - error_code
+      - errors
+      - success
+    RegistrationOTPRequestError:
+      type: object
+      properties:
+        success:
+          type: boolean
+        errors: {}
+      required:
+      - errors
+      - success
+    RegistrationOTPRequestRequest:
+      type: object
+      properties:
+        phone:
+          type: string
+          minLength: 1
+      required:
+      - phone
+    RegistrationOTPRequestResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+        expires_in:
+          type: integer
+        resend_after:
+          type: integer
+      required:
+      - expires_in
+      - message
+      - resend_after
+      - success
+    RegistrationOTPThrottleError:
+      type: object
+      properties:
+        success:
+          type: boolean
+        errors: {}
+      required:
+      - errors
+      - success
+    RegistrationOTPUser:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        username:
+          type: string
+          readOnly: true
+          description: Required. 150 characters or fewer. Letters, digits and @/./+/-/_
+            only.
+        phone:
+          type: string
+          readOnly: true
+          nullable: true
+        first_name:
+          type: string
+          readOnly: true
+        last_name:
+          type: string
+          readOnly: true
+        email:
+          type: string
+          format: email
+          readOnly: true
+          title: Email address
+        role:
+          allOf:
+          - $ref: '#/components/schemas/UserRoleEnum'
+          readOnly: true
+        access_level:
+          allOf:
+          - $ref: '#/components/schemas/UserAccessLevelEnum'
+          readOnly: true
+        is_active:
+          type: boolean
+          readOnly: true
+          title: Active
+          description: Designates whether this user should be treated as active. Unselect
+            this instead of deleting accounts.
+        is_verified:
+          type: boolean
+          readOnly: true
+      required:
+      - access_level
+      - email
+      - first_name
+      - id
+      - is_active
+      - is_verified
+      - last_name
+      - phone
+      - role
+      - username
+    RegistrationOTPVerifyRequest:
+      type: object
+      properties:
+        phone:
+          type: string
+          minLength: 1
+        code:
+          type: string
+          minLength: 1
+          pattern: ^\d{4}$
+      required:
+      - code
+      - phone
+    RegistrationOTPVerifyResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        access:
+          type: string
+        refresh:
+          type: string
+        device_id:
+          type: string
+        created:
+          type: boolean
+        profile_incomplete:
+          type: boolean
+        profile_completion:
+          type: integer
+        missing_profile_fields:
+          type: array
+          items:
+            type: string
+        user:
+          $ref: '#/components/schemas/RegistrationOTPUser'
+      required:
+      - access
+      - created
+      - device_id
+      - missing_profile_fields
+      - profile_completion
+      - profile_incomplete
+      - refresh
+      - success
+      - user
     RejectSignalRequestRequest:
       type: object
       properties:
@@ -14522,6 +14993,14 @@ components:
         profile_completion:
           type: integer
           readOnly: true
+        profile_incomplete:
+          type: boolean
+          readOnly: true
+        missing_profile_fields:
+          type: array
+          items:
+            type: string
+          readOnly: true
         capabilities:
           type: object
           additionalProperties: {}
@@ -14538,7 +15017,9 @@ components:
       - email
       - id
       - is_verified
+      - missing_profile_fields
       - profile_completion
+      - profile_incomplete
       - role
       - username
     UserAccessLevelEnum:
@@ -14855,6 +15336,45 @@ components:
         profile_completion:
           type: integer
           readOnly: true
+        profile_incomplete:
+          type: boolean
+          readOnly: true
+        missing_profile_fields:
+          type: array
+          items:
+            type: string
+          readOnly: true
+        personality_result:
+          type: object
+          nullable: true
+          properties:
+            personality_type:
+              type: string
+            title:
+              type: string
+            subtitle:
+              type: string
+            color:
+              type: string
+            scores:
+              type: object
+              properties:
+                security:
+                  type: integer
+                planning:
+                  type: integer
+                risk:
+                  type: integer
+                discipline:
+                  type: integer
+                learning:
+                  type: integer
+            completed_at:
+              type: string
+              format: date-time
+            version:
+              type: integer
+          readOnly: true
         created_at:
           type: string
           format: date-time
@@ -14867,7 +15387,10 @@ components:
       - created_at
       - email
       - id
+      - missing_profile_fields
+      - personality_result
       - profile_completion
+      - profile_incomplete
       - updated_at
       - username
     UserRoleEnum:

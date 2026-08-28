@@ -347,6 +347,9 @@ REST_FRAMEWORK = {
             default="3/hour",
         ),
         "otp_request": config("OTP_REQUEST_THROTTLE_RATE", default="3/10min"),
+        "registration_otp_request": config(
+            "REGISTRATION_OTP_REQUEST_THROTTLE_RATE", default="5/minute"
+        ),
         "support_message": config("SUPPORT_MESSAGE_THROTTLE_RATE", default="30/minute"),
         "market_quotes": config("MARKET_QUOTES_THROTTLE_RATE", default="60/minute"),
         "market_news": config("MARKET_NEWS_THROTTLE_RATE", default="30/minute"),

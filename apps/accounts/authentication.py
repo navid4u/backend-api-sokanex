@@ -12,7 +12,7 @@ from apps.activity.services import ActivityService
 from .models import SecuritySettings, UserDevice
 
 
-def issue_login_tokens(user, request, refresh_value=None):
+def issue_login_tokens(user, request, refresh_value=None, record_login=True):
     refresh = RefreshToken(refresh_value) if refresh_value else RefreshToken.for_user(user)
     security = SecuritySettings.load()
     refresh.set_exp(lifetime=timedelta(days=security.session_lifetime_days))
@@ -58,13 +58,14 @@ def issue_login_tokens(user, request, refresh_value=None):
             BlacklistedToken.objects.get_or_create(token=outstanding)
         UserDevice.objects.filter(pk__in=extra_ids).update(revoked_at=timezone.now())
 
-    ActivityService.record(
-        user,
-        UserActivity.Type.LOGIN,
-        "Account login",
-        description=device.name or user_agent[:150],
-        target_type="device",
-        target_id=device.pk,
-        ip_address=ip_address,
-    )
+    if record_login:
+        ActivityService.record(
+            user,
+            UserActivity.Type.LOGIN,
+            "Account login",
+            description=device.name or user_agent[:150],
+            target_type="device",
+            target_id=device.pk,
+            ip_address=ip_address,
+        )
     return {"access": access_value, "refresh": refresh_value, "device_id": device_id}

@@ -3,6 +3,7 @@ from django.contrib.auth.password_validation import (
     validate_password,
 )
 from rest_framework import serializers
+from drf_spectacular.utils import extend_schema_field
 from django.db import IntegrityError, transaction
 from rest_framework_simplejwt.exceptions import (
     TokenError,
@@ -26,6 +27,7 @@ from .authentication import issue_login_tokens
 from .models import (
     Badge,
     BrokerConnection,
+    FinancialPersonalityAssessment,
     PlatformRole,
     SecuritySettings,
     UpgradeRequest,
@@ -33,6 +35,7 @@ from .models import (
     UserDevice,
     UserProfile,
 )
+from .services import FinancialPersonalityService, ProfileCompletionService
 from apps.activity.models import UserActivity
 from apps.activity.services import ActivityService
 
@@ -109,6 +112,8 @@ class UserSerializer(serializers.ModelSerializer):
         allow_null=True,
     )
     profile_completion = serializers.SerializerMethodField()
+    profile_incomplete = serializers.SerializerMethodField()
+    missing_profile_fields = serializers.SerializerMethodField()
     capabilities = serializers.SerializerMethodField()
 
     class Meta:
@@ -126,6 +131,8 @@ class UserSerializer(serializers.ModelSerializer):
             "custom_role",
             "is_verified",
             "profile_completion",
+            "profile_incomplete",
+            "missing_profile_fields",
             "capabilities",
             "created_at",
         )
@@ -139,16 +146,21 @@ class UserSerializer(serializers.ModelSerializer):
             "created_at",
         )
 
+    def _profile_status(self, obj):
+        cache = getattr(self, "_profile_status_cache", {})
+        if obj.pk not in cache:
+            cache[obj.pk] = ProfileCompletionService.status(obj)
+            self._profile_status_cache = cache
+        return cache[obj.pk]
+
     def get_profile_completion(self, obj) -> int:
-        profile, _ = UserProfile.objects.get_or_create(user=obj)
-        tracked = (
-            obj.first_name, obj.last_name, obj.phone, obj.avatar,
-            profile.birth_date, profile.country, profile.city,
-            profile.education_level, profile.occupation,
-            profile.risk_tolerance, profile.investment_goal,
-            profile.preferred_markets, profile.trading_frequency,
-        )
-        return round(sum(bool(value) for value in tracked) * 100 / len(tracked))
+        return self._profile_status(obj)["profile_completion"]
+
+    def get_profile_incomplete(self, obj) -> bool:
+        return self._profile_status(obj)["profile_incomplete"]
+
+    def get_missing_profile_fields(self, obj) -> list[str]:
+        return self._profile_status(obj)["missing_profile_fields"]
 
     def get_capabilities(self, obj) -> dict:
         explicit = obj.has_platform_permission(User.Permission.INTERNAL_ANALYSIS_MANAGE)
@@ -607,6 +619,9 @@ class UserProfileDetailsSerializer(serializers.ModelSerializer):
         read_only=True,
     )
     profile_completion = serializers.SerializerMethodField()
+    profile_incomplete = serializers.SerializerMethodField()
+    missing_profile_fields = serializers.SerializerMethodField()
+    personality_result = serializers.SerializerMethodField()
 
     MARKET_CHOICES = {
         "FOREX",
@@ -653,6 +668,9 @@ class UserProfileDetailsSerializer(serializers.ModelSerializer):
             "habits",
             "onboarding_answers",
             "profile_completion",
+            "profile_incomplete",
+            "missing_profile_fields",
+            "personality_result",
             "created_at",
             "updated_at",
         )
@@ -661,6 +679,9 @@ class UserProfileDetailsSerializer(serializers.ModelSerializer):
             "username",
             "email",
             "profile_completion",
+            "profile_incomplete",
+            "missing_profile_fields",
+            "personality_result",
             "created_at",
             "updated_at",
         )
@@ -741,24 +762,38 @@ class UserProfileDetailsSerializer(serializers.ModelSerializer):
         return self._validate_maximum(value, 168)
 
     def get_profile_completion(self, obj) -> int:
-        tracked_fields = (
-            "birth_date",
-            "city",
-            "education_level",
-            "occupation",
-            "monthly_income_range",
-            "trading_experience_years",
-            "risk_tolerance",
-            "investment_goal",
-            "preferred_markets",
-            "trading_frequency",
-            "preferred_learning_time",
-        )
-        completed = sum(
-            bool(getattr(obj, field))
-            for field in tracked_fields
-        )
-        return round(completed * 100 / len(tracked_fields))
+        return ProfileCompletionService.status(obj.user)["profile_completion"]
+
+    def get_profile_incomplete(self, obj) -> bool:
+        return ProfileCompletionService.status(obj.user)["profile_incomplete"]
+
+    def get_missing_profile_fields(self, obj) -> list[str]:
+        return ProfileCompletionService.status(obj.user)["missing_profile_fields"]
+
+    @extend_schema_field({
+        "type": "object",
+        "nullable": True,
+        "properties": {
+            "personality_type": {"type": "string"},
+            "title": {"type": "string"},
+            "subtitle": {"type": "string"},
+            "color": {"type": "string"},
+            "scores": {
+                "type": "object",
+                "properties": {
+                    name: {"type": "integer"}
+                    for name in ("security", "planning", "risk", "discipline", "learning")
+                },
+            },
+            "completed_at": {"type": "string", "format": "date-time"},
+            "version": {"type": "integer"},
+        },
+    })
+    def get_personality_result(self, obj):
+        assessment = obj.user.financial_personality_assessments.filter(
+            is_current=True
+        ).first()
+        return FinancialPersonalityResultSerializer(assessment).data if assessment else None
 
 
 class UpgradeRequestSerializer(serializers.ModelSerializer):
@@ -1070,3 +1105,96 @@ class OTPRequestSerializer(serializers.Serializer):
 
 class OTPVerifySerializer(OTPRequestSerializer):
     code = serializers.RegexField(r"^\d{4}$", error_messages={"invalid": "کد باید چهار رقم باشد."})
+
+
+class RegistrationOTPRequestSerializer(OTPRequestSerializer):
+    pass
+
+
+class RegistrationOTPVerifySerializer(RegistrationOTPRequestSerializer):
+    code = serializers.RegexField(r"^\d{4}$", error_messages={"invalid": "کد باید چهار رقم باشد."})
+
+
+class RegistrationOTPUserSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = (
+            "id", "username", "phone", "first_name", "last_name", "email",
+            "role", "access_level", "is_active", "is_verified",
+        )
+        read_only_fields = fields
+
+
+class RegistrationOTPRequestResponseSerializer(serializers.Serializer):
+    success = serializers.BooleanField()
+    message = serializers.CharField()
+    expires_in = serializers.IntegerField()
+    resend_after = serializers.IntegerField()
+
+
+class RegistrationOTPVerifyResponseSerializer(serializers.Serializer):
+    success = serializers.BooleanField()
+    access = serializers.CharField()
+    refresh = serializers.CharField()
+    device_id = serializers.CharField()
+    created = serializers.BooleanField()
+    profile_incomplete = serializers.BooleanField()
+    profile_completion = serializers.IntegerField()
+    missing_profile_fields = serializers.ListField(child=serializers.CharField())
+    user = RegistrationOTPUserSerializer()
+
+
+class FinancialPersonalityAnswerSerializer(serializers.Serializer):
+    question_id = serializers.IntegerField(min_value=1, max_value=20)
+    option_id = serializers.ChoiceField(choices=("a", "b", "c", "d"))
+
+
+class FinancialPersonalitySubmitSerializer(serializers.Serializer):
+    answers = FinancialPersonalityAnswerSerializer(many=True)
+
+    def validate_answers(self, value):
+        if len(value) != 20:
+            raise serializers.ValidationError("پاسخ هر ۲۰ سؤال الزامی است.")
+        question_ids = [answer["question_id"] for answer in value]
+        if len(question_ids) != len(set(question_ids)):
+            raise serializers.ValidationError("هر سؤال فقط یک پاسخ می‌تواند داشته باشد.")
+        if set(question_ids) != set(range(1, 21)):
+            raise serializers.ValidationError("شناسه سؤال‌ها باید دقیقاً از ۱ تا ۲۰ باشد.")
+        return sorted(value, key=lambda answer: answer["question_id"])
+
+
+class FinancialPersonalityResultSerializer(serializers.Serializer):
+    personality_type = serializers.CharField()
+    title = serializers.SerializerMethodField()
+    subtitle = serializers.SerializerMethodField()
+    color = serializers.SerializerMethodField()
+    scores = serializers.SerializerMethodField()
+    completed_at = serializers.DateTimeField()
+    version = serializers.IntegerField()
+
+    def _metadata(self, obj):
+        return FinancialPersonalityService.METADATA[obj.personality_type]
+
+    def get_title(self, obj) -> str:
+        return self._metadata(obj)["title"]
+
+    def get_subtitle(self, obj) -> str:
+        return self._metadata(obj)["subtitle"]
+
+    def get_color(self, obj) -> str:
+        return self._metadata(obj)["color"]
+
+    def get_scores(self, obj) -> dict:
+        return {
+            "security": obj.score_security,
+            "planning": obj.score_planning,
+            "risk": obj.score_risk,
+            "discipline": obj.score_discipline,
+            "learning": obj.score_learning,
+        }
+
+
+class FinancialPersonalityCurrentResponseSerializer(
+    FinancialPersonalityResultSerializer
+):
+    completed = serializers.BooleanField()

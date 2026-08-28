@@ -2,6 +2,7 @@ from django.db import models
 from django.contrib.auth.models import AbstractUser
 from django.conf import settings
 from django.db.models import Q
+from django.utils import timezone
 from django.utils.text import slugify
 from common.phone import normalize_iran_phone, validate_iran_phone
 
@@ -525,7 +526,12 @@ class UserBadge(models.Model):
 
 
 class OTPChallenge(models.Model):
+    class Purpose(models.TextChoices):
+        LOGIN = "LOGIN", "Login"
+        REGISTRATION_LOGIN = "REGISTRATION_LOGIN", "Registration or login"
+
     phone = models.CharField(max_length=11, db_index=True)
+    purpose = models.CharField(max_length=24, choices=Purpose.choices, default=Purpose.LOGIN)
     code_digest = models.CharField(max_length=64)
     salt = models.CharField(max_length=64)
     request_ip = models.GenericIPAddressField(null=True, blank=True, db_index=True)
@@ -537,12 +543,72 @@ class OTPChallenge(models.Model):
 
     class Meta:
         ordering = ["-created_at"]
-        indexes = [models.Index(fields=["phone", "-created_at"])]
+        indexes = [
+            models.Index(fields=["phone", "-created_at"]),
+            models.Index(fields=["phone", "purpose", "-created_at"]),
+        ]
 
     @property
     def is_usable(self):
         from django.utils import timezone
         return not self.consumed_at and not self.locked_at and self.expires_at > timezone.now()
+
+
+class FinancialPersonalityAssessment(models.Model):
+    class PersonalityType(models.TextChoices):
+        WEALTH_ARCHITECT = "WEALTH_ARCHITECT", "معمار ثروت"
+        CAPITAL_GUARDIAN = "CAPITAL_GUARDIAN", "نگهبان سرمایه"
+        OPPORTUNITY_HUNTER = "OPPORTUNITY_HUNTER", "شکارچی فرصت"
+        DISCIPLINED_NAVIGATOR = "DISCIPLINED_NAVIGATOR", "ناوبر منضبط"
+        MARKET_EXPLORER = "MARKET_EXPLORER", "کاوشگر بازار"
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="financial_personality_assessments",
+    )
+    version = models.PositiveSmallIntegerField(default=1)
+    personality_type = models.CharField(max_length=30, choices=PersonalityType.choices)
+    score_security = models.PositiveSmallIntegerField(default=0)
+    score_planning = models.PositiveSmallIntegerField(default=0)
+    score_risk = models.PositiveSmallIntegerField(default=0)
+    score_discipline = models.PositiveSmallIntegerField(default=0)
+    score_learning = models.PositiveSmallIntegerField(default=0)
+    answers = models.JSONField(default=list)
+    started_at = models.DateTimeField(default=timezone.now)
+    completed_at = models.DateTimeField(default=timezone.now)
+    is_current = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ["-completed_at", "-id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["user"],
+                condition=Q(is_current=True),
+                name="one_current_financial_personality_per_user",
+            )
+        ]
+        indexes = [models.Index(fields=["user", "-completed_at"])]
+
+
+class FinancialPersonalityAuditLog(models.Model):
+    assessment = models.ForeignKey(
+        FinancialPersonalityAssessment,
+        on_delete=models.PROTECT,
+        related_name="audit_logs",
+    )
+    actor = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="financial_personality_audits",
+    )
+    changes = models.JSONField(default=dict)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at", "-id"]
 
 
 class BrokerConnection(models.Model):

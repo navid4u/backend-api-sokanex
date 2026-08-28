@@ -4,6 +4,7 @@ from django.contrib.auth.admin import UserAdmin
 from .models import (
     Badge, PlatformRole, SecuritySettings, UpgradeRequest,
     User, UserBadge, UserDevice, UserProfile, BrokerConnection,
+    FinancialPersonalityAssessment, FinancialPersonalityAuditLog,
 )
 
 admin.site.register(BrokerConnection)
@@ -232,6 +233,51 @@ class SecuritySettingsAdmin(admin.ModelAdmin):
 
     def has_add_permission(self, request):
         return not SecuritySettings.objects.exists()
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(FinancialPersonalityAssessment)
+class FinancialPersonalityAssessmentAdmin(admin.ModelAdmin):
+    list_display = (
+        "id", "user", "personality_type", "version", "is_current", "completed_at"
+    )
+    list_filter = ("personality_type", "version", "is_current")
+    search_fields = ("user__username", "user__phone", "user__email")
+
+    def get_readonly_fields(self, request, obj=None):
+        base = ("user", "version", "answers", "started_at", "completed_at")
+        if request.user.is_superuser:
+            return base
+        return tuple(field.name for field in self.model._meta.fields)
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+    def save_model(self, request, obj, form, change):
+        changed = {
+            field: {"new": form.cleaned_data.get(field)}
+            for field in form.changed_data
+        }
+        super().save_model(request, obj, form, change)
+        if changed:
+            FinancialPersonalityAuditLog.objects.create(
+                assessment=obj, actor=request.user, changes=changed
+            )
+
+
+@admin.register(FinancialPersonalityAuditLog)
+class FinancialPersonalityAuditLogAdmin(admin.ModelAdmin):
+    list_display = ("id", "assessment", "actor", "created_at")
+    search_fields = ("assessment__user__username", "actor__username")
+    readonly_fields = tuple(field.name for field in FinancialPersonalityAuditLog._meta.fields)
+
+    def has_add_permission(self, request):
+        return False
 
     def has_delete_permission(self, request, obj=None):
         return False
