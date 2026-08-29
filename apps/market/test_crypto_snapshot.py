@@ -1,5 +1,5 @@
 from unittest.mock import patch
-from urllib.error import HTTPError
+from urllib.error import HTTPError, URLError
 
 from django.core.cache import cache
 from django.test import override_settings
@@ -20,7 +20,7 @@ class CryptoSnapshotTests(APITestCase):
             {"market_cap_usd": 1000, "volume_24h_usd": 200, "bitcoin_dominance_percentage": 59.3, "market_cap_change_24h": 3.2, "volume_24h_change_24h": 4.2},
             {"quotes": {"USD": {"market_cap": 81.5}}},
             {"data": [{"value": "52"}]},
-            {"status": "ok", "lastTradePrice": "900000"},
+            {"bids": [["899000", "1"]], "asks": [["901000", "1"]]},
         ]
         first = self.client.get("/api/market/crypto-snapshot/")
         second = self.client.get("/api/market/crypto-snapshot/")
@@ -36,12 +36,20 @@ class CryptoSnapshotTests(APITestCase):
             HTTPError("https://api.coinpaprika.com/v1/global", 503, "unavailable", {}, None),
             {"data": {"total_market_cap": {"usd": 2000}, "total_volume": {"usd": 500}, "market_cap_change_percentage_24h_usd": 1.5, "volume_change_percentage_24h_usd": 2.5, "market_cap_percentage": {"btc": 55, "eth": 10}}},
             {"data": [{"value": "60"}]},
-            {"status": "ok", "lastTradePrice": "910000"},
+            {"bids": [["909000", "1"]], "asks": [["911000", "1"]]},
         ]
         response = self.client.get("/api/market/crypto-snapshot/")
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data["eth_dominance"], 10.0)
         self.assertEqual(response.data["volume_change_24h"], 2.5)
+
+    @patch("apps.market.services._request_json")
+    def test_tether_provider_chain_skips_dns_failures(self, request_json):
+        request_json.side_effect = [
+            URLError("tabdeal dns"),
+            {"result": {"bid": [{"price": "920000"}], "ask": [{"price": "922000"}]}},
+        ]
+        self.assertEqual(CryptoSnapshotService._tether_irt_price(), 921000)
 
     @patch("apps.market.services.CryptoSnapshotService._fetch", side_effect=TimeoutError)
     def test_database_fallback_is_stale(self, _fetch):

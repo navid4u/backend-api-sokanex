@@ -275,12 +275,7 @@ class CryptoSnapshotService:
         except (HTTPError, URLError, TimeoutError, ValueError, KeyError, OSError, TypeError):
             global_data = cls._coingecko_global()
         fear = _request_json(settings.FEAR_GREED_URL)["data"][0]
-        tether = settings.TETHER_PRICE_IRR
-        if settings.NOBITEX_USDT_IRT_URL:
-            tether_payload = _request_json(settings.NOBITEX_USDT_IRT_URL)
-            if tether_payload.get("status") != "ok":
-                raise ValueError("Nobitex returned an unsuccessful status.")
-            tether = _number(tether_payload.get("lastTradePrice"))
+        tether = cls._tether_irt_price()
         if not tether:
             raise ValueError("Tether IRR price is unavailable.")
         market_cap = float(global_data["market_cap"])
@@ -300,6 +295,55 @@ class CryptoSnapshotService:
             "tether_price_irr": tether, "fear_greed_value": int(fear["value"]),
             "source": "aggregated",
         }
+
+    @classmethod
+    def _tether_irt_price(cls):
+        providers = (
+            cls._tabdeal_tether,
+            cls._wallex_tether,
+            cls._nobitex_tether,
+        )
+        for provider in providers:
+            try:
+                price = provider()
+                if price and price > 0:
+                    return price
+            except (HTTPError, URLError, TimeoutError, ValueError, KeyError, IndexError, OSError, TypeError):
+                continue
+        if settings.TETHER_PRICE_IRR > 0:
+            return settings.TETHER_PRICE_IRR
+        last = CryptoMarketSnapshot.objects.first()
+        if last and last.tether_price_irr > 0:
+            return float(last.tether_price_irr)
+        raise ValueError("Tether IRT price is unavailable from all configured providers.")
+
+    @staticmethod
+    def _tabdeal_tether():
+        if not settings.TABDEAL_USDT_IRT_URL:
+            return None
+        payload = _request_json(settings.TABDEAL_USDT_IRT_URL)
+        bid = _number(payload["bids"][0][0])
+        ask = _number(payload["asks"][0][0])
+        return (bid + ask) / 2 if bid and ask else bid or ask
+
+    @staticmethod
+    def _wallex_tether():
+        if not settings.WALLEX_USDT_TMN_URL:
+            return None
+        payload = _request_json(settings.WALLEX_USDT_TMN_URL)
+        result = payload["result"]
+        bid = _number(result["bid"][0]["price"])
+        ask = _number(result["ask"][0]["price"])
+        return (bid + ask) / 2 if bid and ask else bid or ask
+
+    @staticmethod
+    def _nobitex_tether():
+        if not settings.NOBITEX_USDT_IRT_URL:
+            return None
+        payload = _request_json(settings.NOBITEX_USDT_IRT_URL)
+        if payload.get("status") != "ok":
+            raise ValueError("Nobitex returned an unsuccessful status.")
+        return _number(payload.get("lastTradePrice"))
 
     @staticmethod
     def _coingecko_global():
