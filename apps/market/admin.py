@@ -1,7 +1,8 @@
 from django.contrib import admin
-from .models import EconomicEvent, NewsArticle, NewsSource
+from .models import CryptoMarketSnapshot, EconomicEvent, NewsArticle, NewsSource
 
 admin.site.register(EconomicEvent)
+admin.site.register(CryptoMarketSnapshot)
 
 
 @admin.register(NewsSource)

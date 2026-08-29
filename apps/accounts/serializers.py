@@ -174,7 +174,10 @@ class UserSerializer(serializers.ModelSerializer):
                 or obj.role == User.Role.SUPER_ADMIN
                 or explicit
                 or fallback
-            )
+            ),
+            "can_manage_ai_assistant": obj.has_platform_permission(
+                User.Permission.AI_ASSISTANT_MANAGE
+            ) or obj.has_platform_permission(User.Permission.PLATFORM_SETTINGS_MANAGE),
         }
 
 

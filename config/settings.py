@@ -83,6 +83,7 @@ INSTALLED_APPS = [
     "apps.market",
     "apps.content_channels",
     "apps.platform_settings",
+    "apps.ai_assistant",
     "landing",
 ]
 
@@ -354,6 +355,9 @@ REST_FRAMEWORK = {
         "market_quotes": config("MARKET_QUOTES_THROTTLE_RATE", default="60/minute"),
         "market_news": config("MARKET_NEWS_THROTTLE_RATE", default="30/minute"),
         "market_charts": config("MARKET_CHARTS_THROTTLE_RATE", default="60/minute"),
+        "market_snapshot": config("MARKET_SNAPSHOT_THROTTLE_RATE", default="30/minute"),
+        "assistant_chat": config("ASSISTANT_CHAT_THROTTLE_RATE", default="30/minute"),
+        "assistant_image": config("ASSISTANT_IMAGE_THROTTLE_RATE", default="10/minute"),
     },
 }
 
@@ -478,6 +482,14 @@ GOLD_CHART_PROVIDER_URL = config("GOLD_CHART_PROVIDER_URL", default="")
 GOLD_CHART_PROVIDER_KEY = config("GOLD_CHART_PROVIDER_KEY", default="")
 MARKET_CIRCUIT_BREAKER_FAILURES = config("MARKET_CIRCUIT_BREAKER_FAILURES", default=3, cast=int)
 MARKET_CIRCUIT_BREAKER_SECONDS = config("MARKET_CIRCUIT_BREAKER_SECONDS", default=60, cast=int)
+MARKET_SNAPSHOT_CACHE_SECONDS = config("MARKET_SNAPSHOT_CACHE_SECONDS", default=120, cast=int)
+MARKET_SNAPSHOT_STALE_SECONDS = config("MARKET_SNAPSHOT_STALE_SECONDS", default=86400, cast=int)
+COINGECKO_GLOBAL_URL = config("COINGECKO_GLOBAL_URL", default="https://api.coingecko.com/api/v3/global")
+FEAR_GREED_URL = config("FEAR_GREED_URL", default="https://api.alternative.me/fng/?limit=1&format=json")
+TETHER_PRICE_URL = config("TETHER_PRICE_URL", default="https://api.coingecko.com/api/v3/simple/price?ids=tether&vs_currencies=irr")
+TETHER_PRICE_IRR = config("TETHER_PRICE_IRR", default=0, cast=float)
+AI_SETTINGS_ENCRYPTION_KEY = config("AI_SETTINGS_ENCRYPTION_KEY", default="")
+ASSISTANT_TEMP_DIR = config("ASSISTANT_TEMP_DIR", default=str(BASE_DIR / "private_tmp"))
 BRSAPI_API_KEY = config("BRSAPI_API_KEY", default="")
 BRSAPI_PRICES_IN_RIAL = config("BRSAPI_PRICES_IN_RIAL", default=False, cast=bool)
 TGJU_ENABLED = config("TGJU_ENABLED", default=False, cast=bool)

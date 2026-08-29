@@ -3159,6 +3159,134 @@ paths:
               schema:
                 $ref: '#/components/schemas/PaginatedArticleListList'
           description: ''
+  /api/assistant/admin/settings/:
+    get:
+      operationId: assistant_admin_settings_retrieve
+      tags:
+      - assistant
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AISettings'
+          description: ''
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+    patch:
+      operationId: assistant_admin_settings_partial_update
+      tags:
+      - assistant
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedAISettingsRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedAISettingsRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedAISettingsRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AISettings'
+          description: ''
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+  /api/assistant/chat/:
+    post:
+      operationId: assistant_chat_create
+      tags:
+      - assistant
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AssistantChatRequest'
+            examples:
+              FinancialQuestion:
+                value:
+                  messages:
+                  - role: user
+                    content: چطور ریسک را مدیریت کنم؟
+                summary: Financial question
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/AssistantChatRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/AssistantChatRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AssistantChatResponse'
+          description: ''
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '429':
+          description: No response body
+        '502':
+          description: No response body
+        '503':
+          description: No response body
+  /api/assistant/technical-analysis/:
+    post:
+      operationId: assistant_technical_analysis_create
+      tags:
+      - assistant
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/TechnicalAnalysisRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/TechnicalAnalysisRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TechnicalAnalysisResponse'
+          description: ''
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '413':
+          description: No response body
+        '422':
+          description: No response body
+        '429':
+          description: No response body
+        '502':
+          description: No response body
+        '503':
+          description: No response body
   /api/billing/payments/:
     post:
       operationId: billing_payments_create
@@ -5627,6 +5755,21 @@ paths:
               schema:
                 $ref: '#/components/schemas/MarketChartUnavailableResponse'
           description: ''
+  /api/market/crypto-snapshot/:
+    get:
+      operationId: market_crypto_snapshot_retrieve
+      tags:
+      - market
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CryptoSnapshotResponse'
+          description: ''
   /api/market/economic-calendar/:
     get:
       operationId: market_economic_calendar_list
@@ -7453,6 +7596,53 @@ paths:
           description: ''
 components:
   schemas:
+    AISettings:
+      type: object
+      properties:
+        enabled:
+          type: boolean
+        provider:
+          type: string
+          maxLength: 30
+        base_url:
+          type: string
+          format: uri
+          maxLength: 200
+        token_configured:
+          type: boolean
+          readOnly: true
+        model:
+          type: string
+          maxLength: 150
+        financial_system_prompt:
+          type: string
+        technical_system_prompt:
+          type: string
+        temperature:
+          type: number
+          format: double
+          maximum: 2
+          minimum: 0
+        max_tokens:
+          type: integer
+          maximum: 8192
+          minimum: 128
+        daily_user_limit:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        image_daily_user_limit:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        request_timeout:
+          type: integer
+          maximum: 120
+          minimum: 10
+      required:
+      - token_configured
     ActivityTypeEnum:
       enum:
       - REGISTER
@@ -7862,6 +8052,29 @@ components:
       required:
       - content
       - title
+    AssistantChatRequest:
+      type: object
+      properties:
+        messages:
+          type: array
+          items:
+            $ref: '#/components/schemas/ChatMessageRequest'
+      required:
+      - messages
+    AssistantChatResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        answer:
+          type: string
+        usage:
+          type: object
+          additionalProperties: {}
+      required:
+      - answer
+      - success
+      - usage
     Badge:
       type: object
       properties:
@@ -8459,6 +8672,26 @@ components:
       required:
       - body
       - title
+    ChatMessageRequest:
+      type: object
+      properties:
+        role:
+          $ref: '#/components/schemas/ChatMessageRoleEnum'
+        content:
+          type: string
+          minLength: 1
+          maxLength: 12000
+      required:
+      - content
+      - role
+    ChatMessageRoleEnum:
+      enum:
+      - user
+      - assistant
+      type: string
+      description: |-
+        * `user` - user
+        * `assistant` - assistant
     ChatRoom:
       type: object
       properties:
@@ -9117,6 +9350,52 @@ components:
             minimum: 1
       required:
       - title
+    CryptoSnapshotResponse:
+      type: object
+      properties:
+        market_cap:
+          type: number
+          format: double
+        market_cap_change_24h:
+          type: number
+          format: double
+        volume_24h:
+          type: number
+          format: double
+        volume_change_24h:
+          type: number
+          format: double
+        btc_dominance:
+          type: number
+          format: double
+        eth_dominance:
+          type: number
+          format: double
+        tether_price_irr:
+          type: number
+          format: double
+        fear_greed:
+          type: object
+          additionalProperties: {}
+        updated_at:
+          type: string
+          format: date-time
+        source:
+          type: string
+        stale:
+          type: boolean
+      required:
+      - btc_dominance
+      - eth_dominance
+      - fear_greed
+      - market_cap
+      - market_cap_change_24h
+      - source
+      - stale
+      - tether_price_irr
+      - updated_at
+      - volume_24h
+      - volume_change_24h
     CustomTokenObtainPairRequest:
       type: object
       properties:
@@ -11508,6 +11787,55 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Withdrawal'
+    PatchedAISettingsRequest:
+      type: object
+      properties:
+        enabled:
+          type: boolean
+        provider:
+          type: string
+          minLength: 1
+          maxLength: 30
+        base_url:
+          type: string
+          format: uri
+          minLength: 1
+          maxLength: 200
+        api_token:
+          type: string
+          writeOnly: true
+        model:
+          type: string
+          maxLength: 150
+        financial_system_prompt:
+          type: string
+          minLength: 1
+        technical_system_prompt:
+          type: string
+          minLength: 1
+        temperature:
+          type: number
+          format: double
+          maximum: 2
+          minimum: 0
+        max_tokens:
+          type: integer
+          maximum: 8192
+          minimum: 128
+        daily_user_limit:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        image_daily_user_limit:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        request_timeout:
+          type: integer
+          maximum: 120
+          minimum: 10
     PatchedAdminUserWriteRequest:
       type: object
       properties:
@@ -12705,6 +13033,7 @@ components:
       - INTERNAL_ANALYSIS_MANAGE
       - SUPPORT_MANAGE
       - PLATFORM_SETTINGS_MANAGE
+      - can_manage_ai_assistant
       type: string
       description: |-
         * `CONTENT_MANAGE` - Manage content
@@ -12719,6 +13048,7 @@ components:
         * `INTERNAL_ANALYSIS_MANAGE` - Manage internal analysis
         * `SUPPORT_MANAGE` - Manage support conversations
         * `PLATFORM_SETTINGS_MANAGE` - Manage platform settings
+        * `can_manage_ai_assistant` - Manage AI assistant
     PlatformRole:
       type: object
       properties:
@@ -14649,6 +14979,28 @@ components:
       properties:
         value:
           type: string
+    TechnicalAnalysisRequest:
+      type: object
+      properties:
+        image:
+          type: string
+          format: binary
+      required:
+      - image
+    TechnicalAnalysisResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        analysis:
+          type: string
+        usage:
+          type: object
+          additionalProperties: {}
+      required:
+      - analysis
+      - success
+      - usage
     TraderPost:
       type: object
       properties:

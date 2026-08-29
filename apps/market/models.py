@@ -73,3 +73,19 @@ class NewsArticle(models.Model):
 
     def __str__(self):
         return self.title
+
+
+class CryptoMarketSnapshot(models.Model):
+    market_cap = models.DecimalField(max_digits=30, decimal_places=2)
+    market_cap_change_24h = models.FloatField()
+    volume_24h = models.DecimalField(max_digits=30, decimal_places=2)
+    volume_change_24h = models.FloatField()
+    btc_dominance = models.FloatField()
+    eth_dominance = models.FloatField()
+    tether_price_irr = models.DecimalField(max_digits=20, decimal_places=2)
+    fear_greed_value = models.PositiveSmallIntegerField()
+    source = models.CharField(max_length=40, default="aggregated")
+    captured_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        ordering = ["-captured_at", "-id"]

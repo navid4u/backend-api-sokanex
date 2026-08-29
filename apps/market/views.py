@@ -3,7 +3,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from django.utils import timezone
 from rest_framework import generics, serializers
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
@@ -12,7 +12,7 @@ from drf_spectacular.utils import OpenApiParameter, extend_schema, inline_serial
 from .models import EconomicEvent, NewsArticle
 from .serializers import EconomicEventSerializer, NewsArticleSerializer
 from .chart_services import MarketChartService, MarketChartUnavailable
-from .services import BASE_SYMBOLS, MarketNewsService, MarketQuoteService
+from .services import BASE_SYMBOLS, CryptoSnapshotService, MarketNewsService, MarketQuoteService
 from common.serializers import EmptySerializer
 
 
@@ -29,6 +29,23 @@ class QuoteView(APIView):
         if len(symbols) > 20:
             raise serializers.ValidationError({"symbols": "Provide at most 20 comma-separated symbols."})
         return Response(MarketQuoteService.get_quotes(symbols))
+
+
+class CryptoSnapshotView(APIView):
+    permission_classes = [AllowAny]
+    serializer_class = EmptySerializer
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "market_snapshot"
+
+    @extend_schema(responses={200: inline_serializer(name="CryptoSnapshotResponse", fields={
+        "market_cap": serializers.FloatField(), "market_cap_change_24h": serializers.FloatField(),
+        "volume_24h": serializers.FloatField(), "volume_change_24h": serializers.FloatField(),
+        "btc_dominance": serializers.FloatField(), "eth_dominance": serializers.FloatField(),
+        "tether_price_irr": serializers.FloatField(), "fear_greed": serializers.DictField(),
+        "updated_at": serializers.DateTimeField(), "source": serializers.CharField(), "stale": serializers.BooleanField(),
+    })})
+    def get(self, request):
+        return Response(CryptoSnapshotService.get_snapshot())
 
 
 class MarketChartView(APIView):

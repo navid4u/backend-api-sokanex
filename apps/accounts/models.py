@@ -37,6 +37,7 @@ class User(AbstractUser):
         INTERNAL_ANALYSIS_MANAGE = "INTERNAL_ANALYSIS_MANAGE", "Manage internal analysis"
         SUPPORT_MANAGE = "SUPPORT_MANAGE", "Manage support conversations"
         PLATFORM_SETTINGS_MANAGE = "PLATFORM_SETTINGS_MANAGE", "Manage platform settings"
+        AI_ASSISTANT_MANAGE = "can_manage_ai_assistant", "Manage AI assistant"
 
     phone = models.CharField(
         max_length=20,

@@ -18,7 +18,7 @@ from django.db import transaction
 from django.utils import timezone
 from rest_framework.exceptions import APIException, ValidationError
 
-from .models import NewsArticle, NewsSource
+from .models import CryptoMarketSnapshot, NewsArticle, NewsSource
 
 
 BASE_SYMBOLS = ("usd-irr", "gold-18k", "half-coin", "coin-emami", "car-index", "tedpix")
@@ -239,6 +239,81 @@ class MarketQuoteService:
                 "stale_age_seconds": age if is_stale else 0,
             })
         return {"updated_at": snapshot["updated_at"], "is_stale": is_stale, "stale_age_seconds": age if is_stale else 0, "results": results}
+
+
+class CryptoSnapshotService:
+    cache_key = "market:v3:crypto-snapshot"
+    circuit_key = "market:v3:crypto-snapshot:circuit"
+
+    @classmethod
+    def get_snapshot(cls):
+        cached = cache.get(cls.cache_key)
+        if cached:
+            return {**cached, "stale": False}
+        state = cache.get(cls.circuit_key) or {"failures": 0, "opened_until": 0}
+        if state["opened_until"] <= int(timezone.now().timestamp()):
+            try:
+                snapshot = cls._fetch()
+                row = CryptoMarketSnapshot.objects.create(**snapshot)
+                payload = cls._serialize(row, False)
+                cache.set(cls.cache_key, payload, settings.MARKET_SNAPSHOT_CACHE_SECONDS)
+                cache.delete(cls.circuit_key)
+                return payload
+            except (HTTPError, URLError, TimeoutError, ValueError, KeyError, OSError, TypeError):
+                failures = state["failures"] + 1
+                opened = int(timezone.now().timestamp()) + settings.MARKET_CIRCUIT_BREAKER_SECONDS if failures >= settings.MARKET_CIRCUIT_BREAKER_FAILURES else 0
+                cache.set(cls.circuit_key, {"failures": failures, "opened_until": opened}, settings.MARKET_CIRCUIT_BREAKER_SECONDS)
+        last = CryptoMarketSnapshot.objects.first()
+        if last and last.captured_at >= timezone.now() - timedelta(seconds=settings.MARKET_SNAPSHOT_STALE_SECONDS):
+            return cls._serialize(last, True)
+        raise MarketProviderUnavailable("No crypto market snapshot is available.")
+
+    @classmethod
+    def _fetch(cls):
+        global_data = _request_json(settings.COINGECKO_GLOBAL_URL)["data"]
+        fear = _request_json(settings.FEAR_GREED_URL)["data"][0]
+        tether = settings.TETHER_PRICE_IRR
+        if settings.TETHER_PRICE_URL:
+            tether = _number(_request_json(settings.TETHER_PRICE_URL)["tether"]["irr"])
+        if not tether:
+            raise ValueError("Tether IRR price is unavailable.")
+        market_cap = float(global_data["total_market_cap"]["usd"])
+        volume = float(global_data["total_volume"]["usd"])
+        market_change = float(global_data["market_cap_change_percentage_24h_usd"])
+        # CoinGecko does not expose a separate total-volume change in /global.
+        volume_change = global_data.get("volume_change_percentage_24h_usd")
+        if volume_change is None:
+            prior = CryptoMarketSnapshot.objects.filter(
+                captured_at__lte=timezone.now() - timedelta(hours=23, minutes=30)
+            ).first()
+            volume_change = ((volume - float(prior.volume_24h)) / float(prior.volume_24h) * 100) if prior and prior.volume_24h else 0
+        return {
+            "market_cap": market_cap, "market_cap_change_24h": market_change,
+            "volume_24h": volume, "volume_change_24h": volume_change,
+            "btc_dominance": float(global_data["market_cap_percentage"]["btc"]),
+            "eth_dominance": float(global_data["market_cap_percentage"]["eth"]),
+            "tether_price_irr": tether, "fear_greed_value": int(fear["value"]),
+            "source": "aggregated",
+        }
+
+    @staticmethod
+    def _label(value):
+        if value <= 24: return "ترس شدید"
+        if value <= 44: return "ترس"
+        if value <= 54: return "خنثی"
+        if value <= 74: return "طمع"
+        return "طمع شدید"
+
+    @classmethod
+    def _serialize(cls, row, stale):
+        return {
+            "market_cap": float(row.market_cap), "market_cap_change_24h": row.market_cap_change_24h,
+            "volume_24h": float(row.volume_24h), "volume_change_24h": row.volume_change_24h,
+            "btc_dominance": row.btc_dominance, "eth_dominance": row.eth_dominance,
+            "tether_price_irr": float(row.tether_price_irr),
+            "fear_greed": {"value": row.fear_greed_value, "label": cls._label(row.fear_greed_value)},
+            "updated_at": row.captured_at.isoformat(), "source": row.source, "stale": stale,
+        }
 
 
 class MarketNewsService:

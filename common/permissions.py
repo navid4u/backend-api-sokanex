@@ -153,6 +153,15 @@ class CanManagePlatform(BasePermission):
         )
 
 
+class CanManageAIAssistant(BasePermission):
+    def has_permission(self, request, view):
+        user = request.user
+        return user.is_authenticated and (
+            user.has_platform_permission(User.Permission.AI_ASSISTANT_MANAGE)
+            or user.has_platform_permission(User.Permission.PLATFORM_SETTINGS_MANAGE)
+        )
+
+
 class IsSignalOwnerOrEmployee(BasePermission):
     """
     Allows the signal owner or authorized employees
