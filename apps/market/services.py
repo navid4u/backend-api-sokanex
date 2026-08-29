@@ -271,13 +271,16 @@ class CryptoSnapshotService:
     @classmethod
     def _fetch(cls):
         try:
-            global_data = cls._coingecko_global()
-        except (HTTPError, URLError, TimeoutError, ValueError, KeyError, OSError, TypeError):
             global_data = cls._coinpaprika_global()
+        except (HTTPError, URLError, TimeoutError, ValueError, KeyError, OSError, TypeError):
+            global_data = cls._coingecko_global()
         fear = _request_json(settings.FEAR_GREED_URL)["data"][0]
         tether = settings.TETHER_PRICE_IRR
-        if settings.TETHER_PRICE_URL:
-            tether = _number(_request_json(settings.TETHER_PRICE_URL)["tether"]["irr"])
+        if settings.NOBITEX_USDT_IRT_URL:
+            tether_payload = _request_json(settings.NOBITEX_USDT_IRT_URL)
+            if tether_payload.get("status") != "ok":
+                raise ValueError("Nobitex returned an unsuccessful status.")
+            tether = _number(tether_payload.get("lastTradePrice"))
         if not tether:
             raise ValueError("Tether IRR price is unavailable.")
         market_cap = float(global_data["market_cap"])

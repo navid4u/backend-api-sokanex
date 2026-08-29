@@ -489,6 +489,7 @@ COINPAPRIKA_GLOBAL_URL = config("COINPAPRIKA_GLOBAL_URL", default="https://api.c
 COINPAPRIKA_ETH_TICKER_URL = config("COINPAPRIKA_ETH_TICKER_URL", default="https://api.coinpaprika.com/v1/tickers/eth-ethereum")
 FEAR_GREED_URL = config("FEAR_GREED_URL", default="https://api.alternative.me/fng/?limit=1&format=json")
 TETHER_PRICE_URL = config("TETHER_PRICE_URL", default="https://api.coingecko.com/api/v3/simple/price?ids=tether&vs_currencies=irr")
+NOBITEX_USDT_IRT_URL = config("NOBITEX_USDT_IRT_URL", default="https://api.nobitex.ir/v3/orderbook/USDTIRT")
 TETHER_PRICE_IRR = config("TETHER_PRICE_IRR", default=0, cast=float)
 AI_SETTINGS_ENCRYPTION_KEY = config("AI_SETTINGS_ENCRYPTION_KEY", default="")
 ASSISTANT_TEMP_DIR = config("ASSISTANT_TEMP_DIR", default=str(BASE_DIR / "private_tmp"))

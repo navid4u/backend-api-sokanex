@@ -17,26 +17,26 @@ class CryptoSnapshotTests(APITestCase):
     @patch("apps.market.services._request_json")
     def test_fetch_and_shared_cache(self, request_json):
         request_json.side_effect = [
-            {"data": {"total_market_cap": {"usd": 1000}, "total_volume": {"usd": 200}, "market_cap_change_percentage_24h_usd": 3.2, "market_cap_percentage": {"btc": 59.3, "eth": 8.15}}},
+            {"market_cap_usd": 1000, "volume_24h_usd": 200, "bitcoin_dominance_percentage": 59.3, "market_cap_change_24h": 3.2, "volume_24h_change_24h": 4.2},
+            {"quotes": {"USD": {"market_cap": 81.5}}},
             {"data": [{"value": "52"}]},
-            {"tether": {"irr": 900000}},
+            {"status": "ok", "lastTradePrice": "900000"},
         ]
         first = self.client.get("/api/market/crypto-snapshot/")
         second = self.client.get("/api/market/crypto-snapshot/")
         self.assertEqual(first.status_code, 200)
         self.assertEqual(first.data["fear_greed"], {"value": 52, "label": "خنثی"})
         self.assertFalse(first.data["stale"])
-        self.assertEqual(request_json.call_count, 3)
+        self.assertEqual(request_json.call_count, 4)
         self.assertEqual(second.data["market_cap"], 1000.0)
 
     @patch("apps.market.services._request_json")
-    def test_coinpaprika_fallback_when_coingecko_is_rate_limited(self, request_json):
+    def test_coingecko_fallback_when_coinpaprika_is_unavailable(self, request_json):
         request_json.side_effect = [
-            HTTPError("https://api.coingecko.com/api/v3/global", 429, "rate limit", {}, None),
-            {"market_cap_usd": 2000, "volume_24h_usd": 500, "bitcoin_dominance_percentage": 55, "market_cap_change_24h": 1.5, "volume_24h_change_24h": 2.5},
-            {"quotes": {"USD": {"market_cap": 200}}},
+            HTTPError("https://api.coinpaprika.com/v1/global", 503, "unavailable", {}, None),
+            {"data": {"total_market_cap": {"usd": 2000}, "total_volume": {"usd": 500}, "market_cap_change_percentage_24h_usd": 1.5, "volume_change_percentage_24h_usd": 2.5, "market_cap_percentage": {"btc": 55, "eth": 10}}},
             {"data": [{"value": "60"}]},
-            {"tether": {"irr": 910000}},
+            {"status": "ok", "lastTradePrice": "910000"},
         ]
         response = self.client.get("/api/market/crypto-snapshot/")
         self.assertEqual(response.status_code, 200)
