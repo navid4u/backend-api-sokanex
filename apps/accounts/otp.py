@@ -156,7 +156,7 @@ class OTPService:
                 matches = list(
                     User.objects.select_for_update().filter(
                         Q(phone=phone) | Q(username=phone)
-                    ).distinct()[:2]
+                    )[:2]
                 )
                 if len(matches) > 1:
                     account_error = RegistrationOTPError(
