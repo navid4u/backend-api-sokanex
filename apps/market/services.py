@@ -270,18 +270,20 @@ class CryptoSnapshotService:
 
     @classmethod
     def _fetch(cls):
-        global_data = _request_json(settings.COINGECKO_GLOBAL_URL)["data"]
+        try:
+            global_data = cls._coingecko_global()
+        except (HTTPError, URLError, TimeoutError, ValueError, KeyError, OSError, TypeError):
+            global_data = cls._coinpaprika_global()
         fear = _request_json(settings.FEAR_GREED_URL)["data"][0]
         tether = settings.TETHER_PRICE_IRR
         if settings.TETHER_PRICE_URL:
             tether = _number(_request_json(settings.TETHER_PRICE_URL)["tether"]["irr"])
         if not tether:
             raise ValueError("Tether IRR price is unavailable.")
-        market_cap = float(global_data["total_market_cap"]["usd"])
-        volume = float(global_data["total_volume"]["usd"])
-        market_change = float(global_data["market_cap_change_percentage_24h_usd"])
-        # CoinGecko does not expose a separate total-volume change in /global.
-        volume_change = global_data.get("volume_change_percentage_24h_usd")
+        market_cap = float(global_data["market_cap"])
+        volume = float(global_data["volume_24h"])
+        market_change = float(global_data["market_cap_change_24h"])
+        volume_change = global_data.get("volume_change_24h")
         if volume_change is None:
             prior = CryptoMarketSnapshot.objects.filter(
                 captured_at__lte=timezone.now() - timedelta(hours=23, minutes=30)
@@ -290,10 +292,37 @@ class CryptoSnapshotService:
         return {
             "market_cap": market_cap, "market_cap_change_24h": market_change,
             "volume_24h": volume, "volume_change_24h": volume_change,
-            "btc_dominance": float(global_data["market_cap_percentage"]["btc"]),
-            "eth_dominance": float(global_data["market_cap_percentage"]["eth"]),
+            "btc_dominance": float(global_data["btc_dominance"]),
+            "eth_dominance": float(global_data["eth_dominance"]),
             "tether_price_irr": tether, "fear_greed_value": int(fear["value"]),
             "source": "aggregated",
+        }
+
+    @staticmethod
+    def _coingecko_global():
+        data = _request_json(settings.COINGECKO_GLOBAL_URL)["data"]
+        return {
+            "market_cap": data["total_market_cap"]["usd"],
+            "volume_24h": data["total_volume"]["usd"],
+            "market_cap_change_24h": data["market_cap_change_percentage_24h_usd"],
+            "volume_change_24h": data.get("volume_change_percentage_24h_usd"),
+            "btc_dominance": data["market_cap_percentage"]["btc"],
+            "eth_dominance": data["market_cap_percentage"]["eth"],
+        }
+
+    @staticmethod
+    def _coinpaprika_global():
+        data = _request_json(settings.COINPAPRIKA_GLOBAL_URL)
+        eth = _request_json(settings.COINPAPRIKA_ETH_TICKER_URL)
+        market_cap = float(data["market_cap_usd"])
+        eth_market_cap = float(eth["quotes"]["USD"]["market_cap"])
+        return {
+            "market_cap": market_cap,
+            "volume_24h": data["volume_24h_usd"],
+            "market_cap_change_24h": data["market_cap_change_24h"],
+            "volume_change_24h": data["volume_24h_change_24h"],
+            "btc_dominance": data["bitcoin_dominance_percentage"],
+            "eth_dominance": eth_market_cap / market_cap * 100,
         }
 
     @staticmethod

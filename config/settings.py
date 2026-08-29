@@ -485,6 +485,8 @@ MARKET_CIRCUIT_BREAKER_SECONDS = config("MARKET_CIRCUIT_BREAKER_SECONDS", defaul
 MARKET_SNAPSHOT_CACHE_SECONDS = config("MARKET_SNAPSHOT_CACHE_SECONDS", default=120, cast=int)
 MARKET_SNAPSHOT_STALE_SECONDS = config("MARKET_SNAPSHOT_STALE_SECONDS", default=86400, cast=int)
 COINGECKO_GLOBAL_URL = config("COINGECKO_GLOBAL_URL", default="https://api.coingecko.com/api/v3/global")
+COINPAPRIKA_GLOBAL_URL = config("COINPAPRIKA_GLOBAL_URL", default="https://api.coinpaprika.com/v1/global")
+COINPAPRIKA_ETH_TICKER_URL = config("COINPAPRIKA_ETH_TICKER_URL", default="https://api.coinpaprika.com/v1/tickers/eth-ethereum")
 FEAR_GREED_URL = config("FEAR_GREED_URL", default="https://api.alternative.me/fng/?limit=1&format=json")
 TETHER_PRICE_URL = config("TETHER_PRICE_URL", default="https://api.coingecko.com/api/v3/simple/price?ids=tether&vs_currencies=irr")
 TETHER_PRICE_IRR = config("TETHER_PRICE_IRR", default=0, cast=float)
