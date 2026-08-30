@@ -2673,6 +2673,44 @@ paths:
               schema:
                 $ref: '#/components/schemas/PaymentProvider'
           description: ''
+  /api/admin/platform/translations/:
+    get:
+      operationId: admin_platform_translations_retrieve
+      tags:
+      - admin
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UITranslationCatalog'
+          description: ''
+    patch:
+      operationId: admin_platform_translations_partial_update
+      tags:
+      - admin
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedUITranslationReplaceRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedUITranslationReplaceRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedUITranslationReplaceRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UITranslationCatalog'
+          description: ''
   /api/admin/platform/upgrade-plans/:
     get:
       operationId: admin_platform_upgrade_plans_list
@@ -6025,6 +6063,29 @@ paths:
               schema:
                 $ref: '#/components/schemas/PublicPlatformSettings'
           description: ''
+  /api/platform/translations/{locale}/:
+    get:
+      operationId: platform_translations_retrieve
+      parameters:
+      - in: path
+        name: locale
+        schema:
+          type: string
+        required: true
+      tags:
+      - platform
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UITranslationCatalog'
+          description: ''
+        '304':
+          description: No response body
   /api/signals/:
     get:
       operationId: signals_list
@@ -12684,6 +12745,12 @@ components:
           nullable: true
         visibility:
           $ref: '#/components/schemas/VisibilityEnum'
+    PatchedUITranslationReplaceRequest:
+      type: object
+      properties:
+        translations:
+          type: object
+          additionalProperties: {}
     PatchedUpgradePlanRequest:
       type: object
       properties:
@@ -15148,6 +15215,26 @@ components:
       description: |-
         * `CREDIT` - Credit
         * `DEBIT` - Debit
+    UITranslationCatalog:
+      type: object
+      properties:
+        locale:
+          type: string
+          readOnly: true
+        version:
+          type: integer
+          readOnly: true
+        translations:
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - locale
+      - translations
+      - updated_at
+      - version
     UpgradePlan:
       type: object
       properties:

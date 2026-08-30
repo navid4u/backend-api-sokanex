@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import PlatformSettings, SystemContent
+from .models import PlatformSettings, SystemContent, UITranslationAuditLog, UITranslationCatalog
 
 
 @admin.register(PlatformSettings)
@@ -26,3 +26,27 @@ class SystemContentAdmin(admin.ModelAdmin):
     list_filter = ("section", "multiline")
     search_fields = ("key", "label", "value")
     readonly_fields = ("key", "section", "label", "multiline", "updated_at")
+
+
+@admin.register(UITranslationCatalog)
+class UITranslationCatalogAdmin(admin.ModelAdmin):
+    list_display = ("locale", "version", "updated_by", "updated_at")
+    readonly_fields = tuple(field.name for field in UITranslationCatalog._meta.fields)
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(UITranslationAuditLog)
+class UITranslationAuditLogAdmin(admin.ModelAdmin):
+    list_display = ("catalog", "actor", "previous_version", "new_version", "created_at")
+    readonly_fields = tuple(field.name for field in UITranslationAuditLog._meta.fields)
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False

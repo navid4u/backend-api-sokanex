@@ -495,6 +495,7 @@ WALLEX_USDT_TMN_URL = config("WALLEX_USDT_TMN_URL", default="https://api.wallex.
 TETHER_PRICE_IRR = config("TETHER_PRICE_IRR", default=0, cast=float)
 AI_SETTINGS_ENCRYPTION_KEY = config("AI_SETTINGS_ENCRYPTION_KEY", default="")
 ASSISTANT_TEMP_DIR = config("ASSISTANT_TEMP_DIR", default=str(BASE_DIR / "private_tmp"))
+TRANSLATIONS_MAX_PAYLOAD_BYTES = config("TRANSLATIONS_MAX_PAYLOAD_BYTES", default=262144, cast=int)
 BRSAPI_API_KEY = config("BRSAPI_API_KEY", default="")
 BRSAPI_PRICES_IN_RIAL = config("BRSAPI_PRICES_IN_RIAL", default=False, cast=bool)
 TGJU_ENABLED = config("TGJU_ENABLED", default=False, cast=bool)

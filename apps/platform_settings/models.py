@@ -37,3 +37,39 @@ class SystemContent(models.Model):
     class Meta:
         ordering = ["section", "key"]
 
+
+class UITranslationCatalog(models.Model):
+    locale = models.CharField(max_length=12, unique=True, default="en")
+    translations = models.JSONField(default=dict, blank=True)
+    version = models.PositiveBigIntegerField(default=1)
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+        related_name="updated_translation_catalogs",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["locale"]
+
+    @classmethod
+    def load(cls, locale="en"):
+        obj, _ = cls.objects.get_or_create(locale=locale)
+        return obj
+
+    def __str__(self):
+        return f"{self.locale} v{self.version}"
+
+
+class UITranslationAuditLog(models.Model):
+    catalog = models.ForeignKey(UITranslationCatalog, on_delete=models.PROTECT, related_name="audit_logs")
+    actor = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, on_delete=models.SET_NULL,
+        related_name="translation_audit_logs",
+    )
+    previous_version = models.PositiveBigIntegerField()
+    new_version = models.PositiveBigIntegerField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at", "-id"]
