@@ -85,6 +85,9 @@ class FinancialPersonalityService:
     @classmethod
     @transaction.atomic
     def submit(cls, user, answers):
+        # Serialise submissions per user, including the very first submission
+        # where there is no assessment row available to lock yet.
+        User.objects.select_for_update().only("pk").get(pk=user.pk)
         scores, personality_type = cls.score_answers(answers)
         FinancialPersonalityAssessment.objects.select_for_update().filter(
             user=user, is_current=True

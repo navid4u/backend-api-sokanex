@@ -5,6 +5,7 @@ from django.core.cache import cache
 from django.db import IntegrityError, transaction
 from django.test import TestCase, override_settings
 from django.utils import timezone
+from rest_framework_simplejwt.tokens import AccessToken
 from rest_framework.test import APIClient
 
 from apps.activity.models import UserActivity
@@ -218,6 +219,62 @@ class FinancialPersonalityAPITests(TestCase):
         self.assertEqual(duplicate_response.status_code, 400)
         self.assertEqual(invalid_response.status_code, 400)
         self.assertIn("answers", incomplete.data["errors"])
+
+    def test_submit_requires_authentication(self):
+        self.client.force_authenticate(user=None)
+        response = self.client.post(
+            "/api/accounts/personality-test/submit/",
+            {"answers": self.answers()},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 401)
+
+    def test_submit_accepts_regular_access_token(self):
+        self.client.force_authenticate(user=None)
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {AccessToken.for_user(self.user)}")
+        response = self.client.post(
+            "/api/accounts/personality-test/submit/",
+            {"answers": self.answers()},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 201)
+        self.assertTrue(response.data["completed"])
+
+    def test_get_before_completion_returns_incomplete_contract(self):
+        response = self.client.get("/api/accounts/personality-test/")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.data,
+            {"completed": False, "personality_type": None},
+        )
+
+    def test_server_calculated_fields_cannot_be_submitted(self):
+        response = self.client.post(
+            "/api/accounts/personality-test/submit/",
+            {
+                "answers": self.answers(),
+                "scores": {"security": 999},
+                "personality_type": "CAPITAL_GUARDIAN",
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("scores", response.data["errors"])
+        self.assertIn("personality_type", response.data["errors"])
+        self.assertFalse(
+            FinancialPersonalityAssessment.objects.filter(user=self.user).exists()
+        )
+
+    def test_database_prevents_two_current_results_for_one_user(self):
+        FinancialPersonalityAssessment.objects.create(
+            user=self.user,
+            personality_type=FinancialPersonalityAssessment.PersonalityType.WEALTH_ARCHITECT,
+        )
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            FinancialPersonalityAssessment.objects.create(
+                user=self.user,
+                personality_type=FinancialPersonalityAssessment.PersonalityType.CAPITAL_GUARDIAN,
+            )
 
     def test_submit_get_profile_history_and_user_isolation(self):
         first = self.client.post(

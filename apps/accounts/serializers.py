@@ -1155,6 +1155,21 @@ class FinancialPersonalityAnswerSerializer(serializers.Serializer):
 class FinancialPersonalitySubmitSerializer(serializers.Serializer):
     answers = FinancialPersonalityAnswerSerializer(many=True)
 
+    def to_internal_value(self, data):
+        if not isinstance(data, dict):
+            raise serializers.ValidationError(
+                {"non_field_errors": ["بدنه درخواست باید یک شیء JSON باشد."]}
+            )
+        unexpected_fields = set(data) - {"answers"}
+        if unexpected_fields:
+            raise serializers.ValidationError(
+                {
+                    field: ["ارسال این فیلد مجاز نیست؛ نتیجه فقط در سرور محاسبه می‌شود."]
+                    for field in sorted(unexpected_fields)
+                }
+            )
+        return super().to_internal_value(data)
+
     def validate_answers(self, value):
         if len(value) != 20:
             raise serializers.ValidationError("پاسخ هر ۲۰ سؤال الزامی است.")
