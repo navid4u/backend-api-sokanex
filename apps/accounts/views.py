@@ -79,6 +79,7 @@ from .serializers import (
     FinancialPersonalitySubmitSerializer,
     BrokerConnectionSerializer,
     BrokerConnectionReviewSerializer,
+    CrmContactSyncSerializer,
 )
 from .models import (
     Badge,
@@ -91,6 +92,7 @@ from .models import (
     BrokerConnection,
     FinancialPersonalityAssessment,
     OTPChallenge,
+    CrmContactSync,
 )
 from django.utils import timezone
 from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken, OutstandingToken
@@ -100,9 +102,41 @@ from apps.activity.services import ActivityService
 from .authentication import issue_login_tokens
 from .otp import OTPService
 from common.responses import success_response
+from .crm import CrmContactSyncService
 
 
 User = get_user_model()
+
+
+class CrmContactSyncListView(generics.ListAPIView):
+    permission_classes = [IsAuthenticated, CanManageUsers]
+    serializer_class = CrmContactSyncSerializer
+    filter_backends = [DjangoFilterBackend, SearchFilter]
+    filterset_fields = ["status"]
+    search_fields = ["user__username", "user__first_name", "user__last_name", "user__phone"]
+
+    def get_queryset(self):
+        return CrmContactSync.objects.select_related("user").all()
+
+
+class CrmContactSyncRetryView(APIView):
+    permission_classes = [IsAuthenticated, CanManageUsers]
+    serializer_class = CrmContactSyncSerializer
+
+    def post(self, request, pk):
+        sync = get_object_or_404(CrmContactSync.objects.select_related("user"), pk=pk)
+        if sync.status == CrmContactSync.Status.SYNCED:
+            return Response(
+                {"status": sync.status, "message": "این مخاطب قبلاً با CRM همگام شده است."},
+                status=status.HTTP_200_OK,
+            )
+        sync.status = CrmContactSync.Status.PENDING
+        sync.attempts = 0
+        sync.next_retry_at = timezone.now()
+        sync.last_error = ""
+        sync.save(update_fields=("status", "attempts", "next_retry_at", "last_error", "updated_at"))
+        CrmContactSyncService.sync(sync)
+        return Response(CrmContactSyncSerializer(sync).data)
 
 
 class BrokerConnectionView(generics.GenericAPIView):

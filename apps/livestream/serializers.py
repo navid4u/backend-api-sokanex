@@ -1,6 +1,9 @@
 from django.utils import timezone
+from django.conf import settings
+from datetime import timedelta
 
 from rest_framework import serializers
+from drf_spectacular.utils import extend_schema_field
 
 from .models import LiveChatMessage, LiveEvent, LivePresence, SpeakRequest
 
@@ -26,6 +29,10 @@ class LiveEventListSerializer(
     )
     status = serializers.SerializerMethodField()
     status_message = serializers.SerializerMethodField()
+    can_join = serializers.SerializerMethodField()
+    join_opens_at = serializers.SerializerMethodField()
+    join_url = serializers.SerializerMethodField()
+    replay_url = serializers.SerializerMethodField()
 
     class Meta:
         model = LiveEvent
@@ -43,6 +50,10 @@ class LiveEventListSerializer(
             "host",
             "is_live_now",
             "status_message",
+            "can_join",
+            "join_opens_at",
+            "join_url",
+            "replay_url",
         )
 
     def get_is_live_now(self, obj) -> bool:
@@ -58,6 +69,8 @@ class LiveEventListSerializer(
         )
 
     def get_status(self, obj) -> str:
+        if not obj.is_active:
+            return LiveEvent.Status.DISABLED
         if obj.status in (LiveEvent.Status.CANCELLED, LiveEvent.Status.DISABLED):
             return obj.status
         now = timezone.now()
@@ -68,7 +81,34 @@ class LiveEventListSerializer(
         return LiveEvent.Status.LIVE
 
     def get_status_message(self, obj) -> str:
-        return "لایو در حال انجام است" if self.get_status(obj) == LiveEvent.Status.LIVE else "لایو هنوز شروع نشده است" if self.get_status(obj) == LiveEvent.Status.SCHEDULED else ""
+        status_value = self.get_status(obj)
+        if status_value == LiveEvent.Status.LIVE:
+            return "لایو در حال انجام است"
+        if status_value == LiveEvent.Status.SCHEDULED:
+            return "لایو هنوز شروع نشده است"
+        if status_value == LiveEvent.Status.ENDED:
+            return "لایو به پایان رسیده است"
+        return "این رویداد در دسترس نیست"
+
+    @extend_schema_field(serializers.DateTimeField())
+    def get_join_opens_at(self, obj):
+        return obj.starts_at - timedelta(minutes=obj.join_early_minutes)
+
+    def get_can_join(self, obj) -> bool:
+        now = timezone.now()
+        if not obj.is_active or obj.status in (LiveEvent.Status.CANCELLED, LiveEvent.Status.DISABLED, LiveEvent.Status.ENDED):
+            return False
+        if now < self.get_join_opens_at(obj):
+            return False
+        return obj.ends_at is None or now <= obj.ends_at
+
+    def get_join_url(self, obj) -> str:
+        if not self.get_can_join(obj):
+            return ""
+        return obj.external_url or obj.provider_join_url or obj.stream_url
+
+    def get_replay_url(self, obj) -> str:
+        return obj.replay_url if self.get_status(obj) == LiveEvent.Status.ENDED else ""
 
 
 class LiveEventDetailSerializer(
@@ -84,9 +124,7 @@ class LiveEventDetailSerializer(
             + (
                 "description",
                 "external_url",
-                "provider_join_url",
                 "ended_at",
-                "replay_url",
                 "created_at",
                 "updated_at",
             )
@@ -95,10 +133,7 @@ class LiveEventDetailSerializer(
     external_url = serializers.SerializerMethodField()
 
     def get_external_url(self, obj) -> str:
-        if self.get_status(obj) != LiveEvent.Status.LIVE:
-            return ""
-        return obj.external_url or obj.stream_url
-
+        return self.get_join_url(obj)
 
 class LiveEventWriteSerializer(
     AllowedLevelsSerializerMixin,
@@ -116,6 +151,7 @@ class LiveEventWriteSerializer(
             "thumbnail",
             "stream_url",
             "external_url",
+            "join_early_minutes",
             "provider_join_url",
             "ended_at",
             "replay_url",
@@ -172,6 +208,10 @@ class LiveEventWriteSerializer(
                 "",
             ),
         )
+        external_url = attrs.get("external_url", getattr(self.instance, "external_url", ""))
+        provider_join_url = attrs.get(
+            "provider_join_url", getattr(self.instance, "provider_join_url", "")
+        )
 
         if (
             starts_at
@@ -189,18 +229,26 @@ class LiveEventWriteSerializer(
 
         if (
             status_value == LiveEvent.Status.LIVE
-            and not stream_url
+            and not (stream_url or external_url or provider_join_url)
         ):
             raise serializers.ValidationError(
                 {
                     "stream_url": (
-                        "Stream URL is required "
-                        "for a live event."
+                        "برای رویداد در حال پخش، وارد کردن لینک لایو الزامی است."
                     )
                 }
             )
 
         return attrs
+
+    def create(self, validated_data):
+        validated_data.setdefault("join_early_minutes", settings.LIVE_JOIN_EARLY_MINUTES)
+        return super().create(validated_data)
+
+    def validate_join_early_minutes(self, value):
+        if value > 1440:
+            raise serializers.ValidationError("زمان ورود زودتر نمی‌تواند بیشتر از ۱۴۴۰ دقیقه باشد.")
+        return value
 
     def validate_thumbnail(self, value):
         return validate_image_upload(

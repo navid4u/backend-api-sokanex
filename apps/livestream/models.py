@@ -40,6 +40,7 @@ class LiveEvent(LevelRestrictedContent):
         blank=True,
     )
     external_url = models.URLField(max_length=500, blank=True)
+    join_early_minutes = models.PositiveSmallIntegerField(default=10)
 
     replay_url = models.URLField(
         max_length=500,

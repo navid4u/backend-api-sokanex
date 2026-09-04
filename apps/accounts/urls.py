@@ -36,10 +36,14 @@ from .views import (
     BrokerConnectionAdminListView,
     BrokerConnectionAdminDetailView,
     BrokerConnectionReviewView,
+    CrmContactSyncListView,
+    CrmContactSyncRetryView,
 )
 
 
 urlpatterns = [
+    path("admin/crm-syncs/", CrmContactSyncListView.as_view(), name="crm-sync-list"),
+    path("admin/crm-syncs/<int:pk>/retry/", CrmContactSyncRetryView.as_view(), name="crm-sync-retry"),
     path("broker-connection/", BrokerConnectionView.as_view(), name="broker-connection"),
     path("admin/broker-connections/", BrokerConnectionAdminListView.as_view(), name="broker-connection-admin-list"),
     path("admin/broker-connections/<int:pk>/", BrokerConnectionAdminDetailView.as_view(), name="broker-connection-admin-detail"),

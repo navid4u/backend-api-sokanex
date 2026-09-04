@@ -612,6 +612,35 @@ class FinancialPersonalityAuditLog(models.Model):
         ordering = ["-created_at", "-id"]
 
 
+class CrmContactSync(models.Model):
+    class Status(models.TextChoices):
+        PENDING = "pending", "Pending"
+        SYNCED = "synced", "Synced"
+        FAILED = "failed", "Failed"
+        NEEDS_REVIEW = "needs_review", "Needs review"
+
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="crm_contact_sync",
+    )
+    remote_ulid = models.CharField(max_length=64, blank=True)
+    phone_e164 = models.CharField(max_length=20, blank=True, db_index=True)
+    payload_hash = models.CharField(max_length=64, blank=True)
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
+    attempts = models.PositiveSmallIntegerField(default=0)
+    last_error = models.CharField(max_length=500, blank=True)
+    last_response_code = models.CharField(max_length=30, blank=True)
+    next_retry_at = models.DateTimeField(null=True, blank=True)
+    synced_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-updated_at", "-id"]
+        indexes = [models.Index(fields=["status", "next_retry_at"])]
+
+
 class BrokerConnection(models.Model):
     class Status(models.TextChoices):
         NOT_STARTED = "not_started", "Not started"

@@ -73,6 +73,8 @@ class SignalCreateSerializer(
     AllowedLevelsSerializerMixin,
     serializers.ModelSerializer,
 ):
+    title = serializers.CharField(required=False, allow_blank=True, max_length=200)
+    trader = serializers.CharField(source="created_by.username", read_only=True)
 
     class Meta:
         model = Signal
@@ -92,11 +94,17 @@ class SignalCreateSerializer(
             "description",
             "image",
             "allowed_levels",
+            "status",
+            "trader",
+            "created_at",
         )
 
         read_only_fields = (
             "id",
             "signal_id",
+            "status",
+            "trader",
+            "created_at",
         )
 
     def validate_image(self, value):
@@ -138,9 +146,8 @@ class SignalCreateSerializer(
                 raise serializers.ValidationError(
                     {
                         "prices": (
-                            "For a buy signal, stop loss "
-                            "must be below entry price and "
-                            "take profit must be above it."
+                            "برای سیگنال خرید باید حد ضرر کمتر از قیمت ورود و "
+                            "حد سود بیشتر از قیمت ورود باشد."
                         ),
                     }
                 )
@@ -154,14 +161,22 @@ class SignalCreateSerializer(
                 raise serializers.ValidationError(
                     {
                         "prices": (
-                            "For a sell signal, take profit "
-                            "must be below entry price and "
-                            "stop loss must be above it."
+                            "برای سیگنال فروش باید حد سود کمتر از قیمت ورود و "
+                            "حد ضرر بیشتر از قیمت ورود باشد."
                         ),
                     }
                 )
 
+        if "title" in attrs:
+            attrs["title"] = attrs["title"].strip()
         return attrs
+
+    def create(self, validated_data):
+        validated_data["symbol"] = validated_data["symbol"].strip().upper()
+        if not validated_data.get("title"):
+            direction_label = "خرید" if validated_data["direction"] == Direction.BUY else "فروش"
+            validated_data["title"] = f"{validated_data['symbol']} - {direction_label}"
+        return super().create(validated_data)
 
 
 class SignalDetailSerializer(

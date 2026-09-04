@@ -255,11 +255,17 @@ class LiveJoinView(APIView):
     serializer_class = EmptySerializer
 
     def post(self, request, slug):
-        event = get_object_or_404(LiveEventService.public_events(request.user), slug=slug, status=LiveEvent.Status.LIVE)
+        event = get_object_or_404(LiveEventService.public_events(request.user), slug=slug)
+        state = LiveEventDetailSerializer(event, context={"request": request})
+        if not state.get_can_join(event):
+            return Response(
+                {"detail": state.get_status_message(event), "join_opens_at": state.get_join_opens_at(event)},
+                status=status.HTTP_403_FORBIDDEN,
+            )
         presence, _ = LivePresence.objects.update_or_create(event=event, user=request.user, defaults={"left_at": None})
         return Response({
             "event": event.slug,
-            "join_url": event.provider_join_url or event.stream_url,
+            "join_url": state.get_join_url(event),
             "participant_id": presence.pk,
             "viewer_count": event.viewer_count,
         })

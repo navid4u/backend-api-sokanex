@@ -930,6 +930,73 @@ paths:
               schema:
                 $ref: '#/components/schemas/BrokerConnectionReview'
           description: ''
+  /api/accounts/admin/crm-syncs/:
+    get:
+      operationId: accounts_admin_crm_syncs_list
+      parameters:
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      - in: query
+        name: status
+        schema:
+          type: string
+          enum:
+          - failed
+          - needs_review
+          - pending
+          - synced
+        description: |-
+          * `pending` - Pending
+          * `synced` - Synced
+          * `failed` - Failed
+          * `needs_review` - Needs review
+      tags:
+      - accounts
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedCrmContactSyncList'
+          description: ''
+  /api/accounts/admin/crm-syncs/{id}/retry/:
+    post:
+      operationId: accounts_admin_crm_syncs_retry_create
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - accounts
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CrmContactSync'
+          description: ''
   /api/accounts/admin/upgrade-requests/:
     get:
       operationId: accounts_admin_upgrade_requests_list
@@ -9411,6 +9478,75 @@ components:
             minimum: 1
       required:
       - title
+    CrmContactSync:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        user:
+          type: integer
+          readOnly: true
+        username:
+          type: string
+          readOnly: true
+        phone:
+          type: string
+          readOnly: true
+        remote_ulid:
+          type: string
+          readOnly: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/CrmContactSyncStatusEnum'
+          readOnly: true
+        attempts:
+          type: integer
+          readOnly: true
+        last_error:
+          type: string
+          readOnly: true
+        last_response_code:
+          type: string
+          readOnly: true
+        synced_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - attempts
+      - created_at
+      - id
+      - last_error
+      - last_response_code
+      - phone
+      - remote_ulid
+      - status
+      - synced_at
+      - updated_at
+      - user
+      - username
+    CrmContactSyncStatusEnum:
+      enum:
+      - pending
+      - synced
+      - failed
+      - needs_review
+      type: string
+      description: |-
+        * `pending` - Pending
+        * `synced` - Synced
+        * `failed` - Failed
+        * `needs_review` - Needs review
     CryptoSnapshotResponse:
       type: object
       properties:
@@ -10346,29 +10482,28 @@ components:
         status_message:
           type: string
           readOnly: true
+        can_join:
+          type: boolean
+          readOnly: true
+        join_opens_at:
+          type: string
+          format: date-time
+          readOnly: true
+        join_url:
+          type: string
+          readOnly: true
+        replay_url:
+          type: string
+          readOnly: true
         description:
           type: string
         external_url:
           type: string
           readOnly: true
-        provider_join_url:
-          oneOf:
-          - type: string
-            format: uri
-            maxLength: 500
-          - type: string
-            maxLength: 0
         ended_at:
           type: string
           format: date-time
           nullable: true
-        replay_url:
-          oneOf:
-          - type: string
-            format: uri
-            maxLength: 500
-          - type: string
-            maxLength: 0
         created_at:
           type: string
           format: date-time
@@ -10378,11 +10513,15 @@ components:
           format: date-time
           readOnly: true
       required:
+      - can_join
       - created_at
       - external_url
       - host
       - id
       - is_live_now
+      - join_opens_at
+      - join_url
+      - replay_url
       - starts_at
       - status
       - status_message
@@ -10438,10 +10577,27 @@ components:
         status_message:
           type: string
           readOnly: true
+        can_join:
+          type: boolean
+          readOnly: true
+        join_opens_at:
+          type: string
+          format: date-time
+          readOnly: true
+        join_url:
+          type: string
+          readOnly: true
+        replay_url:
+          type: string
+          readOnly: true
       required:
+      - can_join
       - host
       - id
       - is_live_now
+      - join_opens_at
+      - join_url
+      - replay_url
       - starts_at
       - status
       - status_message
@@ -10494,6 +10650,11 @@ components:
             maxLength: 500
           - type: string
             maxLength: 0
+        join_early_minutes:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
         provider_join_url:
           oneOf:
           - type: string
@@ -10574,6 +10735,11 @@ components:
             maxLength: 500
           - type: string
             maxLength: 0
+        join_early_minutes:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
         provider_join_url:
           oneOf:
           - type: string
@@ -11346,6 +11512,29 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/CourseSession'
+    PaginatedCrmContactSyncList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/CrmContactSync'
     PaginatedEconomicEventList:
       type: object
       required:
@@ -12441,6 +12630,11 @@ components:
             maxLength: 500
           - type: string
             maxLength: 0
+        join_early_minutes:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
         provider_join_url:
           oneOf:
           - type: string
@@ -12637,7 +12831,6 @@ components:
       properties:
         title:
           type: string
-          minLength: 1
           maxLength: 200
         symbol:
           type: string
@@ -14136,22 +14329,34 @@ components:
             type: integer
             maximum: 5
             minimum: 1
+        status:
+          allOf:
+          - $ref: '#/components/schemas/SignalStatusEnum'
+          readOnly: true
+        trader:
+          type: string
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
       required:
+      - created_at
       - direction
       - entry_price
       - id
       - market
       - signal_id
+      - status
       - stop_loss
       - symbol
       - take_profit
-      - title
+      - trader
     SignalCreateRequest:
       type: object
       properties:
         title:
           type: string
-          minLength: 1
           maxLength: 200
         symbol:
           type: string
@@ -14197,7 +14402,6 @@ components:
       - stop_loss
       - symbol
       - take_profit
-      - title
     SignalDetail:
       type: object
       properties:
@@ -14358,6 +14562,13 @@ components:
             minimum: 1
         status:
           $ref: '#/components/schemas/SignalStatusEnum'
+        trader:
+          type: string
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
         result_price:
           type: string
           format: decimal
@@ -14369,6 +14580,7 @@ components:
           pattern: ^-?\d{0,6}(?:\.\d{0,4})?$
           nullable: true
       required:
+      - created_at
       - direction
       - entry_price
       - id
@@ -14377,13 +14589,12 @@ components:
       - stop_loss
       - symbol
       - take_profit
-      - title
+      - trader
     SignalEditRequest:
       type: object
       properties:
         title:
           type: string
-          minLength: 1
           maxLength: 200
         symbol:
           type: string
@@ -14441,7 +14652,6 @@ components:
       - stop_loss
       - symbol
       - take_profit
-      - title
     SignalList:
       type: object
       properties:
@@ -15435,6 +15645,9 @@ components:
         profile_incomplete:
           type: boolean
           readOnly: true
+        profile_complete:
+          type: boolean
+          readOnly: true
         missing_profile_fields:
           type: array
           items:
@@ -15444,6 +15657,15 @@ components:
           type: object
           additionalProperties: {}
           readOnly: true
+        crm_sync_status:
+          type: string
+          nullable: true
+          readOnly: true
+        crm_synced_at:
+          type: string
+          format: date-time
+          nullable: true
+          readOnly: true
         created_at:
           type: string
           format: date-time
@@ -15452,11 +15674,14 @@ components:
       - access_level
       - capabilities
       - created_at
+      - crm_sync_status
+      - crm_synced_at
       - custom_role
       - email
       - id
       - is_verified
       - missing_profile_fields
+      - profile_complete
       - profile_completion
       - profile_incomplete
       - role
@@ -15778,6 +16003,9 @@ components:
         profile_incomplete:
           type: boolean
           readOnly: true
+        profile_complete:
+          type: boolean
+          readOnly: true
         missing_profile_fields:
           type: array
           items:
@@ -15814,6 +16042,15 @@ components:
             version:
               type: integer
           readOnly: true
+        crm_sync_status:
+          type: string
+          nullable: true
+          readOnly: true
+        crm_synced_at:
+          type: string
+          format: date-time
+          nullable: true
+          readOnly: true
         created_at:
           type: string
           format: date-time
@@ -15824,10 +16061,13 @@ components:
           readOnly: true
       required:
       - created_at
+      - crm_sync_status
+      - crm_synced_at
       - email
       - id
       - missing_profile_fields
       - personality_result
+      - profile_complete
       - profile_completion
       - profile_incomplete
       - updated_at

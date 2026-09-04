@@ -24,9 +24,13 @@ class ProfileCompletionService:
             "trading_frequency": bool(profile.trading_frequency),
         }
         missing = [name for name, completed in values.items() if not completed]
+        missing_identity = [
+            name for name in ("first_name", "last_name") if not values[name]
+        ]
         completion = round(100 * (len(values) - len(missing)) / len(values))
         return {
             "profile_incomplete": bool(missing),
+            "profile_complete": not bool(missing_identity),
             "profile_completion": completion,
             "missing_profile_fields": missing,
         }

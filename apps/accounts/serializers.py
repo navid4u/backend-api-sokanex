@@ -27,6 +27,7 @@ from .authentication import issue_login_tokens
 from .models import (
     Badge,
     BrokerConnection,
+    CrmContactSync,
     FinancialPersonalityAssessment,
     PlatformRole,
     SecuritySettings,
@@ -113,8 +114,11 @@ class UserSerializer(serializers.ModelSerializer):
     )
     profile_completion = serializers.SerializerMethodField()
     profile_incomplete = serializers.SerializerMethodField()
+    profile_complete = serializers.SerializerMethodField()
     missing_profile_fields = serializers.SerializerMethodField()
     capabilities = serializers.SerializerMethodField()
+    crm_sync_status = serializers.SerializerMethodField()
+    crm_synced_at = serializers.SerializerMethodField()
 
     class Meta:
         model = User
@@ -132,8 +136,11 @@ class UserSerializer(serializers.ModelSerializer):
             "is_verified",
             "profile_completion",
             "profile_incomplete",
+            "profile_complete",
             "missing_profile_fields",
             "capabilities",
+            "crm_sync_status",
+            "crm_synced_at",
             "created_at",
         )
         read_only_fields = (
@@ -159,6 +166,9 @@ class UserSerializer(serializers.ModelSerializer):
     def get_profile_incomplete(self, obj) -> bool:
         return self._profile_status(obj)["profile_incomplete"]
 
+    def get_profile_complete(self, obj) -> bool:
+        return self._profile_status(obj)["profile_complete"]
+
     def get_missing_profile_fields(self, obj) -> list[str]:
         return self._profile_status(obj)["missing_profile_fields"]
 
@@ -179,6 +189,16 @@ class UserSerializer(serializers.ModelSerializer):
                 User.Permission.AI_ASSISTANT_MANAGE
             ) or obj.has_platform_permission(User.Permission.PLATFORM_SETTINGS_MANAGE),
         }
+
+    @extend_schema_field(serializers.CharField(allow_null=True))
+    def get_crm_sync_status(self, obj) -> str | None:
+        sync = getattr(obj, "crm_contact_sync", None)
+        return sync.status if sync else None
+
+    @extend_schema_field(serializers.DateTimeField(allow_null=True))
+    def get_crm_synced_at(self, obj):
+        sync = getattr(obj, "crm_contact_sync", None)
+        return sync.synced_at if sync else None
 
 
 class CustomTokenObtainPairSerializer(
@@ -623,8 +643,11 @@ class UserProfileDetailsSerializer(serializers.ModelSerializer):
     )
     profile_completion = serializers.SerializerMethodField()
     profile_incomplete = serializers.SerializerMethodField()
+    profile_complete = serializers.SerializerMethodField()
     missing_profile_fields = serializers.SerializerMethodField()
     personality_result = serializers.SerializerMethodField()
+    crm_sync_status = serializers.SerializerMethodField()
+    crm_synced_at = serializers.SerializerMethodField()
 
     MARKET_CHOICES = {
         "FOREX",
@@ -672,8 +695,11 @@ class UserProfileDetailsSerializer(serializers.ModelSerializer):
             "onboarding_answers",
             "profile_completion",
             "profile_incomplete",
+            "profile_complete",
             "missing_profile_fields",
             "personality_result",
+            "crm_sync_status",
+            "crm_synced_at",
             "created_at",
             "updated_at",
         )
@@ -683,8 +709,11 @@ class UserProfileDetailsSerializer(serializers.ModelSerializer):
             "email",
             "profile_completion",
             "profile_incomplete",
+            "profile_complete",
             "missing_profile_fields",
             "personality_result",
+            "crm_sync_status",
+            "crm_synced_at",
             "created_at",
             "updated_at",
         )
@@ -770,6 +799,9 @@ class UserProfileDetailsSerializer(serializers.ModelSerializer):
     def get_profile_incomplete(self, obj) -> bool:
         return ProfileCompletionService.status(obj.user)["profile_incomplete"]
 
+    def get_profile_complete(self, obj) -> bool:
+        return ProfileCompletionService.status(obj.user)["profile_complete"]
+
     def get_missing_profile_fields(self, obj) -> list[str]:
         return ProfileCompletionService.status(obj.user)["missing_profile_fields"]
 
@@ -797,6 +829,30 @@ class UserProfileDetailsSerializer(serializers.ModelSerializer):
             is_current=True
         ).first()
         return FinancialPersonalityResultSerializer(assessment).data if assessment else None
+
+    @extend_schema_field(serializers.CharField(allow_null=True))
+    def get_crm_sync_status(self, obj) -> str | None:
+        sync = getattr(obj.user, "crm_contact_sync", None)
+        return sync.status if sync else None
+
+    @extend_schema_field(serializers.DateTimeField(allow_null=True))
+    def get_crm_synced_at(self, obj):
+        sync = getattr(obj.user, "crm_contact_sync", None)
+        return sync.synced_at if sync else None
+
+
+class CrmContactSyncSerializer(serializers.ModelSerializer):
+    username = serializers.CharField(source="user.username", read_only=True)
+    phone = serializers.CharField(source="user.phone", read_only=True)
+
+    class Meta:
+        model = CrmContactSync
+        fields = (
+            "id", "user", "username", "phone", "remote_ulid", "status",
+            "attempts", "last_error", "last_response_code", "synced_at",
+            "created_at", "updated_at",
+        )
+        read_only_fields = fields
 
 
 class UpgradeRequestSerializer(serializers.ModelSerializer):
@@ -982,6 +1038,18 @@ class ProfileUpdateSerializer(
             max_size_mb=5,
             file_label="Avatar",
         )
+
+    def _validate_name(self, value, label):
+        value = value.strip()
+        if len(value) < 2:
+            raise serializers.ValidationError(f"{label} باید حداقل ۲ کاراکتر باشد.")
+        return value
+
+    def validate_first_name(self, value):
+        return self._validate_name(value, "نام")
+
+    def validate_last_name(self, value):
+        return self._validate_name(value, "نام خانوادگی")
 
 
 class LogoutSerializer(serializers.Serializer):

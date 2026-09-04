@@ -5,9 +5,18 @@ from .models import (
     Badge, PlatformRole, SecuritySettings, UpgradeRequest,
     User, UserBadge, UserDevice, UserProfile, BrokerConnection,
     FinancialPersonalityAssessment, FinancialPersonalityAuditLog,
+    CrmContactSync,
 )
 
 admin.site.register(BrokerConnection)
+
+
+@admin.register(CrmContactSync)
+class CrmContactSyncAdmin(admin.ModelAdmin):
+    list_display = ("user", "status", "attempts", "remote_ulid", "synced_at", "updated_at")
+    list_filter = ("status",)
+    search_fields = ("user__username", "user__phone", "remote_ulid")
+    readonly_fields = tuple(field.name for field in CrmContactSync._meta.fields)
 
 
 class UserProfileInline(admin.StackedInline):
