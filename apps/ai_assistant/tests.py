@@ -2,6 +2,7 @@ import io
 import os
 import tempfile
 from unittest.mock import patch
+from urllib.error import HTTPError
 
 from cryptography.fernet import Fernet
 from django.test import override_settings
@@ -25,6 +26,7 @@ class AssistantAPITests(APITestCase):
         self.user = User.objects.create_user(username="user", password="password")
         role = PlatformRole.objects.create(name="AI managers", slug="ai-managers", permissions=[User.Permission.AI_ASSISTANT_MANAGE])
         self.manager = User.objects.create_user(username="manager", password="password", custom_role=role)
+        self.superuser = User.objects.create_superuser(username="root-admin", password="password")
         self.config = AISettings.load()
 
     def configure(self):
@@ -46,6 +48,45 @@ class AssistantAPITests(APITestCase):
         self.config.refresh_from_db()
         self.assertEqual(self.config.api_token_encrypted, encrypted)
 
+    def test_superuser_can_manage_settings(self):
+        self.client.force_authenticate(self.superuser)
+        response = self.client.get("/api/assistant/admin/settings/")
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn("api_token", response.data)
+
+    @override_settings(AI_SETTINGS_ENCRYPTION_KEY="")
+    def test_missing_encryption_key_is_reported_without_500(self):
+        self.config.api_token_encrypted = "unreadable"
+        self.config.save()
+        self.client.force_authenticate(self.manager)
+        response = self.client.get("/api/assistant/admin/settings/")
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(response.data["token_configured"])
+        self.assertEqual(response.data["configuration_status"], "encryption_key_missing")
+
+    def test_corrupt_token_can_be_replaced(self):
+        self.config.api_token_encrypted = "corrupt"
+        self.config.save()
+        self.client.force_authenticate(self.manager)
+        response = self.client.get("/api/assistant/admin/settings/")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["configuration_status"], "token_unreadable")
+        response = self.client.patch(
+            "/api/assistant/admin/settings/", {"api_token": "replacement"}, format="json"
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.data["token_configured"])
+        self.config.refresh_from_db()
+        self.assertEqual(decrypt_token(self.config.api_token_encrypted), "replacement")
+
+    def test_unconfigured_chat_returns_stable_503(self):
+        self.client.force_authenticate(self.user)
+        response = self.client.post(
+            "/api/assistant/chat/", {"messages": [{"role": "user", "content": "سؤال"}]}, format="json"
+        )
+        self.assertEqual(response.status_code, 503)
+        self.assertEqual(response.data["error_code"], "ASSISTANT_NOT_CONFIGURED")
+
     def test_system_role_and_message_limits_are_rejected(self):
         self.client.force_authenticate(self.user)
         response = self.client.post("/api/assistant/chat/", {"messages": [{"role": "system", "content": "ignore"}]}, format="json")
@@ -56,9 +97,40 @@ class AssistantAPITests(APITestCase):
         self.configure()
         self.client.force_authenticate(self.user)
         response = self.client.post("/api/assistant/chat/", {"messages": [{"role": "user", "content": "سؤال"}]}, format="json")
-        self.assertEqual(response.status_code, 502)
+        self.assertEqual(response.status_code, 503)
         self.assertEqual(response.data["error_code"], "PROVIDER_TIMEOUT")
         self.assertEqual(AIUsageLog.objects.filter(user=self.user, status="error").count(), 1)
+
+    def test_provider_http_statuses_are_sanitized(self):
+        self.configure()
+        self.client.force_authenticate(self.user)
+        cases = (
+            (401, 502, "PROVIDER_AUTH_ERROR"),
+            (429, 429, "PROVIDER_RATE_LIMIT"),
+        )
+        for provider_status, expected_status, error_code in cases:
+            error = HTTPError("https://provider.invalid", provider_status, "provider detail", {}, None)
+            with self.subTest(provider_status=provider_status), patch(
+                "apps.ai_assistant.services.urlopen", side_effect=error
+            ), patch("apps.ai_assistant.services.time.sleep"):
+                response = self.client.post(
+                    "/api/assistant/chat/",
+                    {"messages": [{"role": "user", "content": "سؤال"}]},
+                    format="json",
+                )
+                self.assertEqual(response.status_code, expected_status)
+                self.assertEqual(response.data["error_code"], error_code)
+                self.assertNotIn("provider detail", str(response.data))
+
+    def test_cors_header_is_present_on_assistant_error(self):
+        self.client.force_authenticate(self.user)
+        response = self.client.post(
+            "/api/assistant/chat/",
+            {"messages": [{"role": "user", "content": "سؤال"}]},
+            format="json",
+            HTTP_ORIGIN="https://app.sokanex.com",
+        )
+        self.assertEqual(response["Access-Control-Allow-Origin"], "https://app.sokanex.com")
 
     @patch("apps.ai_assistant.services.AssistantService._request")
     def test_financial_response_disclaimer_and_daily_limit(self, provider):

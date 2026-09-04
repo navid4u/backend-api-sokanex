@@ -5,7 +5,9 @@ from PIL import Image, UnidentifiedImageError
 
 from rest_framework import serializers
 
-from .crypto import encrypt_token
+from django.core.exceptions import ImproperlyConfigured
+
+from .crypto import encrypt_token, token_configuration_status
 from .models import AISettings
 
 
@@ -16,18 +18,24 @@ def clean_content(value):
 
 class AISettingsSerializer(serializers.ModelSerializer):
     token_configured = serializers.SerializerMethodField()
+    configuration_status = serializers.SerializerMethodField()
     api_token = serializers.CharField(write_only=True, required=False, allow_blank=True, trim_whitespace=False)
 
     class Meta:
         model = AISettings
         fields = (
-            "enabled", "provider", "base_url", "token_configured", "api_token", "model",
+            "enabled", "provider", "base_url", "token_configured", "configuration_status", "api_token", "model",
             "financial_system_prompt", "technical_system_prompt", "temperature", "max_tokens",
             "daily_user_limit", "image_daily_user_limit", "request_timeout",
         )
 
     def get_token_configured(self, obj) -> bool:
-        return bool(obj.api_token_encrypted)
+        configured, _ = token_configuration_status(obj.api_token_encrypted)
+        return configured
+
+    def get_configuration_status(self, obj) -> str:
+        _, status = token_configuration_status(obj.api_token_encrypted)
+        return status
 
     def validate_base_url(self, value):
         if not value.startswith("https://"):
@@ -37,7 +45,12 @@ class AISettingsSerializer(serializers.ModelSerializer):
     def update(self, instance, validated_data):
         token = validated_data.pop("api_token", None)
         if token:
-            instance.api_token_encrypted = encrypt_token(token)
+            try:
+                instance.api_token_encrypted = encrypt_token(token)
+            except (ImproperlyConfigured, ValueError) as exc:
+                raise serializers.ValidationError(
+                    {"api_token": "کلید رمزنگاری دستیار روی سرور تنظیم یا معتبر نیست."}
+                ) from exc
         return super().update(instance, validated_data)
 
 

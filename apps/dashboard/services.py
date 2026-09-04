@@ -165,6 +165,11 @@ class DashboardService:
                     )
                 ),
 
+                "can_manage_ai_assistant": (
+                    user.has_platform_permission(User.Permission.AI_ASSISTANT_MANAGE)
+                    or user.has_platform_permission(User.Permission.PLATFORM_SETTINGS_MANAGE)
+                ),
+
                 "can_manage_internal_analysis": (
                     user.is_superuser
                     or user.role == User.Role.SUPER_ADMIN

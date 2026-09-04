@@ -6,6 +6,7 @@ from datetime import timedelta
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
+from django.core.exceptions import ImproperlyConfigured
 from django.db import transaction
 from django.utils import timezone
 
@@ -23,12 +24,20 @@ class AssistantService:
     def _ready(cls, mode):
         config = AISettings.load()
         if not config.enabled:
-            raise AssistantError("دستیار هوشمند غیرفعال است.", "ASSISTANT_DISABLED", 503)
+            raise AssistantError("دستیار هوشمند هنوز برای استفاده فعال نشده است.", "ASSISTANT_NOT_CONFIGURED", 503)
         limit = config.daily_user_limit if mode == AIUsageLog.Mode.FINANCIAL else config.image_daily_user_limit
         if limit == 0:
-            raise AssistantError("این قابلیت توسط مدیر غیرفعال شده است.", "ASSISTANT_DISABLED", 503)
+            raise AssistantError("این قابلیت هنوز برای استفاده فعال نشده است.", "ASSISTANT_NOT_CONFIGURED", 503)
         if not config.api_token_encrypted or not config.model:
             raise AssistantError("توکن یا مدل دستیار توسط مدیر تنظیم نشده است.", "ASSISTANT_NOT_CONFIGURED", 503)
+        try:
+            decrypt_token(config.api_token_encrypted)
+        except (ImproperlyConfigured, ValueError, TypeError):
+            raise AssistantError(
+                "تنظیمات امن دستیار نیاز به ثبت مجدد توکن دارد.",
+                "ASSISTANT_NOT_CONFIGURED",
+                503,
+            ) from None
         return config, limit
 
     @classmethod
@@ -71,10 +80,17 @@ class AssistantService:
                 if exc.code in (429, 502, 503) and attempt == 0:
                     time.sleep(0.25)
                     continue
-                code = "PROVIDER_AUTH_ERROR" if exc.code in (401, 403) else "PROVIDER_RATE_LIMIT" if exc.code == 429 else "PROVIDER_ERROR"
-                raise AssistantError("ارتباط با سرویس هوشمند ناموفق بود.", code, 502) from exc
+                if exc.code in (401, 403):
+                    code, response_status = "PROVIDER_AUTH_ERROR", 502
+                elif exc.code == 429:
+                    code, response_status = "PROVIDER_RATE_LIMIT", 429
+                elif exc.code in (502, 503, 504):
+                    code, response_status = "PROVIDER_UNAVAILABLE", 503
+                else:
+                    code, response_status = "PROVIDER_ERROR", 502
+                raise AssistantError("ارتباط با سرویس هوشمند ناموفق بود.", code, response_status) from exc
             except (URLError, TimeoutError, ValueError, json.JSONDecodeError) as exc:
-                raise AssistantError("سرویس هوشمند در زمان مقرر پاسخ نداد.", "PROVIDER_TIMEOUT", 502) from exc
+                raise AssistantError("سرویس هوشمند در زمان مقرر پاسخ نداد.", "PROVIDER_TIMEOUT", 503) from exc
 
     @classmethod
     def financial(cls, user, messages):

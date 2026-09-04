@@ -7769,6 +7769,9 @@ components:
         token_configured:
           type: boolean
           readOnly: true
+        configuration_status:
+          type: string
+          readOnly: true
         model:
           type: string
           maxLength: 150
@@ -7800,6 +7803,7 @@ components:
           maximum: 120
           minimum: 10
       required:
+      - configuration_status
       - token_configured
     ActivityTypeEnum:
       enum:
@@ -9752,8 +9756,11 @@ components:
           type: boolean
         can_manage_internal_analysis:
           type: boolean
+        can_manage_ai_assistant:
+          type: boolean
       required:
       - can_manage_academy
+      - can_manage_ai_assistant
       - can_manage_content
       - can_manage_internal_analysis
       - can_manage_landing

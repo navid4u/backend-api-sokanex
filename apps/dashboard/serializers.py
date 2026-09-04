@@ -113,6 +113,8 @@ class DashboardCapabilitiesSerializer(
 
     can_manage_internal_analysis = serializers.BooleanField()
 
+    can_manage_ai_assistant = serializers.BooleanField()
+
 
 class DashboardFinanceSerializer(serializers.Serializer):
     connected = serializers.BooleanField()
