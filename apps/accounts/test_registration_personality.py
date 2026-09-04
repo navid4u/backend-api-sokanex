@@ -66,6 +66,19 @@ class RegistrationOTPTests(TestCase):
         self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {verified.data['access']}")
         self.assertEqual(self.client.get("/api/dashboard/").status_code, 200)
 
+    @override_settings(CRM_ENABLED=True, CRM_API_KEY="wrong-key")
+    @patch("apps.accounts.crm.request.urlopen")
+    def test_otp_verify_is_fail_open_and_never_calls_crm_http(self, urlopen):
+        requested, _ = self.request_code(phone="09351234567")
+        self.assertEqual(requested.status_code, 200)
+        verified = self.client.post(
+            "/api/accounts/auth/registration/verify/",
+            {"phone": "09351234567", "code": "4839"},
+        )
+        self.assertEqual(verified.status_code, 200)
+        self.assertIn("access", verified.data)
+        urlopen.assert_not_called()
+
     def test_existing_user_logs_in_without_creating_another_user(self):
         user = User.objects.create_user(
             username="09121234567", phone="09121234567", password="OldPassword123!"

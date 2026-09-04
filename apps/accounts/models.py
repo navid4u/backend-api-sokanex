@@ -618,6 +618,7 @@ class CrmContactSync(models.Model):
         SYNCED = "synced", "Synced"
         FAILED = "failed", "Failed"
         NEEDS_REVIEW = "needs_review", "Needs review"
+        DEAD_LETTER = "dead_letter", "Dead letter"
 
     user = models.OneToOneField(
         settings.AUTH_USER_MODEL,

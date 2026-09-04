@@ -1,6 +1,8 @@
 from django.contrib.auth import get_user_model
 from django.shortcuts import get_object_or_404
 from django.db.models.deletion import ProtectedError
+from django.db.models import Max
+from django.conf import settings
 from django.utils.decorators import method_decorator
 from django.views.decorators.cache import never_cache
 from django_filters.rest_framework import (
@@ -137,6 +139,77 @@ class CrmContactSyncRetryView(APIView):
         sync.save(update_fields=("status", "attempts", "next_retry_at", "last_error", "updated_at"))
         CrmContactSyncService.sync(sync)
         return Response(CrmContactSyncSerializer(sync).data)
+
+
+class CrmContactSyncRetryAllView(APIView):
+    permission_classes = [IsAuthenticated, CanManageUsers]
+
+    @extend_schema(
+        request=None,
+        responses=inline_serializer(
+            name="CrmContactRetryAllResponse",
+            fields={"queued": serializers.IntegerField()},
+        ),
+    )
+    def post(self, request):
+        CrmContactSyncService.close_circuit()
+        updated = CrmContactSync.objects.filter(
+            status__in=(CrmContactSync.Status.FAILED, CrmContactSync.Status.DEAD_LETTER)
+        ).update(
+            status=CrmContactSync.Status.PENDING,
+            attempts=0,
+            last_error="",
+            next_retry_at=timezone.now(),
+        )
+        return Response({"queued": updated})
+
+
+class CrmIntegrationHealthView(APIView):
+    permission_classes = [IsAuthenticated, CanManageUsers]
+
+    @extend_schema(
+        responses=inline_serializer(
+            name="CrmIntegrationHealthResponse",
+            fields={
+                "status": serializers.ChoiceField(
+                    choices=("configured", "healthy", "degraded", "auth_error", "disabled")
+                ),
+                "configured": serializers.BooleanField(),
+                "last_success_at": serializers.DateTimeField(allow_null=True),
+                "failed_jobs": serializers.IntegerField(),
+            },
+        )
+    )
+    def get(self, request):
+        failed_count = CrmContactSync.objects.filter(
+            status__in=(
+                CrmContactSync.Status.FAILED,
+                CrmContactSync.Status.DEAD_LETTER,
+                CrmContactSync.Status.NEEDS_REVIEW,
+            )
+        ).count()
+        last_success = CrmContactSync.objects.filter(
+            status=CrmContactSync.Status.SYNCED
+        ).aggregate(value=Max("synced_at"))["value"]
+        circuit = CrmContactSyncService.circuit_state()
+        if not settings.CRM_ENABLED:
+            integration_status = "disabled"
+        elif circuit and circuit.get("reason") == "auth_error":
+            integration_status = "auth_error"
+        elif not settings.CRM_API_KEY:
+            integration_status = "degraded"
+        elif last_success and not failed_count:
+            integration_status = "healthy"
+        elif not last_success and not failed_count:
+            integration_status = "configured"
+        else:
+            integration_status = "degraded"
+        return Response({
+            "status": integration_status,
+            "configured": bool(settings.CRM_ENABLED and settings.CRM_API_KEY),
+            "last_success_at": last_success,
+            "failed_jobs": failed_count,
+        })
 
 
 class BrokerConnectionView(generics.GenericAPIView):

@@ -1,11 +1,13 @@
 import hashlib
 import json
 import logging
+import secrets
 from datetime import datetime, time, timedelta, timezone as dt_timezone
 from urllib import error, request
 
 from django.conf import settings
 from django.core.exceptions import ValidationError
+from django.core.cache import cache
 from django.db import transaction
 from django.utils import timezone
 
@@ -17,6 +19,32 @@ logger = logging.getLogger(__name__)
 
 
 class CrmContactSyncService:
+    CIRCUIT_KEY = "crm:contact-sync:circuit"
+
+    @staticmethod
+    def key_fingerprint():
+        return hashlib.sha256(settings.CRM_API_KEY.encode("utf-8")).hexdigest()[:16]
+
+    @classmethod
+    def circuit_state(cls):
+        state = cache.get(cls.CIRCUIT_KEY)
+        if state and state.get("key_fingerprint") != cls.key_fingerprint():
+            cache.delete(cls.CIRCUIT_KEY)
+            return None
+        return state
+
+    @classmethod
+    def open_circuit(cls, reason, permanent=False):
+        timeout = None if permanent else settings.CRM_CIRCUIT_BREAKER_SECONDS
+        cache.set(
+            cls.CIRCUIT_KEY,
+            {"reason": reason, "key_fingerprint": cls.key_fingerprint()},
+            timeout=timeout,
+        )
+
+    @classmethod
+    def close_circuit(cls):
+        cache.delete(cls.CIRCUIT_KEY)
     @staticmethod
     def normalize_phone(value):
         return "98" + normalize_iran_phone(value)[1:]
@@ -97,10 +125,28 @@ class CrmContactSyncService:
 
     @classmethod
     def sync(cls, sync):
-        if not settings.CRM_ENABLED or not settings.CRM_API_KEY:
+        if not settings.CRM_ENABLED:
             sync.status = CrmContactSync.Status.FAILED
-            sync.last_error = "CRM فعال نیست یا کلید API تنظیم نشده است."
-            sync.save(update_fields=("status", "last_error", "updated_at"))
+            sync.last_error = "CRM غیرفعال است."
+            sync.last_response_code = "disabled"
+            sync.next_retry_at = None
+            sync.save(update_fields=("status", "last_error", "last_response_code", "next_retry_at", "updated_at"))
+            return sync
+        if not settings.CRM_API_KEY:
+            sync.status = CrmContactSync.Status.FAILED
+            sync.last_error = "کلید API سرویس CRM تنظیم نشده است."
+            sync.last_response_code = "configuration_error"
+            sync.next_retry_at = None
+            cls.open_circuit("configuration_error", permanent=True)
+            sync.save(update_fields=("status", "last_error", "last_response_code", "next_retry_at", "updated_at"))
+            return sync
+        circuit = cls.circuit_state()
+        if circuit:
+            sync.status = CrmContactSync.Status.FAILED
+            sync.last_error = "ارسال به CRM به‌دلیل باز بودن مدار اتصال متوقف است."
+            sync.last_response_code = circuit["reason"]
+            sync.next_retry_at = None
+            sync.save(update_fields=("status", "last_error", "last_response_code", "next_retry_at", "updated_at"))
             return sync
         payload = cls.build_payload(sync.user)
         digest = cls.payload_hash(payload)
@@ -132,16 +178,26 @@ class CrmContactSyncService:
                 sync.last_error = ""
                 sync.synced_at = timezone.now()
                 sync.next_retry_at = None
-            elif str(api_code) == "2002":
-                sync.status = CrmContactSync.Status.NEEDS_REVIEW
-                sync.last_error = "CRM اطلاعات مخاطب را نامعتبر تشخیص داد (2002)."
+                cls.close_circuit()
+            elif str(api_code) in ("2001", "2002"):
+                sync.status = CrmContactSync.Status.FAILED
+                sync.last_error = f"CRM درخواست را به‌دلیل خطای تنظیمات رد کرد ({api_code})."
                 sync.next_retry_at = None
+                cls.open_circuit("auth_error", permanent=True)
             else:
-                cls._mark_retry(sync, f"CRM request failed ({api_code}).")
+                cls._mark_permanent(sync, f"CRM request failed ({api_code}).")
         except error.HTTPError as exc:
             sync.last_response_code = str(exc.code)
             logger.warning("CRM HTTP error user_id=%s response_code=%s", sync.user_id, exc.code)
-            cls._mark_retry(sync, f"CRM HTTP error ({exc.code}).")
+            if exc.code in (401, 403):
+                sync.status = CrmContactSync.Status.FAILED
+                sync.last_error = f"CRM authorization failed ({exc.code})."
+                sync.next_retry_at = None
+                cls.open_circuit("auth_error", permanent=True)
+            elif exc.code == 429 or exc.code >= 500:
+                cls._mark_retry(sync, f"CRM temporary HTTP error ({exc.code}).")
+            else:
+                cls._mark_permanent(sync, f"CRM permanent HTTP error ({exc.code}).")
         except (error.URLError, TimeoutError, json.JSONDecodeError, ValueError) as exc:
             logger.warning("CRM contact sync failed user_id=%s error_type=%s", sync.user_id, type(exc).__name__)
             cls._mark_retry(sync, f"خطای ارتباط با CRM: {type(exc).__name__}")
@@ -149,13 +205,21 @@ class CrmContactSyncService:
         return sync
 
     @staticmethod
+    def _mark_permanent(sync, message):
+        sync.last_error = message[:500]
+        sync.status = CrmContactSync.Status.DEAD_LETTER
+        sync.next_retry_at = None
+
+    @staticmethod
     def _mark_retry(sync, message):
         sync.last_error = message[:500]
         sync.status = CrmContactSync.Status.FAILED
         if sync.attempts < settings.CRM_MAX_ATTEMPTS:
             delay = settings.CRM_RETRY_BASE_SECONDS * (2 ** max(sync.attempts - 1, 0))
-            sync.next_retry_at = timezone.now() + timedelta(seconds=delay)
+            jitter = secrets.randbelow(max(settings.CRM_RETRY_JITTER_SECONDS, 0) + 1)
+            sync.next_retry_at = timezone.now() + timedelta(seconds=delay + jitter)
         else:
+            sync.status = CrmContactSync.Status.DEAD_LETTER
             sync.next_retry_at = None
 
     @classmethod

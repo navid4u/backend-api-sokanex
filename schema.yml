@@ -957,6 +957,7 @@ paths:
         schema:
           type: string
           enum:
+          - dead_letter
           - failed
           - needs_review
           - pending
@@ -966,6 +967,7 @@ paths:
           * `synced` - Synced
           * `failed` - Failed
           * `needs_review` - Needs review
+          * `dead_letter` - Dead letter
       tags:
       - accounts
       security:
@@ -996,6 +998,20 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CrmContactSync'
+          description: ''
+  /api/accounts/admin/crm-syncs/retry-all/:
+    post:
+      operationId: accounts_admin_crm_syncs_retry_all_create
+      tags:
+      - accounts
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CrmContactRetryAllResponse'
           description: ''
   /api/accounts/admin/upgrade-requests/:
     get:
@@ -2497,6 +2513,20 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/UserActivity'
+          description: ''
+  /api/admin/integrations/crm/health/:
+    get:
+      operationId: admin_integrations_crm_health_retrieve
+      tags:
+      - admin
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CrmIntegrationHealthResponse'
           description: ''
   /api/admin/platform/content/:
     get:
@@ -9478,6 +9508,13 @@ components:
             minimum: 1
       required:
       - title
+    CrmContactRetryAllResponse:
+      type: object
+      properties:
+        queued:
+          type: integer
+      required:
+      - queued
     CrmContactSync:
       type: object
       properties:
@@ -9541,12 +9578,46 @@ components:
       - synced
       - failed
       - needs_review
+      - dead_letter
       type: string
       description: |-
         * `pending` - Pending
         * `synced` - Synced
         * `failed` - Failed
         * `needs_review` - Needs review
+        * `dead_letter` - Dead letter
+    CrmIntegrationHealthResponse:
+      type: object
+      properties:
+        status:
+          $ref: '#/components/schemas/CrmIntegrationHealthResponseStatusEnum'
+        configured:
+          type: boolean
+        last_success_at:
+          type: string
+          format: date-time
+          nullable: true
+        failed_jobs:
+          type: integer
+      required:
+      - configured
+      - failed_jobs
+      - last_success_at
+      - status
+    CrmIntegrationHealthResponseStatusEnum:
+      enum:
+      - configured
+      - healthy
+      - degraded
+      - auth_error
+      - disabled
+      type: string
+      description: |-
+        * `configured` - configured
+        * `healthy` - healthy
+        * `degraded` - degraded
+        * `auth_error` - auth_error
+        * `disabled` - disabled
     CryptoSnapshotResponse:
       type: object
       properties:

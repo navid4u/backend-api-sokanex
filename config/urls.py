@@ -11,6 +11,7 @@ from django.views.decorators.cache import never_cache
 
 from apps.accounts.views import (
     CustomTokenObtainPairView,
+    CrmIntegrationHealthView,
 )
 from apps.accounts.jwt import DeviceAwareTokenRefreshView
 
@@ -120,6 +121,11 @@ urlpatterns = [
     path(
         "api/landing/",
         include("landing.urls"),
+    ),
+    path(
+        "api/admin/integrations/crm/health/",
+        CrmIntegrationHealthView.as_view(),
+        name="crm-integration-health",
     ),
     path("api/market/", include("apps.market.urls")),
     path("api/assistant/", include("apps.ai_assistant.urls")),
