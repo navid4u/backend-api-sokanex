@@ -1,8 +1,25 @@
 import json
+import logging
+import socket
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
 from django.conf import settings
+
+
+logger = logging.getLogger("django.request")
+
+
+def _safe_provider_value(value, limit=200):
+    return str(value or "").replace("\r", " ").replace("\n", " ")[:limit]
+
+
+def _is_insufficient_credit(value, status_text):
+    combined = f"{value} {status_text}".lower()
+    return any(marker in combined for marker in (
+        "insufficient credit", "insufficient balance", "credit", "balance",
+        "اعتبار", "موجودی", "شارژ",
+    ))
 
 
 class SMSProviderError(Exception):
@@ -50,18 +67,41 @@ class PayamitoSMSService:
             headers={"Accept": "application/json", "Content-Type": "application/json"},
         )
         try:
-            with urlopen(request, timeout=min(settings.PAYAMITO_TIMEOUT_SECONDS, 15)) as response:
+            timeout = max(1, min(int(settings.PAYAMITO_TIMEOUT_SECONDS), 10))
+            with urlopen(request, timeout=timeout) as response:
                 result = json.loads(response.read().decode("utf-8"))
-        except (HTTPError, URLError, TimeoutError, ValueError, OSError) as exc:
+        except (HTTPError, URLError, TimeoutError, socket.timeout, ValueError, OSError) as exc:
+            logger.warning(
+                "sms_provider_transport_failure provider=payamito error_type=%s",
+                type(exc).__name__,
+            )
             raise SMSProviderError("Payamito is temporarily unavailable.") from exc
         ret_status = result.get("RetStatus")
         value = str(result.get("Value", ""))
+        status_text = result.get("StrRetStatus", "")
+        admin_code = (
+            "SMS_PROVIDER_INSUFFICIENT_CREDIT"
+            if _is_insufficient_credit(value, status_text)
+            else "SMS_PROVIDER_RESPONSE"
+        )
+        log_method = logger.info if ret_status == 1 else logger.warning
+        log_method(
+            "sms_provider_result provider=payamito code=%s ret_status=%s value=%s str_status=%s",
+            admin_code,
+            _safe_provider_value(ret_status),
+            _safe_provider_value(value),
+            _safe_provider_value(status_text),
+        )
         if ret_status != 1:
             raise SMSProviderError(
-                result.get("StrRetStatus") or "Payamito rejected the message.",
-                provider_code=value or ret_status,
+                status_text or "Payamito rejected the message.",
+                provider_code=(
+                    "SMS_PROVIDER_INSUFFICIENT_CREDIT"
+                    if admin_code == "SMS_PROVIDER_INSUFFICIENT_CREDIT"
+                    else value or ret_status
+                ),
             )
-        return {"message_id": value, "status": result.get("StrRetStatus", "Ok")}
+        return {"message_id": value, "status": status_text or "Ok"}
 
 
 # Backward-compatible import name for integrations that imported the old class.

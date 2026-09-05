@@ -441,7 +441,7 @@ PAYAMITO_ENABLED = config("PAYAMITO_ENABLED", default=False, cast=bool)
 PAYAMITO_USERNAME = config("PAYAMITO_USERNAME", default="")
 PAYAMITO_API_KEY = config("PAYAMITO_API_KEY", default="")
 PAYAMITO_FROM_NUMBER = config("PAYAMITO_FROM_NUMBER", default="9981803296")
-PAYAMITO_TIMEOUT_SECONDS = config("PAYAMITO_TIMEOUT_SECONDS", default=15, cast=int)
+PAYAMITO_TIMEOUT_SECONDS = config("PAYAMITO_TIMEOUT_SECONDS", default=8, cast=int)
 PAYAMITO_OTP_MESSAGE_TEMPLATE = config(
     "PAYAMITO_OTP_MESSAGE_TEMPLATE",
     default="کد ورود شما به سوکانکس: {code}\nاین کد تا ۲ دقیقه معتبر است.",

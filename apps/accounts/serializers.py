@@ -5,6 +5,8 @@ from django.contrib.auth.password_validation import (
 from rest_framework import serializers
 from drf_spectacular.utils import extend_schema_field
 from django.db import IntegrityError, transaction
+from django.db.models import Q
+from rest_framework.exceptions import APIException
 from rest_framework_simplejwt.exceptions import (
     TokenError,
 )
@@ -41,6 +43,14 @@ from apps.activity.models import UserActivity
 from apps.activity.services import ActivityService
 
 User = get_user_model()
+
+
+class LoginIdentifierConflict(APIException):
+    status_code = 409
+    default_detail = "برای این شماره بیش از یک حساب پیدا شد؛ با پشتیبانی تماس بگیرید."
+    default_code = "phone_conflict"
+    machine_code = "PHONE_CONFLICT"
+    public_message = default_detail
 
 
 class BrokerConnectionSerializer(serializers.ModelSerializer):
@@ -233,9 +243,22 @@ class CustomTokenObtainPairSerializer(
     def validate(self, attrs):
         identifier = str(attrs.get(self.username_field, "")).strip()
         try:
-            attrs[self.username_field] = normalize_iran_phone(identifier)
+            normalized_phone = normalize_iran_phone(identifier)
         except DjangoValidationError:
             attrs[self.username_field] = identifier
+        else:
+            matches = list(
+                User.objects.filter(
+                    Q(phone=normalized_phone)
+                    | Q(username=normalized_phone)
+                    | Q(username=identifier)
+                ).distinct()[:2]
+            )
+            if len(matches) > 1:
+                raise LoginIdentifierConflict()
+            attrs[self.username_field] = (
+                matches[0].get_username() if matches else normalized_phone
+            )
         data = super().validate(attrs)
         session = issue_login_tokens(self.user, self.context["request"], data["refresh"])
         data.update(session)

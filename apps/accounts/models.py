@@ -554,6 +554,7 @@ class OTPChallenge(models.Model):
     expires_at = models.DateTimeField()
     consumed_at = models.DateTimeField(null=True, blank=True)
     locked_at = models.DateTimeField(null=True, blank=True)
+    sent_at = models.DateTimeField(null=True, blank=True, db_index=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -566,7 +567,12 @@ class OTPChallenge(models.Model):
     @property
     def is_usable(self):
         from django.utils import timezone
-        return not self.consumed_at and not self.locked_at and self.expires_at > timezone.now()
+        return (
+            bool(self.sent_at)
+            and not self.consumed_at
+            and not self.locked_at
+            and self.expires_at > timezone.now()
+        )
 
 
 class FinancialPersonalityAssessment(models.Model):

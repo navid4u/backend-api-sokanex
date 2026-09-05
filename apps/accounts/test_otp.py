@@ -10,6 +10,7 @@ from apps.activity.models import UserActivity
 from common.phone import normalize_iran_phone
 
 from .models import OTPChallenge, UserDevice, UserProfile
+from .otp import OTPProviderError
 
 
 User = get_user_model()
@@ -61,6 +62,24 @@ class OTPAuthenticationTests(TestCase):
         self.assertEqual(response.status_code, 429)
         self.assertIn("Retry-After", response)
 
+    @patch("apps.accounts.otp.PayamitoService.send_otp")
+    def test_provider_failure_returns_503_and_immediate_retry_is_not_throttled(self, send_otp):
+        send_otp.side_effect = [OTPProviderError(), {"value": "123", "status": "Ok"}]
+        payload = {"phone": "09121234567"}
+
+        failed = self.client.post("/api/accounts/auth/otp/request/", payload)
+        self.assertEqual(failed.status_code, 503)
+        self.assertEqual(failed.data["error_code"], "SMS_PROVIDER_UNAVAILABLE")
+        self.assertEqual(
+            failed.data["message"],
+            "ارسال پیامک موقتاً انجام نشد. لطفاً کمی بعد دوباره تلاش کنید.",
+        )
+        self.assertFalse(OTPChallenge.objects.exists())
+
+        retried = self.client.post("/api/accounts/auth/otp/request/", payload)
+        self.assertEqual(retried.status_code, 200)
+        self.assertIsNotNone(OTPChallenge.objects.get().sent_at)
+
     def test_mobile_registration_is_canonical_and_password_confirmed(self):
         response = self.client.post("/api/accounts/register/", {
             "first_name": "Ali", "last_name": "Ahmadi", "phone": "+989351234567",
@@ -78,6 +97,40 @@ class OTPAuthenticationTests(TestCase):
         )
         self.assertEqual(response.status_code, 200)
         self.assertIn("access", response.data)
+
+    def test_password_login_accepts_legacy_username(self):
+        legacy = User.objects.create_user(
+            username="legacy-user", phone="09351234567", password="StrongPass123!"
+        )
+        response = self.client.post(
+            "/api/token/",
+            {"username": legacy.username, "password": "StrongPass123!"},
+        )
+        self.assertEqual(response.status_code, 200)
+
+    def test_password_login_finds_legacy_user_by_phone_field(self):
+        legacy = User.objects.create_user(
+            username="old-account", phone="09361234567", password="StrongPass123!"
+        )
+        response = self.client.post(
+            "/api/token/",
+            {"username": legacy.phone, "password": "StrongPass123!"},
+        )
+        self.assertEqual(response.status_code, 200)
+
+    def test_password_login_rejects_phone_identity_conflict(self):
+        User.objects.create_user(
+            username="09371234567", phone="09381234567", password="StrongPass123!"
+        )
+        User.objects.create_user(
+            username="another-user", phone="09371234567", password="StrongPass123!"
+        )
+        response = self.client.post(
+            "/api/token/",
+            {"username": "09371234567", "password": "StrongPass123!"},
+        )
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(response.data["error_code"], "PHONE_CONFLICT")
 
     @patch("apps.accounts.otp.PayamitoService.send_otp")
     @patch("apps.accounts.otp.secrets.randbelow", return_value=4839)

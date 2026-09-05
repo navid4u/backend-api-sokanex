@@ -39,3 +39,33 @@ class PayamitoSMSServiceTests(SimpleTestCase):
         with self.assertRaises(SMSProviderError) as context:
             render_sms_template("Code: {wrong_name}", code="4839")
         self.assertEqual(context.exception.provider_code, "invalid_template")
+
+    @patch("common.sms.urlopen")
+    def test_insufficient_credit_is_classified_without_exposing_credentials(self, urlopen):
+        response = MagicMock()
+        response.read.return_value = json.dumps({
+            "Value": "0", "RetStatus": 0, "StrRetStatus": "اعتبار کافی نیست"
+        }).encode("utf-8")
+        urlopen.return_value.__enter__.return_value = response
+
+        with self.assertLogs("django.request", level="WARNING") as logs:
+            with self.assertRaises(SMSProviderError) as context:
+                PayamitoSMSService.send("09121234567", "test")
+
+        self.assertEqual(
+            context.exception.provider_code, "SMS_PROVIDER_INSUFFICIENT_CREDIT"
+        )
+        output = " ".join(logs.output)
+        self.assertIn("SMS_PROVIDER_INSUFFICIENT_CREDIT", output)
+        self.assertNotIn("key", output)
+
+    @override_settings(PAYAMITO_TIMEOUT_SECONDS=30)
+    @patch("common.sms.urlopen")
+    def test_timeout_is_capped_at_ten_seconds(self, urlopen):
+        response = MagicMock()
+        response.read.return_value = json.dumps({
+            "Value": "1", "RetStatus": 1, "StrRetStatus": "Ok"
+        }).encode()
+        urlopen.return_value.__enter__.return_value = response
+        PayamitoSMSService.send("09121234567", "test")
+        self.assertEqual(urlopen.call_args.kwargs["timeout"], 10)

@@ -1,6 +1,7 @@
 import hashlib
 import hmac
 import secrets
+import logging
 from datetime import timedelta
 
 from django.conf import settings
@@ -15,10 +16,15 @@ from common.sms import PayamitoSMSService, SMSProviderError, render_sms_template
 from .models import OTPChallenge, User, UserProfile
 
 
+logger = logging.getLogger("django.request")
+
+
 class OTPProviderError(APIException):
     status_code = 503
-    default_detail = "Verification-code delivery is temporarily unavailable."
-    default_code = "otp_provider_unavailable"
+    default_detail = "ارسال پیامک موقتاً انجام نشد. لطفاً کمی بعد دوباره تلاش کنید."
+    default_code = "sms_provider_unavailable"
+    machine_code = "SMS_PROVIDER_UNAVAILABLE"
+    public_message = default_detail
 
 
 class RegistrationOTPError(APIException):
@@ -40,6 +46,10 @@ class PayamitoService:
                 render_sms_template(settings.PAYAMITO_OTP_MESSAGE_TEMPLATE, code=code),
             )
         except SMSProviderError as exc:
+            logger.warning(
+                "otp_delivery_failed provider=payamito provider_code=%s",
+                exc.provider_code or "transport_error",
+            )
             raise OTPProviderError() from exc
         return {"value": result["message_id"], "status": result["status"]}
 
@@ -69,7 +79,13 @@ class OTPService:
         ip = ActivityService.client_ip(request)
         window = now - timedelta(minutes=cls.window_minutes)
         with transaction.atomic():
-            purpose_challenges = OTPChallenge.objects.filter(phone=phone, purpose=purpose)
+            purpose_challenges = OTPChallenge.objects.filter(
+                phone=phone,
+                purpose=purpose,
+                sent_at__isnull=False,
+                consumed_at__isnull=True,
+                locked_at__isnull=True,
+            )
             latest = purpose_challenges.select_for_update().first()
             if latest and latest.created_at > now - timedelta(seconds=cooldown):
                 wait = cooldown - int((now - latest.created_at).total_seconds())
@@ -77,7 +93,12 @@ class OTPService:
             if purpose_challenges.filter(created_at__gte=window).count() >= cls.max_requests:
                 raise Throttled(wait=cooldown, detail="Too many verification-code requests.")
             if ip and OTPChallenge.objects.filter(
-                request_ip=ip, purpose=purpose, created_at__gte=window
+                request_ip=ip,
+                purpose=purpose,
+                created_at__gte=window,
+                sent_at__isnull=False,
+                consumed_at__isnull=True,
+                locked_at__isnull=True,
             ).count() >= cls.max_requests:
                 raise Throttled(wait=cooldown, detail="Too many requests from this network.")
 
@@ -94,8 +115,10 @@ class OTPService:
         try:
             PayamitoService.send_otp(phone, code)
         except Exception:
-            OTPChallenge.objects.filter(pk=challenge.pk).update(locked_at=timezone.now())
+            OTPChallenge.objects.filter(pk=challenge.pk).delete()
             raise
+        challenge.sent_at = timezone.now()
+        challenge.save(update_fields=["sent_at"])
         return challenge
 
     @classmethod
