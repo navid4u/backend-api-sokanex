@@ -32,6 +32,8 @@ class DashboardStatsSerializer(
         decimal_places=8,
     )
 
+    wallet_balance_usd = serializers.DecimalField(max_digits=18, decimal_places=2)
+
     wallet_currency = serializers.CharField(
         max_length=10,
     )
@@ -133,6 +135,8 @@ class DashboardSerializer(
     user = UserSerializer()
 
     stats = DashboardStatsSerializer()
+
+    premium_subscription = serializers.DictField()
 
     capabilities = (
         DashboardCapabilitiesSerializer()

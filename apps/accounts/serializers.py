@@ -119,6 +119,8 @@ class UserSerializer(serializers.ModelSerializer):
     capabilities = serializers.SerializerMethodField()
     crm_sync_status = serializers.SerializerMethodField()
     crm_synced_at = serializers.SerializerMethodField()
+    wallet_balance_usd = serializers.SerializerMethodField()
+    premium_subscription = serializers.SerializerMethodField()
 
     class Meta:
         model = User
@@ -141,6 +143,8 @@ class UserSerializer(serializers.ModelSerializer):
             "capabilities",
             "crm_sync_status",
             "crm_synced_at",
+            "wallet_balance_usd",
+            "premium_subscription",
             "created_at",
         )
         read_only_fields = (
@@ -199,6 +203,17 @@ class UserSerializer(serializers.ModelSerializer):
     def get_crm_synced_at(self, obj):
         sync = getattr(obj, "crm_contact_sync", None)
         return sync.synced_at if sync else None
+
+    @extend_schema_field(serializers.DecimalField(max_digits=18, decimal_places=2))
+    def get_wallet_balance_usd(self, obj):
+        from apps.wallet.services import WalletService
+
+        return format(WalletService.balance_usd_for_user(obj), ".2f")
+
+    def get_premium_subscription(self, obj) -> dict:
+        from apps.wallet.services import WalletService
+
+        return WalletService.premium_subscription(obj)
 
 
 class CustomTokenObtainPairSerializer(
@@ -350,6 +365,8 @@ class UserListSerializer(
         read_only=True,
         allow_null=True,
     )
+    wallet_balance_usd = serializers.SerializerMethodField()
+    premium_subscription = serializers.SerializerMethodField()
 
     class Meta:
         model = User
@@ -365,8 +382,21 @@ class UserListSerializer(
             "custom_role",
             "is_active",
             "is_verified",
+            "wallet_balance_usd",
+            "premium_subscription",
             "created_at",
         )
+
+    @extend_schema_field(serializers.DecimalField(max_digits=18, decimal_places=2))
+    def get_wallet_balance_usd(self, obj):
+        from apps.wallet.services import WalletService
+
+        return format(WalletService.balance_usd_for_user(obj), ".2f")
+
+    def get_premium_subscription(self, obj) -> dict:
+        from apps.wallet.services import WalletService
+
+        return WalletService.premium_subscription(obj)
 
 
 class AdminUserWriteSerializer(serializers.ModelSerializer):
@@ -648,6 +678,8 @@ class UserProfileDetailsSerializer(serializers.ModelSerializer):
     personality_result = serializers.SerializerMethodField()
     crm_sync_status = serializers.SerializerMethodField()
     crm_synced_at = serializers.SerializerMethodField()
+    wallet_balance_usd = serializers.SerializerMethodField()
+    premium_subscription = serializers.SerializerMethodField()
 
     MARKET_CHOICES = {
         "FOREX",
@@ -700,6 +732,8 @@ class UserProfileDetailsSerializer(serializers.ModelSerializer):
             "personality_result",
             "crm_sync_status",
             "crm_synced_at",
+            "wallet_balance_usd",
+            "premium_subscription",
             "created_at",
             "updated_at",
         )
@@ -840,6 +874,17 @@ class UserProfileDetailsSerializer(serializers.ModelSerializer):
         sync = getattr(obj.user, "crm_contact_sync", None)
         return sync.synced_at if sync else None
 
+    @extend_schema_field(serializers.DecimalField(max_digits=18, decimal_places=2))
+    def get_wallet_balance_usd(self, obj):
+        from apps.wallet.services import WalletService
+
+        return format(WalletService.balance_usd_for_user(obj.user), ".2f")
+
+    def get_premium_subscription(self, obj) -> dict:
+        from apps.wallet.services import WalletService
+
+        return WalletService.premium_subscription(obj.user)
+
 
 class CrmContactSyncSerializer(serializers.ModelSerializer):
     username = serializers.CharField(source="user.username", read_only=True)
@@ -870,6 +915,8 @@ class UpgradeRequestSerializer(serializers.ModelSerializer):
             "requested_level",
             "plan",
             "price_snapshot_irt",
+            "price_snapshot_usd",
+            "purchase_idempotency_key",
             "message",
             "status",
             "admin_note",
@@ -882,6 +929,8 @@ class UpgradeRequestSerializer(serializers.ModelSerializer):
             "id",
             "plan",
             "price_snapshot_irt",
+            "price_snapshot_usd",
+            "purchase_idempotency_key",
             "status",
             "admin_note",
             "reviewed_by",
@@ -1039,6 +1088,7 @@ class ProfileUpdateSerializer(
             file_label="Avatar",
         )
 
+
     def _validate_name(self, value, label):
         value = value.strip()
         if len(value) < 2:
@@ -1050,6 +1100,35 @@ class ProfileUpdateSerializer(
 
     def validate_last_name(self, value):
         return self._validate_name(value, "نام خانوادگی")
+
+
+class PremiumPurchaseSerializer(serializers.Serializer):
+    idempotency_key = serializers.CharField(min_length=8, max_length=120)
+    plan_id = serializers.IntegerField(min_value=1, required=False)
+
+    def validate_idempotency_key(self, value):
+        value = value.strip()
+        if not value:
+            raise serializers.ValidationError("idempotency_key الزامی است.")
+        return value
+
+
+class PremiumSubscriptionSerializer(serializers.Serializer):
+    active = serializers.BooleanField()
+    tier = serializers.CharField(allow_null=True)
+    plan_id = serializers.IntegerField(allow_null=True)
+    purchased_at = serializers.DateTimeField(allow_null=True)
+
+
+class PremiumPurchaseWalletSerializer(serializers.Serializer):
+    balance_usd = serializers.DecimalField(max_digits=18, decimal_places=2)
+    display_currency = serializers.CharField()
+
+
+class PremiumPurchaseResponseSerializer(serializers.Serializer):
+    wallet = PremiumPurchaseWalletSerializer()
+    upgrade_request = UpgradeRequestSerializer()
+    subscription = PremiumSubscriptionSerializer()
 
 
 class LogoutSerializer(serializers.Serializer):

@@ -70,6 +70,8 @@ class DashboardService:
             "stats": {
                 "wallet_balance": str(WalletService.balance_irt(wallet)),
 
+                "wallet_balance_usd": str(wallet.balance_usd),
+
                 "wallet_currency": wallet.currency,
 
                 "signals": approved_signals.count(),
@@ -110,6 +112,8 @@ class DashboardService:
                     upcoming_live_events.count()
                 ),
             },
+
+            "premium_subscription": WalletService.premium_subscription(user),
 
             "capabilities": {
                 "can_submit_signals": (

@@ -82,6 +82,8 @@ from .serializers import (
     BrokerConnectionSerializer,
     BrokerConnectionReviewSerializer,
     CrmContactSyncSerializer,
+    PremiumPurchaseSerializer,
+    PremiumPurchaseResponseSerializer,
 )
 from .models import (
     Badge,
@@ -1018,6 +1020,37 @@ class MyUpgradeRequestListCreateView(generics.ListCreateAPIView):
         return UpgradeRequest.objects.filter(
             user=self.request.user
         ).select_related("reviewed_by")
+
+
+class PremiumPurchaseView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        request=PremiumPurchaseSerializer,
+        responses={201: PremiumPurchaseResponseSerializer, 200: PremiumPurchaseResponseSerializer, 402: None},
+    )
+    def post(self, request):
+        from apps.wallet.services import WalletService
+
+        serializer = PremiumPurchaseSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        purchase, wallet, created = WalletService.purchase_premium(
+            request.user,
+            serializer.validated_data["idempotency_key"],
+            serializer.validated_data.get("plan_id"),
+        )
+        request.user.refresh_from_db(fields=["access_level"])
+        return Response(
+            {
+                "wallet": {
+                    "balance_usd": str(wallet.balance_usd),
+                    "display_currency": "USD",
+                },
+                "upgrade_request": UpgradeRequestSerializer(purchase).data,
+                "subscription": WalletService.premium_subscription(request.user),
+            },
+            status=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
+        )
 
 
 class UpgradeRequestManagementListView(generics.ListAPIView):

@@ -23,6 +23,13 @@ class Wallet(models.Model):
         ],
     )
 
+    balance_usd = models.DecimalField(
+        max_digits=18,
+        decimal_places=2,
+        default=Decimal("100.00"),
+        validators=[MinValueValidator(Decimal("0.00"))],
+    )
+
     currency = models.CharField(
         max_length=10,
         default="IRT",
@@ -166,6 +173,48 @@ class LedgerEntry(models.Model):
         raise RuntimeError("Ledger entries are immutable.")
 
 
+class UsdLedgerEntry(models.Model):
+    class Direction(models.TextChoices):
+        DEBIT = "DEBIT", "Debit"
+        CREDIT = "CREDIT", "Credit"
+
+    wallet = models.ForeignKey(
+        Wallet,
+        on_delete=models.PROTECT,
+        related_name="usd_ledger_entries",
+    )
+    direction = models.CharField(max_length=6, choices=Direction.choices)
+    amount_usd = models.DecimalField(
+        max_digits=18,
+        decimal_places=2,
+        validators=[MinValueValidator(Decimal("0.01"))],
+    )
+    balance_after = models.DecimalField(max_digits=18, decimal_places=2)
+    kind = models.CharField(max_length=40, db_index=True)
+    idempotency_key = models.CharField(max_length=160, null=True, blank=True)
+    description = models.CharField(max_length=255, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at", "-id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["wallet", "idempotency_key"],
+                condition=models.Q(idempotency_key__isnull=False),
+                name="unique_usd_ledger_idempotency_per_wallet",
+            ),
+        ]
+
+    def save(self, *args, **kwargs):
+        if self.pk:
+            raise RuntimeError("USD ledger entries are immutable.")
+        super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        raise RuntimeError("USD ledger entries are immutable.")
+
+
 class BankCard(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="bank_cards")
     title = models.CharField(max_length=100, blank=True)
@@ -248,10 +297,21 @@ class PaymentAuditLog(models.Model):
 
 
 class UpgradePlan(models.Model):
+    class Type(models.TextChoices):
+        UPGRADE = "UPGRADE", "Level upgrade"
+        PREMIUM = "PREMIUM", "Premium subscription"
+
     level = models.PositiveSmallIntegerField(unique=True)
+    plan_type = models.CharField(max_length=20, choices=Type.choices, default=Type.UPGRADE)
     title = models.CharField(max_length=120)
     description = models.TextField(blank=True)
     price_irt = models.PositiveBigIntegerField(default=0)
+    price_usd = models.DecimalField(
+        max_digits=18,
+        decimal_places=2,
+        default=Decimal("0.00"),
+        validators=[MinValueValidator(Decimal("0.00"))],
+    )
     active = models.BooleanField(default=True)
     features = models.JSONField(default=list, blank=True)
     sort_order = models.PositiveSmallIntegerField(default=0)
@@ -272,4 +332,6 @@ class UpgradePlan(models.Model):
     def save(self, *args, **kwargs):
         if self.level == 1:
             self.price_irt = 0
+        if self.level == 5:
+            self.plan_type = self.Type.PREMIUM
         super().save(*args, **kwargs)

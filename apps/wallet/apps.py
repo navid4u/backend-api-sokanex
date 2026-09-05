@@ -8,3 +8,6 @@ class WalletConfig(AppConfig):
     )
 
     name = "apps.wallet"
+
+    def ready(self):
+        from . import signals  # noqa: F401

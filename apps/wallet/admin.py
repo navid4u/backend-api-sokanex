@@ -9,6 +9,7 @@ from .models import (
     PaymentProvider,
     Transaction,
     UpgradePlan,
+    UsdLedgerEntry,
     Wallet,
     Withdrawal,
 )
@@ -38,6 +39,7 @@ class WalletAdmin(admin.ModelAdmin):
     list_display = (
         "user",
         "balance",
+        "balance_usd",
         "currency",
         "updated_at",
     )
@@ -49,6 +51,7 @@ class WalletAdmin(admin.ModelAdmin):
 
     readonly_fields = (
         "balance",
+        "balance_usd",
         "created_at",
         "updated_at",
     )
@@ -103,6 +106,23 @@ class TransactionAdmin(admin.ModelAdmin):
         return False
 
 
+@admin.register(UsdLedgerEntry)
+class UsdLedgerEntryAdmin(admin.ModelAdmin):
+    list_display = ("wallet", "direction", "amount_usd", "balance_after", "kind", "created_at")
+    list_filter = ("direction", "kind")
+    search_fields = ("wallet__user__username", "idempotency_key")
+    readonly_fields = (
+        "wallet", "direction", "amount_usd", "balance_after", "kind",
+        "idempotency_key", "description", "metadata", "created_at",
+    )
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
 @admin.register(PaymentProvider)
 class PaymentProviderAdmin(admin.ModelAdmin):
     list_display = ("code", "title", "is_active", "sandbox", "sort_order", "updated_at")
@@ -111,8 +131,8 @@ class PaymentProviderAdmin(admin.ModelAdmin):
 
 @admin.register(UpgradePlan)
 class UpgradePlanAdmin(admin.ModelAdmin):
-    list_display = ("level", "title", "price_irt", "active", "sort_order")
-    list_editable = ("price_irt", "active", "sort_order")
+    list_display = ("level", "plan_type", "title", "price_irt", "price_usd", "active", "sort_order")
+    list_editable = ("price_irt", "price_usd", "active", "sort_order")
 
 
 @admin.register(BankCard)

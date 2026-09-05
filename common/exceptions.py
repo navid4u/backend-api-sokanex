@@ -78,6 +78,9 @@ def custom_exception_handler(
     machine_code = getattr(exc, "machine_code", None)
     if machine_code:
         payload["error_code"] = machine_code
+    extra_payload = getattr(exc, "extra_payload", None)
+    if extra_payload:
+        payload.update(extra_payload)
 
     return Response(
         payload,

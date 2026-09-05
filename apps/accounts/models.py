@@ -187,6 +187,15 @@ class UpgradeRequest(models.Model):
     )
     plan = models.ForeignKey("wallet.UpgradePlan", null=True, blank=True, on_delete=models.PROTECT)
     price_snapshot_irt = models.PositiveBigIntegerField(default=0)
+    price_snapshot_usd = models.DecimalField(max_digits=18, decimal_places=2, default=0)
+    purchase_idempotency_key = models.CharField(max_length=120, null=True, blank=True)
+    usd_ledger_entry = models.ForeignKey(
+        "wallet.UsdLedgerEntry",
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="premium_upgrade_requests",
+    )
     hold_ledger_transaction = models.ForeignKey(
         "wallet.LedgerTransaction", null=True, blank=True, on_delete=models.PROTECT,
         related_name="upgrade_holds",
@@ -216,6 +225,11 @@ class UpgradeRequest(models.Model):
                 fields=["user"],
                 condition=Q(status="PENDING"),
                 name="one_pending_upgrade_request_per_user",
+            ),
+            models.UniqueConstraint(
+                fields=["user", "purchase_idempotency_key"],
+                condition=Q(purchase_idempotency_key__isnull=False),
+                name="unique_premium_purchase_key_per_user",
             ),
         ]
 

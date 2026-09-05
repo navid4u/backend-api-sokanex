@@ -2075,6 +2075,40 @@ paths:
               schema:
                 $ref: '#/components/schemas/UpgradeRequest'
           description: ''
+  /api/accounts/upgrade-requests/premium/purchase/:
+    post:
+      operationId: accounts_upgrade_requests_premium_purchase_create
+      tags:
+      - accounts
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PremiumPurchaseRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PremiumPurchaseRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PremiumPurchaseRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PremiumPurchaseResponse'
+          description: ''
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PremiumPurchaseResponse'
+          description: ''
+        '402':
+          description: No response body
   /api/accounts/user-badges/{id}/:
     delete:
       operationId: accounts_user_badges_destroy
@@ -7863,6 +7897,15 @@ components:
         price_snapshot_irt:
           type: integer
           readOnly: true
+        price_snapshot_usd:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,16}(?:\.\d{0,2})?$
+          readOnly: true
+        purchase_idempotency_key:
+          type: string
+          readOnly: true
+          nullable: true
         message:
           type: string
         status:
@@ -7895,6 +7938,8 @@ components:
       - id
       - plan
       - price_snapshot_irt
+      - price_snapshot_usd
+      - purchase_idempotency_key
       - requested_level
       - reviewed_at
       - reviewed_by
@@ -9689,6 +9734,9 @@ components:
           $ref: '#/components/schemas/User'
         stats:
           $ref: '#/components/schemas/DashboardStats'
+        premium_subscription:
+          type: object
+          additionalProperties: {}
         capabilities:
           $ref: '#/components/schemas/DashboardCapabilities'
         finance:
@@ -9726,6 +9774,7 @@ components:
       - chat_rooms
       - finance
       - live_events
+      - premium_subscription
       - recent_articles
       - recent_notifications
       - recent_signals
@@ -9825,6 +9874,10 @@ components:
           type: string
           format: decimal
           pattern: ^-?\d{0,12}(?:\.\d{0,8})?$
+        wallet_balance_usd:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,16}(?:\.\d{0,2})?$
         wallet_currency:
           type: string
           maxLength: 10
@@ -9870,6 +9923,7 @@ components:
       - upcoming_live_events
       - videos
       - wallet_balance
+      - wallet_balance_usd
       - wallet_currency
     DeviceAwareTokenRefresh:
       type: object
@@ -13036,6 +13090,10 @@ components:
           maximum: 9223372036854775807
           minimum: 0
           format: int64
+        price_usd:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,16}(?:\.\d{0,2})?$
         active:
           type: boolean
         features: {}
@@ -13577,6 +13635,63 @@ components:
         * `EVENING` - Evening
         * `NIGHT` - Night
         * `FLEXIBLE` - Flexible
+    PremiumPurchaseRequest:
+      type: object
+      properties:
+        idempotency_key:
+          type: string
+          minLength: 8
+          maxLength: 120
+        plan_id:
+          type: integer
+          minimum: 1
+      required:
+      - idempotency_key
+    PremiumPurchaseResponse:
+      type: object
+      properties:
+        wallet:
+          $ref: '#/components/schemas/PremiumPurchaseWallet'
+        upgrade_request:
+          $ref: '#/components/schemas/UpgradeRequest'
+        subscription:
+          $ref: '#/components/schemas/PremiumSubscription'
+      required:
+      - subscription
+      - upgrade_request
+      - wallet
+    PremiumPurchaseWallet:
+      type: object
+      properties:
+        balance_usd:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,16}(?:\.\d{0,2})?$
+        display_currency:
+          type: string
+      required:
+      - balance_usd
+      - display_currency
+    PremiumSubscription:
+      type: object
+      properties:
+        active:
+          type: boolean
+        tier:
+          type: string
+          nullable: true
+        plan_id:
+          type: integer
+          nullable: true
+        purchased_at:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+      - active
+      - plan_id
+      - purchased_at
+      - tier
     ProfileUpdateResponse:
       type: object
       properties:
@@ -15526,8 +15641,15 @@ components:
     UpgradePlan:
       type: object
       properties:
+        id:
+          type: integer
+          readOnly: true
         level:
           type: integer
+          readOnly: true
+        plan_type:
+          allOf:
+          - $ref: '#/components/schemas/UpgradeRequestTypeEnum'
           readOnly: true
         title:
           type: string
@@ -15539,6 +15661,10 @@ components:
           maximum: 9223372036854775807
           minimum: 0
           format: int64
+        price_usd:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,16}(?:\.\d{0,2})?$
         active:
           type: boolean
         features: {}
@@ -15548,7 +15674,9 @@ components:
           minimum: 0
           format: int64
       required:
+      - id
       - level
+      - plan_type
       - title
     UpgradePlanRequest:
       type: object
@@ -15564,6 +15692,10 @@ components:
           maximum: 9223372036854775807
           minimum: 0
           format: int64
+        price_usd:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,16}(?:\.\d{0,2})?$
         active:
           type: boolean
         features: {}
@@ -15594,6 +15726,15 @@ components:
         price_snapshot_irt:
           type: integer
           readOnly: true
+        price_snapshot_usd:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,16}(?:\.\d{0,2})?$
+          readOnly: true
+        purchase_idempotency_key:
+          type: string
+          readOnly: true
+          nullable: true
         message:
           type: string
         status:
@@ -15626,6 +15767,8 @@ components:
       - id
       - plan
       - price_snapshot_irt
+      - price_snapshot_usd
+      - purchase_idempotency_key
       - requested_level
       - reviewed_at
       - reviewed_by
@@ -15744,6 +15887,15 @@ components:
           format: date-time
           nullable: true
           readOnly: true
+        wallet_balance_usd:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,16}(?:\.\d{0,2})?$
+          readOnly: true
+        premium_subscription:
+          type: object
+          additionalProperties: {}
+          readOnly: true
         created_at:
           type: string
           format: date-time
@@ -15759,11 +15911,13 @@ components:
       - id
       - is_verified
       - missing_profile_fields
+      - premium_subscription
       - profile_complete
       - profile_completion
       - profile_incomplete
       - role
       - username
+      - wallet_balance_usd
     UserAccessLevelEnum:
       enum:
       - 1
@@ -15955,6 +16109,15 @@ components:
             this instead of deleting accounts.
         is_verified:
           type: boolean
+        wallet_balance_usd:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,16}(?:\.\d{0,2})?$
+          readOnly: true
+        premium_subscription:
+          type: object
+          additionalProperties: {}
+          readOnly: true
         created_at:
           type: string
           format: date-time
@@ -15963,7 +16126,9 @@ components:
       - created_at
       - custom_role
       - id
+      - premium_subscription
       - username
+      - wallet_balance_usd
     UserProfileDetails:
       type: object
       properties:
@@ -16129,6 +16294,15 @@ components:
           format: date-time
           nullable: true
           readOnly: true
+        wallet_balance_usd:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,16}(?:\.\d{0,2})?$
+          readOnly: true
+        premium_subscription:
+          type: object
+          additionalProperties: {}
+          readOnly: true
         created_at:
           type: string
           format: date-time
@@ -16145,11 +16319,13 @@ components:
       - id
       - missing_profile_fields
       - personality_result
+      - premium_subscription
       - profile_complete
       - profile_completion
       - profile_incomplete
       - updated_at
       - username
+      - wallet_balance_usd
     UserRoleEnum:
       enum:
       - SUPER_ADMIN
@@ -16567,8 +16743,20 @@ components:
         balance:
           type: integer
           readOnly: true
+        balance_usd:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,16}(?:\.\d{0,2})?$
+          readOnly: true
         currency:
           type: string
+          readOnly: true
+        display_currency:
+          type: string
+          readOnly: true
+        premium_subscription:
+          allOf:
+          - $ref: '#/components/schemas/WalletPremiumSubscription'
           readOnly: true
         updated_at:
           type: string
@@ -16576,9 +16764,32 @@ components:
           readOnly: true
       required:
       - balance
+      - balance_usd
       - currency
+      - display_currency
       - id
+      - premium_subscription
       - updated_at
+    WalletPremiumSubscription:
+      type: object
+      properties:
+        active:
+          type: boolean
+        tier:
+          type: string
+          nullable: true
+        plan_id:
+          type: integer
+          nullable: true
+        purchased_at:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+      - active
+      - plan_id
+      - purchased_at
+      - tier
     Withdrawal:
       type: object
       properties:

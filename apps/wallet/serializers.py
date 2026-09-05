@@ -1,15 +1,26 @@
 import hashlib
 
 from django.conf import settings
+from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
 from .models import BankCard, Payment, PaymentProvider, Transaction, UpgradePlan, Wallet, Withdrawal
 from .services import WalletService
 
 
+class WalletPremiumSubscriptionSerializer(serializers.Serializer):
+    active = serializers.BooleanField()
+    tier = serializers.CharField(allow_null=True)
+    plan_id = serializers.IntegerField(allow_null=True)
+    purchased_at = serializers.DateTimeField(allow_null=True)
+
+
 class WalletSerializer(serializers.ModelSerializer):
 
     balance = serializers.SerializerMethodField()
+    balance_usd = serializers.DecimalField(max_digits=18, decimal_places=2, read_only=True)
+    display_currency = serializers.SerializerMethodField()
+    premium_subscription = serializers.SerializerMethodField()
 
     class Meta:
         model = Wallet
@@ -17,7 +28,10 @@ class WalletSerializer(serializers.ModelSerializer):
         fields = (
             "id",
             "balance",
+            "balance_usd",
             "currency",
+            "display_currency",
+            "premium_subscription",
             "updated_at",
         )
 
@@ -25,6 +39,13 @@ class WalletSerializer(serializers.ModelSerializer):
 
     def get_balance(self, obj) -> int:
         return WalletService.balance_irt(obj)
+
+    def get_display_currency(self, obj) -> str:
+        return "USD"
+
+    @extend_schema_field(WalletPremiumSubscriptionSerializer)
+    def get_premium_subscription(self, obj) -> dict:
+        return WalletService.premium_subscription(obj.user)
 
 
 class TransactionSerializer(serializers.ModelSerializer):
@@ -133,5 +154,8 @@ class PaymentVerifySerializer(serializers.Serializer):
 class UpgradePlanSerializer(serializers.ModelSerializer):
     class Meta:
         model = UpgradePlan
-        fields = ("level", "title", "description", "price_irt", "active", "features", "sort_order")
-        read_only_fields = ("level",)
+        fields = (
+            "id", "level", "plan_type", "title", "description", "price_irt",
+            "price_usd", "active", "features", "sort_order",
+        )
+        read_only_fields = ("id", "level", "plan_type")

@@ -39,6 +39,7 @@ from .views import (
     CrmContactSyncListView,
     CrmContactSyncRetryView,
     CrmContactSyncRetryAllView,
+    PremiumPurchaseView,
 )
 
 
@@ -130,6 +131,11 @@ urlpatterns = [
         "upgrade-requests/",
         MyUpgradeRequestListCreateView.as_view(),
         name="my-upgrade-requests",
+    ),
+    path(
+        "upgrade-requests/premium/purchase/",
+        PremiumPurchaseView.as_view(),
+        name="premium-purchase",
     ),
     path(
         "admin/upgrade-requests/",
