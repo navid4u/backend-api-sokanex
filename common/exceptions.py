@@ -56,6 +56,17 @@ def custom_exception_handler(
             ),
         )
 
+        try:
+            from apps.observability.services import ObservabilityService
+            ObservabilityService.record_exception(
+                request,
+                exc,
+                request_id=getattr(request, "observability_request_id", ""),
+            )
+            request._observability_logged = True
+        except Exception:
+            pass
+
         return Response(
             {
                 "success": False,

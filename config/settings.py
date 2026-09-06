@@ -84,6 +84,7 @@ INSTALLED_APPS = [
     "apps.content_channels",
     "apps.platform_settings",
     "apps.ai_assistant",
+    "apps.observability",
     "landing",
 ]
 
@@ -97,6 +98,8 @@ MIDDLEWARE = [
 
     # Must remain before CommonMiddleware
     "corsheaders.middleware.CorsMiddleware",
+
+    "apps.observability.middleware.ObservabilityMiddleware",
 
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
@@ -358,6 +361,7 @@ REST_FRAMEWORK = {
         "market_snapshot": config("MARKET_SNAPSHOT_THROTTLE_RATE", default="30/minute"),
         "assistant_chat": config("ASSISTANT_CHAT_THROTTLE_RATE", default="30/minute"),
         "assistant_image": config("ASSISTANT_IMAGE_THROTTLE_RATE", default="10/minute"),
+        "frontend_logs": config("FRONTEND_LOG_THROTTLE_RATE", default="30/minute"),
     },
 }
 
@@ -719,6 +723,10 @@ SPECTACULAR_SETTINGS = {
 DEFAULT_AUTO_FIELD = (
     "django.db.models.BigAutoField"
 )
+
+OBSERVABILITY_ENABLED = config("OBSERVABILITY_ENABLED", default=True, cast=bool)
+OBSERVABILITY_RETENTION_DAYS = config("OBSERVABILITY_RETENTION_DAYS", default=90, cast=int)
+OBSERVABILITY_SLOW_REQUEST_MS = config("OBSERVABILITY_SLOW_REQUEST_MS", default=2000, cast=int)
 # --------------------------------------------------
 # Logging
 # --------------------------------------------------
@@ -764,6 +772,10 @@ LOGGING = {
                 else "simple"
             ),
         },
+        "database": {
+            "class": "apps.observability.handlers.DatabaseLogHandler",
+            "level": "WARNING",
+        },
     },
 
     "root": {
@@ -801,6 +813,7 @@ LOGGING = {
         "django.security": {
             "handlers": [
                 "console",
+                "database",
             ],
             "level": "WARNING",
             "propagate": False,
@@ -817,6 +830,7 @@ LOGGING = {
         "apps": {
             "handlers": [
                 "console",
+                "database",
             ],
             "level": (
                 "DEBUG"
@@ -829,6 +843,7 @@ LOGGING = {
         "common": {
             "handlers": [
                 "console",
+                "database",
             ],
             "level": (
                 "DEBUG"

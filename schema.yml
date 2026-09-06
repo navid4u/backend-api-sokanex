@@ -6179,6 +6179,137 @@ paths:
               schema:
                 $ref: '#/components/schemas/NotificationUnreadCountResponse'
           description: ''
+  /api/observability/frontend/:
+    post:
+      operationId: observability_frontend_create
+      tags:
+      - observability
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FrontendLogRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/FrontendLogRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/FrontendLogRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FrontendLog'
+          description: ''
+  /api/observability/logs/:
+    get:
+      operationId: observability_logs_list
+      parameters:
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      tags:
+      - observability
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedLogEventList'
+          description: ''
+  /api/observability/logs/{id}/:
+    get:
+      operationId: observability_logs_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - observability
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LogEvent'
+          description: ''
+  /api/observability/logs/{id}/resolve/:
+    patch:
+      operationId: observability_logs_resolve_partial_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - observability
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedResolveLogRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedResolveLogRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedResolveLogRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResolveLog'
+          description: ''
+  /api/observability/logs/summary/:
+    get:
+      operationId: observability_logs_summary_retrieve
+      tags:
+      - observability
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LogSummary'
+          description: ''
   /api/platform/settings/public/:
     get:
       operationId: platform_settings_public_retrieve
@@ -8748,6 +8879,24 @@ components:
       - id
       - name
       - slug
+    CategoryEnum:
+      enum:
+      - javascript_error
+      - unhandled_rejection
+      - api_error
+      - network_error
+      - react_error_boundary
+      - resource_error
+      - other
+      type: string
+      description: |-
+        * `javascript_error` - javascript_error
+        * `unhandled_rejection` - unhandled_rejection
+        * `api_error` - api_error
+        * `network_error` - network_error
+        * `react_error_boundary` - react_error_boundary
+        * `resource_error` - resource_error
+        * `other` - other
     CategoryRequest:
       type: object
       properties:
@@ -10163,6 +10312,87 @@ components:
       - created_at
       - following
       - id
+    FrontendLog:
+      type: object
+      properties:
+        client_event_id:
+          type: string
+          maxLength: 80
+        level:
+          allOf:
+          - $ref: '#/components/schemas/FrontendLogLevelEnum'
+          default: error
+        category:
+          $ref: '#/components/schemas/CategoryEnum'
+        message:
+          type: string
+          maxLength: 1000
+        error_type:
+          type: string
+          maxLength: 180
+        stack_trace:
+          type: string
+          maxLength: 16000
+        frontend_url:
+          oneOf:
+          - type: string
+            format: uri
+            maxLength: 1000
+          - type: string
+            maxLength: 0
+        release:
+          type: string
+          maxLength: 100
+        context: {}
+      required:
+      - category
+      - message
+    FrontendLogLevelEnum:
+      enum:
+      - warning
+      - error
+      - critical
+      type: string
+      description: |-
+        * `warning` - warning
+        * `error` - error
+        * `critical` - critical
+    FrontendLogRequest:
+      type: object
+      properties:
+        client_event_id:
+          type: string
+          maxLength: 80
+        level:
+          allOf:
+          - $ref: '#/components/schemas/FrontendLogLevelEnum'
+          default: error
+        category:
+          $ref: '#/components/schemas/CategoryEnum'
+        message:
+          type: string
+          minLength: 1
+          maxLength: 1000
+        error_type:
+          type: string
+          maxLength: 180
+        stack_trace:
+          type: string
+          maxLength: 16000
+        frontend_url:
+          oneOf:
+          - type: string
+            format: uri
+            maxLength: 1000
+          - type: string
+            maxLength: 0
+        release:
+          type: string
+          maxLength: 100
+        context: {}
+      required:
+      - category
+      - message
     GenderEnum:
       enum:
       - MALE
@@ -10942,6 +11172,140 @@ components:
       - joined_at
       - last_seen_at
       - user
+      - username
+    LogEvent:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        source:
+          $ref: '#/components/schemas/SourceEnum'
+        level:
+          $ref: '#/components/schemas/LogEventLevelEnum'
+        category:
+          type: string
+          maxLength: 80
+        message:
+          type: string
+          maxLength: 1000
+        error_type:
+          type: string
+          maxLength: 180
+        stack_trace:
+          type: string
+        request_id:
+          type: string
+          maxLength: 64
+        client_event_id:
+          type: string
+          maxLength: 80
+        method:
+          type: string
+          maxLength: 12
+        path:
+          type: string
+          maxLength: 1000
+        status_code:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+          nullable: true
+        duration_ms:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+          nullable: true
+        user:
+          allOf:
+          - $ref: '#/components/schemas/LogUser'
+          readOnly: true
+        ip_address:
+          type: string
+          nullable: true
+        user_agent:
+          type: string
+          maxLength: 500
+        frontend_url:
+          type: string
+          maxLength: 1000
+        release:
+          type: string
+          maxLength: 100
+        context: {}
+        is_resolved:
+          type: boolean
+        resolved_by:
+          allOf:
+          - $ref: '#/components/schemas/LogUser'
+          readOnly: true
+        resolved_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - category
+      - client_event_id
+      - created_at
+      - id
+      - level
+      - message
+      - resolved_by
+      - source
+      - user
+    LogEventLevelEnum:
+      enum:
+      - info
+      - warning
+      - error
+      - critical
+      type: string
+      description: |-
+        * `info` - Info
+        * `warning` - Warning
+        * `error` - Error
+        * `critical` - Critical
+    LogSummary:
+      type: object
+      properties:
+        last_24_hours:
+          type: integer
+        unresolved:
+          type: integer
+        by_level:
+          type: object
+          additionalProperties:
+            type: integer
+        by_source:
+          type: object
+          additionalProperties:
+            type: integer
+      required:
+      - by_level
+      - by_source
+      - last_24_hours
+      - unresolved
+    LogUser:
+      type: object
+      properties:
+        id:
+          type: integer
+        username:
+          type: string
+        first_name:
+          type: string
+        last_name:
+          type: string
+      required:
+      - first_name
+      - id
+      - last_name
       - username
     LogoutRequest:
       type: object
@@ -11782,6 +12146,29 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/LiveEventList'
+    PaginatedLogEventList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/LogEvent'
     PaginatedMessageList:
       type: object
       required:
@@ -12923,6 +13310,11 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/QuizQuestionWriteRequest'
+    PatchedResolveLogRequest:
+      type: object
+      properties:
+        is_resolved:
+          type: boolean
     PatchedSecuritySettingsRequest:
       type: object
       properties:
@@ -14346,6 +14738,13 @@ components:
         * `3` - Level 3
         * `4` - Level 4
         * `5` - Level 5
+    ResolveLog:
+      type: object
+      properties:
+        is_resolved:
+          type: boolean
+      required:
+      - is_resolved
     RiskToleranceEnum:
       enum:
       - LOW
@@ -15151,6 +15550,14 @@ components:
       - last_name
       - posts_count
       - username
+    SourceEnum:
+      enum:
+      - backend
+      - frontend
+      type: string
+      description: |-
+        * `backend` - Backend
+        * `frontend` - Frontend
     SpeakRequest:
       type: object
       properties:

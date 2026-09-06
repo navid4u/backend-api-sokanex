@@ -131,6 +131,7 @@ urlpatterns = [
     path("api/assistant/", include("apps.ai_assistant.urls")),
     path("api/channels/", include("apps.content_channels.urls")),
     path("api/support/", include("apps.chat.support_urls")),
+    path("api/observability/", include("apps.observability.urls")),
     path("api/", include("apps.platform_settings.urls")),
     path("api/", include("apps.wallet.billing_urls")),
 ]
