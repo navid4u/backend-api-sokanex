@@ -1,5 +1,5 @@
 from django.conf import settings
-from django.core.validators import MaxValueValidator, MinValueValidator
+from django.core.validators import MaxLengthValidator, MaxValueValidator, MinValueValidator
 from django.db import models
 
 
@@ -60,3 +60,30 @@ class AIUsageLog(models.Model):
 
     class Meta:
         indexes = [models.Index(fields=["user", "mode", "created_at"])]
+
+
+class AssistantQuestion(models.Model):
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="assistant_questions",
+    )
+    question = models.TextField(validators=[MaxLengthValidator(12000)])
+    client_message_id = models.CharField(max_length=80, blank=True)
+    provider_succeeded = models.BooleanField(default=False, db_index=True)
+    provider_status_code = models.PositiveSmallIntegerField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        ordering = ["-created_at", "-id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["user", "client_message_id"],
+                condition=~models.Q(client_message_id=""),
+                name="unique_assistant_question_client_message",
+            )
+        ]
+        indexes = [models.Index(fields=["user", "-created_at"])]
+
+    def __str__(self):
+        return f"{self.user_id}: {self.question[:60]}"

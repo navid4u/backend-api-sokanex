@@ -2,7 +2,7 @@ from django import forms
 from django.contrib import admin
 
 from .crypto import encrypt_token
-from .models import AISettings, AISettingsAuditLog, AIUsageLog
+from .models import AISettings, AISettingsAuditLog, AIUsageLog, AssistantQuestion
 
 
 class AISettingsAdminForm(forms.ModelForm):
@@ -54,4 +54,20 @@ class AIUsageAdmin(admin.ModelAdmin):
     readonly_fields = tuple(field.name for field in AIUsageLog._meta.fields)
 
     def has_add_permission(self, request):
+        return False
+
+
+@admin.register(AssistantQuestion)
+class AssistantQuestionAdmin(admin.ModelAdmin):
+    list_display = (
+        "id", "user", "created_at", "provider_succeeded", "provider_status_code",
+    )
+    list_filter = ("provider_succeeded", "provider_status_code", "created_at")
+    search_fields = ("question", "user__username", "user__phone", "user__first_name", "user__last_name")
+    readonly_fields = tuple(field.name for field in AssistantQuestion._meta.fields)
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
         return False

@@ -8,7 +8,7 @@ from rest_framework import serializers
 from django.core.exceptions import ImproperlyConfigured
 
 from .crypto import encrypt_token, token_configuration_status
-from .models import AISettings
+from .models import AISettings, AssistantQuestion
 
 
 def clean_content(value):
@@ -67,6 +67,12 @@ class ChatMessageSerializer(serializers.Serializer):
 
 class AssistantChatSerializer(serializers.Serializer):
     messages = ChatMessageSerializer(many=True, allow_empty=False)
+    client_message_id = serializers.CharField(
+        required=False,
+        allow_blank=False,
+        max_length=80,
+        trim_whitespace=True,
+    )
 
     def validate_messages(self, value):
         if len(value) > 20:
@@ -74,6 +80,39 @@ class AssistantChatSerializer(serializers.Serializer):
         if sum(len(item["content"]) for item in value) > 12000:
             raise serializers.ValidationError("Conversation exceeds 12000 characters.")
         return value
+
+    def validate_client_message_id(self, value):
+        if not re.fullmatch(r"[A-Za-z0-9._:-]{8,80}", value):
+            raise serializers.ValidationError(
+                "Use 8-80 letters, numbers, dots, underscores, colons or hyphens."
+            )
+        return value
+
+
+class AssistantQuestionUserSerializer(serializers.Serializer):
+    id = serializers.IntegerField()
+    username = serializers.CharField()
+    first_name = serializers.CharField()
+    last_name = serializers.CharField()
+    phone = serializers.CharField(allow_null=True, allow_blank=True)
+
+
+class AssistantQuestionSerializer(serializers.ModelSerializer):
+    username = serializers.CharField(source="user.username", read_only=True)
+    phone = serializers.CharField(source="user.phone", read_only=True, allow_null=True)
+    user_display_name = serializers.SerializerMethodField()
+    user = AssistantQuestionUserSerializer(read_only=True)
+
+    class Meta:
+        model = AssistantQuestion
+        fields = (
+            "id", "question", "created_at", "provider_succeeded",
+            "provider_status_code", "username", "phone", "user_display_name", "user",
+        )
+        read_only_fields = fields
+
+    def get_user_display_name(self, obj) -> str:
+        return obj.user.get_full_name().strip() or obj.user.username
 
 
 class TechnicalAnalysisSerializer(serializers.Serializer):

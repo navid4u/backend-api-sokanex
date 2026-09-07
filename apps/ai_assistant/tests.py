@@ -11,7 +11,7 @@ from rest_framework.test import APITestCase
 
 from apps.accounts.models import PlatformRole, User
 from .crypto import decrypt_token
-from .models import AISettings, AIUsageLog
+from .models import AISettings, AIUsageLog, AssistantQuestion
 
 
 KEY = Fernet.generate_key().decode()
@@ -100,6 +100,10 @@ class AssistantAPITests(APITestCase):
         self.assertEqual(response.status_code, 503)
         self.assertEqual(response.data["error_code"], "PROVIDER_TIMEOUT")
         self.assertEqual(AIUsageLog.objects.filter(user=self.user, status="error").count(), 1)
+        question = AssistantQuestion.objects.get(user=self.user)
+        self.assertEqual(question.question, "سؤال")
+        self.assertFalse(question.provider_succeeded)
+        self.assertIsNone(question.provider_status_code)
 
     def test_provider_http_statuses_are_sanitized(self):
         self.configure()
@@ -121,6 +125,9 @@ class AssistantAPITests(APITestCase):
                 self.assertEqual(response.status_code, expected_status)
                 self.assertEqual(response.data["error_code"], error_code)
                 self.assertNotIn("provider detail", str(response.data))
+                archived = AssistantQuestion.objects.filter(user=self.user).first()
+                self.assertFalse(archived.provider_succeeded)
+                self.assertEqual(archived.provider_status_code, provider_status)
 
     def test_cors_header_is_present_on_assistant_error(self):
         self.client.force_authenticate(self.user)
@@ -147,6 +154,59 @@ class AssistantAPITests(APITestCase):
         self.assertEqual(response.status_code, 429)
         self.assertEqual(response.data["error_code"], "DAILY_LIMIT_REACHED")
 
+    @patch("apps.ai_assistant.services.AssistantService._request")
+    def test_financial_question_is_archived_once_and_response_is_not_stored(self, provider):
+        self.configure()
+        provider.return_value = (
+            {"choices": [{"message": {"content": "پاسخ فوق محرمانه مدل"}}], "usage": {}},
+            200,
+        )
+        self.client.force_authenticate(self.user)
+        payload = {
+            "client_message_id": "message-12345678",
+            "messages": [{"role": "user", "content": "<b>  پرسش مالی من  </b>"}],
+        }
+        first = self.client.post("/api/assistant/chat/", payload, format="json")
+        second = self.client.post("/api/assistant/chat/", payload, format="json")
+        self.assertEqual(first.status_code, 200)
+        self.assertEqual(second.status_code, 200)
+        self.assertEqual(AssistantQuestion.objects.count(), 1)
+        question = AssistantQuestion.objects.get()
+        self.assertEqual(question.question, "پرسش مالی من")
+        self.assertTrue(question.provider_succeeded)
+        self.assertEqual(question.provider_status_code, 200)
+        self.assertNotIn("پاسخ فوق محرمانه مدل", question.question)
+        self.assertFalse(hasattr(question, "answer"))
+
+    def test_question_archive_permissions_search_pagination_and_redaction(self):
+        AssistantQuestion.objects.bulk_create([
+            AssistantQuestion(user=self.user, question=f"پرسش سرمایه گذاری {index}")
+            for index in range(25)
+        ])
+        self.client.force_authenticate(self.user)
+        self.assertEqual(self.client.get("/api/assistant/admin/questions/").status_code, 403)
+
+        self.client.force_authenticate(self.manager)
+        response = self.client.get(
+            "/api/assistant/admin/questions/?search=سرمایه&ordering=created_at&page_size=10"
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["count"], 25)
+        self.assertEqual(len(response.data["results"]), 10)
+        item = response.data["results"][0]
+        self.assertEqual(item["username"], self.user.username)
+        self.assertIn("phone", item)
+        serialized = str(item).lower()
+        for forbidden in ("answer", "token", "password", "system_prompt", "cookie"):
+            self.assertNotIn(forbidden, serialized)
+        self.assertEqual(
+            self.client.get("/api/assistant/admin/questions/?page_size=25").status_code,
+            400,
+        )
+
+        self.client.force_authenticate(self.superuser)
+        self.assertEqual(self.client.get("/api/assistant/admin/questions/").status_code, 200)
+
     @override_settings(ASSISTANT_TEMP_DIR=tempfile.gettempdir())
     @patch("apps.ai_assistant.services.AssistantService.technical")
     def test_valid_image_is_processed_and_temporary_file_removed(self, technical):
@@ -160,6 +220,7 @@ class AssistantAPITests(APITestCase):
         response = self.client.post("/api/assistant/technical-analysis/", {"image": image}, format="multipart")
         self.assertEqual(response.status_code, 200)
         self.assertEqual(set(os.listdir(tempfile.gettempdir())), before)
+        self.assertFalse(AssistantQuestion.objects.exists())
 
     def test_oversize_and_fake_mime_are_rejected(self):
         self.client.force_authenticate(self.user)

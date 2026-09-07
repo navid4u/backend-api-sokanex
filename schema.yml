@@ -3328,6 +3328,45 @@ paths:
               schema:
                 $ref: '#/components/schemas/PaginatedArticleListList'
           description: ''
+  /api/assistant/admin/questions/:
+    get:
+      operationId: assistant_admin_questions_list
+      parameters:
+      - in: query
+        name: ordering
+        schema:
+          type: string
+          enum:
+          - -created_at
+          - created_at
+      - in: query
+        name: page
+        schema:
+          type: integer
+      - in: query
+        name: page_size
+        schema:
+          type: integer
+          enum:
+          - 10
+          - 100
+          - 20
+          - 50
+      - in: query
+        name: search
+        schema:
+          type: string
+      tags:
+      - assistant
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedAssistantQuestionList'
+          description: ''
   /api/assistant/admin/settings/:
     get:
       operationId: assistant_admin_settings_retrieve
@@ -8397,6 +8436,10 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/ChatMessageRequest'
+        client_message_id:
+          type: string
+          minLength: 1
+          maxLength: 80
       required:
       - messages
     AssistantChatResponse:
@@ -8413,6 +8456,70 @@ components:
       - answer
       - success
       - usage
+    AssistantQuestion:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        question:
+          type: string
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        provider_succeeded:
+          type: boolean
+          readOnly: true
+        provider_status_code:
+          type: integer
+          readOnly: true
+          nullable: true
+        username:
+          type: string
+          readOnly: true
+        phone:
+          type: string
+          readOnly: true
+          nullable: true
+        user_display_name:
+          type: string
+          readOnly: true
+        user:
+          allOf:
+          - $ref: '#/components/schemas/AssistantQuestionUser'
+          readOnly: true
+      required:
+      - created_at
+      - id
+      - phone
+      - provider_status_code
+      - provider_succeeded
+      - question
+      - user
+      - user_display_name
+      - username
+    AssistantQuestionUser:
+      type: object
+      properties:
+        id:
+          type: integer
+        username:
+          type: string
+        first_name:
+          type: string
+        last_name:
+          type: string
+        phone:
+          type: string
+          nullable: true
+      required:
+      - first_name
+      - id
+      - last_name
+      - phone
+      - username
     Badge:
       type: object
       properties:
@@ -11778,6 +11885,29 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/ArticleList'
+    PaginatedAssistantQuestionList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/AssistantQuestion'
     PaginatedBadgeList:
       type: object
       required:

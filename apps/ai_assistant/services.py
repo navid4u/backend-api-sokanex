@@ -58,7 +58,12 @@ class AssistantService:
             choice = (payload.get("choices") or [{}])[0]
             answer = ((choice.get("message") or {}).get("content") or "").strip()
             if not answer:
-                raise AssistantError("پاسخ معتبری از سرویس دریافت نشد.", "INCOMPLETE_PROVIDER_RESPONSE", 502)
+                raise AssistantError(
+                    "پاسخ معتبری از سرویس دریافت نشد.",
+                    "INCOMPLETE_PROVIDER_RESPONSE",
+                    502,
+                    provider_status_code=provider_status,
+                )
             usage = payload.get("usage") or {}
             input_tokens = int(usage.get("prompt_tokens") or 0)
             output_tokens = int(usage.get("completion_tokens") or 0)
@@ -88,7 +93,12 @@ class AssistantService:
                     code, response_status = "PROVIDER_UNAVAILABLE", 503
                 else:
                     code, response_status = "PROVIDER_ERROR", 502
-                raise AssistantError("ارتباط با سرویس هوشمند ناموفق بود.", code, response_status) from exc
+                raise AssistantError(
+                    "ارتباط با سرویس هوشمند ناموفق بود.",
+                    code,
+                    response_status,
+                    provider_status_code=exc.code,
+                ) from exc
             except (URLError, TimeoutError, ValueError, json.JSONDecodeError) as exc:
                 raise AssistantError("سرویس هوشمند در زمان مقرر پاسخ نداد.", "PROVIDER_TIMEOUT", 503) from exc
 
