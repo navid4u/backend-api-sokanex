@@ -4,6 +4,7 @@ import ipaddress
 import json
 import re
 import socket
+import logging
 import xml.etree.ElementTree as ET
 from datetime import timedelta
 from email.utils import parsedate_to_datetime
@@ -18,7 +19,10 @@ from django.db import transaction
 from django.utils import timezone
 from rest_framework.exceptions import APIException, ValidationError
 
-from .models import CryptoMarketSnapshot, NewsArticle, NewsSource
+from .models import CryptoMarketSnapshot, MarketQuoteSnapshot, NewsArticle, NewsSource
+
+
+logger = logging.getLogger(__name__)
 
 
 BASE_SYMBOLS = ("usd-irr", "gold-18k", "half-coin", "coin-emami", "car-index", "tedpix")
@@ -169,12 +173,43 @@ class MarketQuoteService:
             snapshot = {"updated_at": timezone.now().isoformat(), "quotes": quotes}
             cache.set(cls.fresh_cache_key, snapshot, settings.MARKET_DATA_CACHE_SECONDS)
             cache.set(cls.stale_cache_key, snapshot, settings.MARKET_DATA_STALE_SECONDS)
+            MarketQuoteSnapshot.objects.update_or_create(
+                pk=1,
+                defaults={
+                    "quotes": quotes,
+                    "source_updated_at": timezone.now(),
+                },
+            )
             return cls._response(snapshot, symbols, False)
 
         stale = cache.get(cls.stale_cache_key)
         if stale:
             return cls._response(stale, symbols, True)
-        raise MarketProviderUnavailable()
+        persisted = MarketQuoteSnapshot.objects.first()
+        if persisted and persisted.quotes:
+            snapshot = {
+                "updated_at": persisted.source_updated_at.isoformat(),
+                "quotes": persisted.quotes,
+            }
+            cache.set(cls.stale_cache_key, snapshot, settings.MARKET_DATA_STALE_SECONDS)
+            return cls._response(snapshot, symbols, True)
+
+        if cache.add("market:v3:quotes:unavailable-log", True, timeout=300):
+            logger.warning(
+                "Market quotes unavailable generic_configured=%s brsapi_configured=%s "
+                "tgju_enabled=%s provider_errors=%s",
+                bool(settings.MARKET_DATA_PROVIDER_URL and settings.MARKET_DATA_API_KEY),
+                bool(settings.BRSAPI_API_KEY),
+                bool(settings.TGJU_ENABLED),
+                ",".join(provider_errors) or "none",
+            )
+        return {
+            "updated_at": timezone.now().isoformat(),
+            "available": False,
+            "is_stale": True,
+            "stale_age_seconds": 0,
+            "results": [],
+        }
 
     @classmethod
     def _with_circuit_breaker(cls, name, provider):
@@ -238,7 +273,13 @@ class MarketQuoteService:
                 "source_timestamp": row.get("source_timestamp"), "is_stale": is_stale,
                 "stale_age_seconds": age if is_stale else 0,
             })
-        return {"updated_at": snapshot["updated_at"], "is_stale": is_stale, "stale_age_seconds": age if is_stale else 0, "results": results}
+        return {
+            "updated_at": snapshot["updated_at"],
+            "available": bool(results),
+            "is_stale": is_stale,
+            "stale_age_seconds": age if is_stale else 0,
+            "results": results,
+        }
 
 
 class CryptoSnapshotService:

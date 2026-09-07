@@ -1,11 +1,13 @@
 from unittest.mock import patch
+from datetime import timedelta
 
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.test import TestCase, override_settings
+from django.utils import timezone
 from rest_framework.test import APIClient
 
-from .models import NewsArticle, NewsSource
+from .models import MarketQuoteSnapshot, NewsArticle, NewsSource
 from .services import BASE_SYMBOLS, MarketQuoteService
 
 
@@ -26,10 +28,31 @@ class MarketV2Tests(TestCase):
     @override_settings(
         MARKET_DATA_PROVIDER_URL="", MARKET_DATA_API_KEY="", BRSAPI_API_KEY="", TGJU_ENABLED=False,
     )
-    def test_quotes_never_invent_values_when_no_provider_or_cache_exists(self):
+    def test_quotes_gracefully_return_empty_when_no_provider_or_cache_exists(self):
         response = self.client.get("/api/market/quotes/")
-        self.assertEqual(response.status_code, 503)
-        self.assertNotIn("results", response.data)
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(response.data["available"])
+        self.assertEqual(response.data["results"], [])
+
+    @override_settings(
+        MARKET_DATA_PROVIDER_URL="", MARKET_DATA_API_KEY="", BRSAPI_API_KEY="", TGJU_ENABLED=False,
+    )
+    def test_quotes_use_persistent_last_known_real_snapshot(self):
+        MarketQuoteSnapshot.objects.create(
+            quotes={
+                "usd-irr": {
+                    "symbol": "usd-irr", "name": "دلار", "price": 100000,
+                    "unit": "تومان", "source": "verified-provider",
+                    "source_timestamp": timezone.now().isoformat(),
+                }
+            },
+            source_updated_at=timezone.now() - timedelta(minutes=5),
+        )
+        response = self.client.get("/api/market/quotes/?symbols=usd-irr")
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.data["available"])
+        self.assertTrue(response.data["is_stale"])
+        self.assertEqual(response.data["results"][0]["price"], 100000)
 
     def test_news_without_approved_sources_is_an_empty_real_list(self):
         response = self.client.get("/api/market/news/")

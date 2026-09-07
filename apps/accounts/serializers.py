@@ -685,7 +685,8 @@ class UserCustomRoleUpdateSerializer(serializers.Serializer):
 
 
 class UserProfileDetailsSerializer(serializers.ModelSerializer):
-    country = serializers.CharField(required=False, max_length=100)
+    country = serializers.CharField(required=False, allow_blank=True, max_length=100)
+    income_currency = serializers.CharField(required=False, allow_blank=True, max_length=10)
     username = serializers.CharField(
         source="user.username",
         read_only=True,
@@ -799,6 +800,32 @@ class UserProfileDetailsSerializer(serializers.ModelSerializer):
         if value and value > timezone.localdate():
             raise serializers.ValidationError(
                 "Birth date cannot be in the future."
+            )
+        return value
+
+    def validate_country(self, value):
+        value = value.strip().upper()
+        if not value:
+            return "IR"
+        value = {
+            "IRAN": "IR",
+            "IRAN, ISLAMIC REPUBLIC OF": "IR",
+            "ایران": "IR",
+        }.get(value, value)
+        if len(value) != 2 or not value.isalpha():
+            raise serializers.ValidationError(
+                "Use an ISO-3166 alpha-2 country code, for example IR."
+            )
+        return value
+
+    def validate_income_currency(self, value):
+        value = value.strip().upper()
+        if not value:
+            return "IRT"
+        value = {"تومان": "IRT", "ریال": "IRR", "دلار": "USD"}.get(value, value)
+        if len(value) < 3 or len(value) > 10 or not value.isalpha():
+            raise serializers.ValidationError(
+                "Enter a valid currency code, for example IRT, IRR or USD."
             )
         return value
 
@@ -1251,19 +1278,6 @@ class SecuritySettingsSerializer(serializers.ModelSerializer):
     def validate_session_lifetime_days(self, value):
         if not 1 <= value <= 90:
             raise serializers.ValidationError("Must be between 1 and 90.")
-        return value
-
-    def validate_country(self, value):
-        value = value.strip().upper()
-        value = {"IRAN": "IR", "IRAN, ISLAMIC REPUBLIC OF": "IR"}.get(value, value)
-        if len(value) != 2 or not value.isalpha():
-            raise serializers.ValidationError("Use an ISO-3166 alpha-2 country code.")
-        return value
-
-    def validate_income_currency(self, value):
-        value = value.strip().upper()
-        if len(value) < 3 or len(value) > 10 or not value.isalpha():
-            raise serializers.ValidationError("Enter a valid currency code.")
         return value
 
 class OTPRequestSerializer(serializers.Serializer):

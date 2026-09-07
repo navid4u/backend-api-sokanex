@@ -69,3 +69,15 @@ class ObservabilityTests(TestCase):
     def test_python_warning_is_persisted(self):
         logging.getLogger("apps.test_component").warning("provider temporarily unavailable")
         self.assertTrue(LogEvent.objects.filter(category="python_log", message__icontains="provider").exists())
+
+    def test_validation_log_contains_errors_but_not_request_values(self):
+        self.client.force_authenticate(self.user)
+        response = self.client.patch(
+            "/api/accounts/profile/details/",
+            {"exercise_days_per_week": 99, "bio": "private biography"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 400)
+        event = LogEvent.objects.get(category="validation_error")
+        self.assertIn("exercise_days_per_week", event.context["validation_errors"])
+        self.assertNotIn("private biography", str(event.context))

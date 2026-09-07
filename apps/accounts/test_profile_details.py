@@ -125,6 +125,39 @@ class UserProfileDetailsAPITests(APITestCase):
         self.assertIn("preferred_markets", response.data["errors"])
         self.assertIn("exercise_days_per_week", response.data["errors"])
 
+    def test_legacy_blank_country_and_currency_do_not_block_profile_save(self):
+        profile = UserProfile.objects.create(
+            user=self.user,
+            country="",
+            income_currency="",
+        )
+        self.authenticate(self.user)
+        response = self.client.patch(
+            reverse("profile-details"),
+            {
+                "country": "",
+                "income_currency": "",
+                "city": "Tehran",
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        profile.refresh_from_db()
+        self.assertEqual(profile.country, "IR")
+        self.assertEqual(profile.income_currency, "IRT")
+        self.assertEqual(profile.city, "Tehran")
+
+    def test_profile_accepts_persian_country_and_currency_aliases(self):
+        self.authenticate(self.user)
+        response = self.client.patch(
+            reverse("profile-details"),
+            {"country": "ایران", "income_currency": "تومان"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["country"], "IR")
+        self.assertEqual(response.data["income_currency"], "IRT")
+
     def test_regular_user_cannot_read_another_profile(self):
         self.authenticate(self.user)
         response = self.client.get(

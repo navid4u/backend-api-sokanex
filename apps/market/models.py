@@ -89,3 +89,14 @@ class CryptoMarketSnapshot(models.Model):
 
     class Meta:
         ordering = ["-captured_at", "-id"]
+
+
+class MarketQuoteSnapshot(models.Model):
+    """Persistent last-known real quotes, shared by all Gunicorn workers."""
+
+    quotes = models.JSONField(default=dict)
+    source_updated_at = models.DateTimeField()
+    captured_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-source_updated_at", "-id"]
