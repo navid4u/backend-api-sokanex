@@ -179,6 +179,39 @@ class ObservabilityTests(TestCase):
         self.assertEqual(LogEvent.objects.count(), 0)
         self.assertTrue(User.objects.filter(pk=user_id).exists())
 
+    def test_superadmin_can_purge_logs_over_delete_and_post(self):
+        self.client.force_authenticate(self.superadmin)
+        LogEvent.objects.create(source="backend", level="error", category="one", message="one")
+        LogEvent.objects.create(source="frontend", level="warning", category="two", message="two")
+
+        response = self.client.delete("/api/observability/logs/purge/")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data, {"deleted": 2})
+        self.assertEqual(LogEvent.objects.count(), 0)
+
+        response = self.client.post(
+            "/api/observability/logs/purge/", {"confirm": True}, format="json"
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data, {"deleted": 0})
+        self.assertEqual(LogEvent.objects.count(), 0)
+
+    def test_purge_endpoint_requires_superadmin_and_post_confirmation(self):
+        event = LogEvent.objects.create(
+            source="backend", level="error", category="protected", message="protected"
+        )
+        self.client.force_authenticate(self.user)
+        self.assertEqual(self.client.delete("/api/observability/logs/purge/").status_code, 403)
+        self.assertTrue(LogEvent.objects.filter(pk=event.pk).exists())
+
+        self.client.force_authenticate(self.superadmin)
+        response = self.client.post(
+            "/api/observability/logs/purge/", {"confirm": False}, format="json"
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertTrue(LogEvent.objects.filter(pk=event.pk).exists())
+        self.assertEqual(LogEvent.objects.count(), 1)
+
     def test_frontend_ingest_remains_public(self):
         self.client.credentials(HTTP_AUTHORIZATION="Bearer expired-or-malformed")
         response = self.client.post(

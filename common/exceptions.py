@@ -97,7 +97,11 @@ def custom_exception_handler(
     request_path = getattr(request, "path", "")
     expected_user_input_error = request_path.startswith("/api/accounts/auth/otp/")
 
-    if response.status_code == status.HTTP_400_BAD_REQUEST and not expected_user_input_error:
+    if (
+        response.status_code == status.HTTP_400_BAD_REQUEST
+        and not expected_user_input_error
+        and not getattr(request, "_observability_skip", False)
+    ):
         try:
             from apps.observability.models import LogEvent
             from apps.observability.services import ObservabilityService

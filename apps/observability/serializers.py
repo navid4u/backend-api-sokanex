@@ -56,7 +56,7 @@ class LogEventDetailSerializer(serializers.ModelSerializer):
             "status_code", "duration_ms", "is_resolved", "created_at",
         )
 
-    def get_username(self, obj):
+    def get_username(self, obj) -> str | None:
         return obj.user.username if obj.user_id else None
 
 
@@ -83,6 +83,15 @@ class FrontendLogSerializer(serializers.Serializer):
 
 class ResolveLogSerializer(serializers.Serializer):
     is_resolved = serializers.BooleanField()
+
+
+class PurgeLogSerializer(serializers.Serializer):
+    confirm = serializers.BooleanField()
+
+    def validate_confirm(self, value):
+        if value is not True:
+            raise serializers.ValidationError("Set confirm to true to purge all logs.")
+        return value
 
 
 class LogSummarySerializer(serializers.Serializer):

@@ -1,10 +1,12 @@
 from datetime import timedelta
 
+from django.db import transaction
 from django.db.models import Count, Q, TextField
 from django.db.models.functions import Cast
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
-from rest_framework import generics, status
+from drf_spectacular.utils import extend_schema, inline_serializer
+from rest_framework import generics, serializers, status
 from rest_framework.exceptions import ValidationError
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
@@ -17,7 +19,7 @@ from apps.activity.services import ActivityService
 from .models import LogEvent
 from .serializers import (
     FrontendLogSerializer, LogEventDetailSerializer, LogEventSerializer, LogSummarySerializer,
-    ResolveLogSerializer,
+    PurgeLogSerializer, ResolveLogSerializer,
 )
 from .services import ObservabilityService
 from .throttles import FrontendLogThrottle
@@ -114,6 +116,50 @@ class LogEventResolveView(generics.GenericAPIView):
         event.resolved_at = timezone.now() if event.is_resolved else None
         event.save(update_fields=("is_resolved", "resolved_by", "resolved_at"))
         return Response(LogEventSerializer(event).data)
+
+
+class LogEventPurgeView(generics.GenericAPIView):
+    permission_classes = [IsSuperAdmin]
+    serializer_class = PurgeLogSerializer
+
+    def _skip_self_observation(self, request):
+        request._observability_skip = True
+        underlying_request = getattr(request, "_request", None)
+        if underlying_request is not None:
+            underlying_request._observability_skip = True
+
+    @staticmethod
+    def _purge():
+        with transaction.atomic():
+            deleted = LogEvent.objects.count()
+            LogEvent.objects.all().delete()
+        return Response({"deleted": deleted}, status=status.HTTP_200_OK)
+
+    @extend_schema(
+        request=None,
+        responses={
+            200: inline_serializer(
+                name="ObservabilityPurgeResponse",
+                fields={"deleted": serializers.IntegerField()},
+            )
+        },
+    )
+    def delete(self, request):
+        self._skip_self_observation(request)
+        return self._purge()
+
+    @extend_schema(
+        request=PurgeLogSerializer,
+        responses=inline_serializer(
+            name="ObservabilityPurgePostResponse",
+            fields={"deleted": serializers.IntegerField()},
+        ),
+    )
+    def post(self, request):
+        self._skip_self_observation(request)
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        return self._purge()
 
 
 class LogSummaryView(generics.GenericAPIView):

@@ -38,7 +38,11 @@ class ObservabilityMiddleware:
             or (status_code == 400 and not getattr(request, "_observability_logged", False))
             or (duration_ms >= slow_ms and not expected_status)
         )
-        if should_log and not getattr(request, "_observability_logged", False):
+        if (
+            should_log
+            and not getattr(request, "_observability_logged", False)
+            and not getattr(request, "_observability_skip", False)
+        ):
             user = getattr(request, "user", None)
             if not getattr(user, "is_authenticated", False):
                 user = None

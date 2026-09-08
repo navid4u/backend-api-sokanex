@@ -1579,7 +1579,7 @@ paths:
               $ref: '#/components/schemas/LogoutRequest'
         required: true
       security:
-      - jwtAuth: []
+      - {}
       responses:
         '200':
           description: No response body
@@ -6236,7 +6236,6 @@ paths:
               $ref: '#/components/schemas/FrontendLogRequest'
         required: true
       security:
-      - jwtAuth: []
       - {}
       responses:
         '200':
@@ -6334,6 +6333,45 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ResolveLog'
+          description: ''
+  /api/observability/logs/purge/:
+    post:
+      operationId: observability_logs_purge_create
+      tags:
+      - observability
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PurgeLogRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PurgeLogRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PurgeLogRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ObservabilityPurgePostResponse'
+          description: ''
+    delete:
+      operationId: observability_logs_purge_destroy
+      tags:
+      - observability
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ObservabilityPurgeResponse'
           description: ''
   /api/observability/logs/summary/:
     get:
@@ -10872,6 +10910,18 @@ components:
           type: string
       required:
       - message
+    Level6e3Enum:
+      enum:
+      - info
+      - warning
+      - error
+      - critical
+      type: string
+      description: |-
+        * `info` - Info
+        * `warning` - Warning
+        * `error` - Error
+        * `critical` - Critical
     LiveChatMessage:
       type: object
       properties:
@@ -11289,7 +11339,7 @@ components:
         source:
           $ref: '#/components/schemas/SourceEnum'
         level:
-          $ref: '#/components/schemas/LogEventLevelEnum'
+          $ref: '#/components/schemas/Level6e3Enum'
         category:
           type: string
           maxLength: 80
@@ -11366,18 +11416,6 @@ components:
       - resolved_by
       - source
       - user
-    LogEventLevelEnum:
-      enum:
-      - info
-      - warning
-      - error
-      - critical
-      type: string
-      description: |-
-        * `info` - Info
-        * `warning` - Warning
-        * `error` - Error
-        * `critical` - Critical
     LogEventDetail:
       type: object
       properties:
@@ -11387,29 +11425,37 @@ components:
         source:
           $ref: '#/components/schemas/SourceEnum'
         level:
-          $ref: '#/components/schemas/LogEventLevelEnum'
+          $ref: '#/components/schemas/Level6e3Enum'
         category:
           type: string
+          maxLength: 80
         message:
           type: string
+          maxLength: 1000
         error_type:
           type: string
+          readOnly: true
           nullable: true
         stack_trace:
           type: string
+          readOnly: true
           nullable: true
         context: {}
         request_id:
           type: string
+          readOnly: true
           nullable: true
         frontend_url:
           type: string
+          readOnly: true
           nullable: true
         release:
           type: string
+          readOnly: true
           nullable: true
         user_agent:
           type: string
+          readOnly: true
           nullable: true
         ip_address:
           type: string
@@ -11421,19 +11467,26 @@ components:
         user:
           allOf:
           - $ref: '#/components/schemas/LogUser'
-          nullable: true
           readOnly: true
         method:
           type: string
+          readOnly: true
           nullable: true
         path:
           type: string
+          readOnly: true
           nullable: true
         status_code:
           type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
           nullable: true
         duration_ms:
           type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
           nullable: true
         is_resolved:
           type: boolean
@@ -11444,12 +11497,19 @@ components:
       required:
       - category
       - created_at
+      - error_type
+      - frontend_url
       - id
-      - is_resolved
       - level
       - message
+      - method
+      - path
+      - release
+      - request_id
       - source
+      - stack_trace
       - user
+      - user_agent
       - username
     LogSummary:
       type: object
@@ -11880,6 +11940,20 @@ components:
       required:
       - code
       - phone
+    ObservabilityPurgePostResponse:
+      type: object
+      properties:
+        deleted:
+          type: integer
+      required:
+      - deleted
+    ObservabilityPurgeResponse:
+      type: object
+      properties:
+        deleted:
+          type: integer
+      required:
+      - deleted
     OptionIdEnum:
       enum:
       - a
@@ -14400,6 +14474,13 @@ components:
           readOnly: true
       required:
       - updated_at
+    PurgeLogRequest:
+      type: object
+      properties:
+        confirm:
+          type: boolean
+      required:
+      - confirm
     PurposeEnum:
       enum:
       - WALLET_DEPOSIT
