@@ -1,7 +1,12 @@
 import logging
+from datetime import timedelta
+from io import StringIO
+from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
+from django.core.management import call_command
 from django.test import TestCase, override_settings
+from django.utils import timezone
 from rest_framework.test import APIClient
 
 from .models import LogEvent
@@ -66,6 +71,65 @@ class ObservabilityTests(TestCase):
         invalid = self.client.get("/api/observability/logs/?is_resolved=maybe")
         self.assertEqual(invalid.status_code, 400)
 
+    def test_detail_returns_single_complete_object_with_nullable_values(self):
+        event = LogEvent.objects.create(
+            source="backend",
+            level="error",
+            category="api_error",
+            message="Detail failure",
+            context={"safe": "value"},
+            user=self.user,
+            status_code=500,
+            duration_ms=17,
+        )
+        self.client.force_authenticate(self.superadmin)
+        response = self.client.get(f"/api/observability/logs/{event.pk}/")
+        self.assertEqual(response.status_code, 200)
+        self.assertIsInstance(response.data, dict)
+        self.assertEqual(set(response.data), {
+            "id", "source", "level", "category", "message", "error_type",
+            "stack_trace", "context", "request_id", "frontend_url", "release",
+            "user_agent", "ip_address", "username", "user", "method", "path",
+            "status_code", "duration_ms", "is_resolved", "created_at",
+        })
+        self.assertEqual(response.data["username"], self.user.username)
+        self.assertEqual(response.data["user"]["id"], self.user.pk)
+        for field in ("error_type", "stack_trace", "request_id", "frontend_url", "release", "user_agent", "ip_address", "method", "path"):
+            self.assertIsNone(response.data[field])
+        self.assertEqual(self.client.get("/api/observability/logs/999999/").status_code, 404)
+
+    def test_non_superadmin_cannot_access_any_management_endpoint(self):
+        event = LogEvent.objects.create(source="backend", level="error", category="test", message="failure")
+        self.client.force_authenticate(self.user)
+        self.assertEqual(self.client.get("/api/observability/logs/").status_code, 403)
+        self.assertEqual(self.client.get("/api/observability/logs/summary/").status_code, 403)
+        self.assertEqual(self.client.get(f"/api/observability/logs/{event.pk}/").status_code, 403)
+        self.assertEqual(
+            self.client.patch(f"/api/observability/logs/{event.pk}/resolve/", {"is_resolved": True}, format="json").status_code,
+            403,
+        )
+
+    def test_search_is_partial_and_covers_supported_fields(self):
+        related = User.objects.create_user(username="search-person", password="Pass123!")
+        event = LogEvent.objects.create(
+            source="backend",
+            level="error",
+            category="provider",
+            message="Payment gateway timed out",
+            path="/api/wallet/purchase/",
+            error_type="ProviderTimeoutError",
+            request_id="req-unique-123",
+            user=related,
+            context={"provider": "safe-market-source"},
+        )
+        LogEvent.objects.create(source="backend", level="warning", category="other", message="unrelated")
+        self.client.force_authenticate(self.superadmin)
+        for term in ("gateway timed", "wallet/pur", "timeout", "search-pers", "unique-12", "market-source"):
+            response = self.client.get("/api/observability/logs/", {"search": term})
+            self.assertEqual(response.status_code, 200, term)
+            self.assertEqual(response.data["count"], 1, term)
+            self.assertEqual(response.data["results"][0]["id"], event.pk, term)
+
     def test_python_warning_is_persisted(self):
         logging.getLogger("apps.test_component").warning("provider temporarily unavailable")
         self.assertTrue(LogEvent.objects.filter(category="python_log", message__icontains="provider").exists())
@@ -81,3 +145,42 @@ class ObservabilityTests(TestCase):
         event = LogEvent.objects.get(category="validation_error")
         self.assertIn("exercise_days_per_week", event.context["validation_errors"])
         self.assertNotIn("private biography", str(event.context))
+
+    def test_purge_default_removes_only_logs_older_than_five_days_and_summary_uses_remaining(self):
+        now = timezone.now()
+        old = LogEvent.objects.create(source="backend", level="error", category="old", message="old")
+        boundary = LogEvent.objects.create(source="backend", level="warning", category="boundary", message="boundary")
+        recent = LogEvent.objects.create(source="frontend", level="error", category="recent", message="recent")
+        LogEvent.objects.filter(pk=old.pk).update(created_at=now - timedelta(days=5, microseconds=1))
+        LogEvent.objects.filter(pk=boundary.pk).update(created_at=now - timedelta(days=5))
+
+        output = StringIO()
+        with patch("apps.observability.management.commands.purge_observability_logs.timezone.now", return_value=now):
+            call_command("purge_observability_logs", stdout=output)
+
+        self.assertIn("Deleted observability logs: 1", output.getvalue())
+        self.assertFalse(LogEvent.objects.filter(pk=old.pk).exists())
+        self.assertEqual(LogEvent.objects.filter(pk__in=(boundary.pk, recent.pk)).count(), 2)
+        self.client.force_authenticate(self.superadmin)
+        summary = self.client.get("/api/observability/logs/summary/")
+        self.assertEqual(summary.status_code, 200)
+        self.assertEqual(summary.data["unresolved"], 2)
+
+    def test_purge_all_only_deletes_observability_logs(self):
+        LogEvent.objects.create(source="backend", level="error", category="one", message="one")
+        LogEvent.objects.create(source="frontend", level="warning", category="two", message="two")
+        user_id = self.user.pk
+        output = StringIO()
+        call_command("purge_observability_logs", "--all", stdout=output)
+        self.assertIn("Deleted observability logs: 2", output.getvalue())
+        self.assertEqual(LogEvent.objects.count(), 0)
+        self.assertTrue(User.objects.filter(pk=user_id).exists())
+
+    def test_frontend_ingest_remains_public(self):
+        response = self.client.post(
+            "/api/observability/frontend/",
+            {"category": "network_error", "message": "Public frontend report"},
+            format="json",
+            HTTP_ORIGIN="https://app.sokanex.com",
+        )
+        self.assertEqual(response.status_code, 202)

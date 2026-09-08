@@ -6302,7 +6302,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/LogEvent'
+                $ref: '#/components/schemas/LogEventDetail'
           description: ''
   /api/observability/logs/{id}/resolve/:
     patch:
@@ -11378,6 +11378,79 @@ components:
         * `warning` - Warning
         * `error` - Error
         * `critical` - Critical
+    LogEventDetail:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        source:
+          $ref: '#/components/schemas/SourceEnum'
+        level:
+          $ref: '#/components/schemas/LogEventLevelEnum'
+        category:
+          type: string
+        message:
+          type: string
+        error_type:
+          type: string
+          nullable: true
+        stack_trace:
+          type: string
+          nullable: true
+        context: {}
+        request_id:
+          type: string
+          nullable: true
+        frontend_url:
+          type: string
+          nullable: true
+        release:
+          type: string
+          nullable: true
+        user_agent:
+          type: string
+          nullable: true
+        ip_address:
+          type: string
+          nullable: true
+        username:
+          type: string
+          nullable: true
+          readOnly: true
+        user:
+          allOf:
+          - $ref: '#/components/schemas/LogUser'
+          nullable: true
+          readOnly: true
+        method:
+          type: string
+          nullable: true
+        path:
+          type: string
+          nullable: true
+        status_code:
+          type: integer
+          nullable: true
+        duration_ms:
+          type: integer
+          nullable: true
+        is_resolved:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - category
+      - created_at
+      - id
+      - is_resolved
+      - level
+      - message
+      - source
+      - user
+      - username
     LogSummary:
       type: object
       properties:

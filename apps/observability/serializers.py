@@ -26,6 +26,40 @@ class LogEventSerializer(serializers.ModelSerializer):
         )
 
 
+class NullableBlankCharField(serializers.CharField):
+    """Represent legacy blank model values as JSON null in detail responses."""
+
+    def to_representation(self, value):
+        if value in (None, ""):
+            return None
+        return super().to_representation(value)
+
+
+class LogEventDetailSerializer(serializers.ModelSerializer):
+    username = serializers.SerializerMethodField()
+    user = LogUserSerializer(read_only=True)
+    error_type = NullableBlankCharField(read_only=True, allow_null=True)
+    stack_trace = NullableBlankCharField(read_only=True, allow_null=True)
+    request_id = NullableBlankCharField(read_only=True, allow_null=True)
+    frontend_url = NullableBlankCharField(read_only=True, allow_null=True)
+    release = NullableBlankCharField(read_only=True, allow_null=True)
+    user_agent = NullableBlankCharField(read_only=True, allow_null=True)
+    method = NullableBlankCharField(read_only=True, allow_null=True)
+    path = NullableBlankCharField(read_only=True, allow_null=True)
+
+    class Meta:
+        model = LogEvent
+        fields = (
+            "id", "source", "level", "category", "message", "error_type",
+            "stack_trace", "context", "request_id", "frontend_url", "release",
+            "user_agent", "ip_address", "username", "user", "method", "path",
+            "status_code", "duration_ms", "is_resolved", "created_at",
+        )
+
+    def get_username(self, obj):
+        return obj.user.username if obj.user_id else None
+
+
 class FrontendLogSerializer(serializers.Serializer):
     client_event_id = serializers.CharField(max_length=80, required=False, allow_blank=True)
     level = serializers.ChoiceField(choices=("warning", "error", "critical"), default="error")

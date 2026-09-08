@@ -1,0 +1,13 @@
+[Unit]
+Description=Sokanex purge observability logs older than five days
+After=network.target
+
+[Service]
+Type=oneshot
+User=tradingapp
+Group=tradingapp
+WorkingDirectory=/srv/trading-platform/backend
+ExecStart=/srv/trading-platform/venv/bin/python manage.py purge_observability_logs --days 5
+NoNewPrivileges=true
+PrivateTmp=true
+

@@ -1,6 +1,7 @@
 from datetime import timedelta
 
-from django.db.models import Count, Q
+from django.db.models import Count, Q, TextField
+from django.db.models.functions import Cast
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework import generics, status
@@ -15,7 +16,7 @@ from apps.activity.services import ActivityService
 
 from .models import LogEvent
 from .serializers import (
-    FrontendLogSerializer, LogEventSerializer, LogSummarySerializer,
+    FrontendLogSerializer, LogEventDetailSerializer, LogEventSerializer, LogSummarySerializer,
     ResolveLogSerializer,
 )
 from .services import ObservabilityService
@@ -77,17 +78,19 @@ class LogEventListView(generics.ListAPIView):
             queryset = queryset.filter(is_resolved=normalized == "true")
         search = params.get("search", "").strip()
         if search:
-            queryset = queryset.filter(
+            queryset = queryset.annotate(
+                context_search=Cast("context", output_field=TextField())
+            ).filter(
                 Q(message__icontains=search) | Q(path__icontains=search)
                 | Q(error_type__icontains=search) | Q(user__username__icontains=search)
-                | Q(request_id__icontains=search)
+                | Q(request_id__icontains=search) | Q(context_search__icontains=search)
             )
         return queryset
 
 
 class LogEventDetailView(generics.RetrieveAPIView):
     permission_classes = [IsSuperAdmin]
-    serializer_class = LogEventSerializer
+    serializer_class = LogEventDetailSerializer
     queryset = LogEvent.objects.select_related("user", "resolved_by")
 
 

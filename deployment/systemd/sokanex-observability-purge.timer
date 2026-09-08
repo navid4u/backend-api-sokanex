@@ -1,0 +1,11 @@
+[Unit]
+Description=Run Sokanex observability retention cleanup daily
+
+[Timer]
+OnCalendar=daily
+Persistent=true
+RandomizedDelaySec=20m
+Unit=sokanex-observability-purge.service
+
+[Install]
+WantedBy=timers.target
