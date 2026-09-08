@@ -66,6 +66,24 @@ class MarketV2Tests(TestCase):
         self.assertEqual(rows["gold-18k"]["price"], 23509100)
         self.assertEqual(rows["usd-irr"]["source_timestamp"], "2026-09-08 14:42:00")
 
+    @override_settings(TGJU_ENABLED=True, TGJU_API_URL="https://example.com/ajax.json", MARKET_DATA_TIMEOUT_SECONDS=8)
+    def test_tgju_uses_short_timeout_without_retry(self):
+        with patch("apps.market.services._request_json", return_value={"current": {}}) as request_json:
+            MarketQuoteService._tgju_provider()
+        request_json.assert_called_once_with(
+            "https://example.com/ajax.json", timeout=4, retries=0
+        )
+
+    @override_settings(
+        MARKET_DATA_PROVIDER_URL="", MARKET_DATA_API_KEY="", BRSAPI_API_KEY="", TGJU_ENABLED=True,
+    )
+    def test_concurrent_quote_refresh_does_not_call_provider(self):
+        cache.set(MarketQuoteService.refresh_lock_key, True, 10)
+        with patch.object(MarketQuoteService, "_tgju_provider") as provider:
+            response = MarketQuoteService.get_quotes(["usd-irr"])
+        provider.assert_not_called()
+        self.assertFalse(response["available"])
+
     def test_news_without_approved_sources_is_an_empty_real_list(self):
         response = self.client.get("/api/market/news/")
         self.assertEqual(response.status_code, 200)

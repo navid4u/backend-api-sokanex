@@ -65,12 +65,14 @@ def ensure_public_host(url):
             raise ValueError("Feed host must resolve to a public address.")
 
 
-def _request_json(url, headers=None):
+def _request_json(url, headers=None, *, timeout=None, retries=None):
     request = Request(url, headers={"Accept": "application/json", "User-Agent": settings.MARKET_HTTP_USER_AGENT, **(headers or {})})
     last_error = None
-    for _ in range(settings.MARKET_DATA_RETRY_COUNT + 1):
+    request_timeout = settings.MARKET_DATA_TIMEOUT_SECONDS if timeout is None else timeout
+    request_retries = settings.MARKET_DATA_RETRY_COUNT if retries is None else retries
+    for _ in range(request_retries + 1):
         try:
-            with urlopen(request, timeout=settings.MARKET_DATA_TIMEOUT_SECONDS) as response:
+            with urlopen(request, timeout=request_timeout) as response:
                 return json.loads(response.read().decode("utf-8"))
         except (HTTPError, URLError, TimeoutError, ValueError) as exc:
             last_error = exc
@@ -169,6 +171,7 @@ def _extract_rows(payload, aliases, source, rial_prices=False):
 class MarketQuoteService:
     fresh_cache_key = "market:v3:quotes:fresh"
     stale_cache_key = "market:v3:quotes:last-known"
+    refresh_lock_key = "market:v3:quotes:refresh-lock"
     aliases = {
         "usd-irr": {"usd-irr", "price_dollar_rl", "usd", "دلار"},
         "gold-18k": {"gold-18k", "geram18", "geram_18", "tgju_gold_irg18", "طلای 18 عیار"},
@@ -184,20 +187,32 @@ class MarketQuoteService:
         if fresh and all(symbol in fresh["quotes"] for symbol in symbols):
             return cls._response(fresh, symbols, False)
 
+        # Prevent a cold-cache traffic burst from occupying every synchronous
+        # Gunicorn worker with the same outbound provider request.
+        lock_acquired = cache.add(cls.refresh_lock_key, True, timeout=10)
+        if not lock_acquired:
+            fallback = cls._last_known(symbols)
+            if fallback is not None:
+                return fallback
+            return cls._unavailable_response()
+
         quotes = {}
         provider_errors = []
-        providers = (
-            ("generic", cls._generic_provider), ("brsapi", cls._brsapi_provider),
-            ("tgju", cls._tgju_provider),
-        )
-        for provider_name, provider in providers:
-            try:
-                rows = cls._with_circuit_breaker(provider_name, provider)
-                quotes.update({key: value for key, value in rows.items() if key not in quotes})
-            except (HTTPError, URLError, TimeoutError, ValueError, KeyError, OSError) as exc:
-                provider_errors.append(type(exc).__name__)
-            if all(symbol in quotes for symbol in symbols):
-                break
+        try:
+            providers = (
+                ("generic", cls._generic_provider), ("brsapi", cls._brsapi_provider),
+                ("tgju", cls._tgju_provider),
+            )
+            for provider_name, provider in providers:
+                try:
+                    rows = cls._with_circuit_breaker(provider_name, provider)
+                    quotes.update({key: value for key, value in rows.items() if key not in quotes})
+                except (HTTPError, URLError, TimeoutError, ValueError, KeyError, OSError) as exc:
+                    provider_errors.append(type(exc).__name__)
+                if all(symbol in quotes for symbol in symbols):
+                    break
+        finally:
+            cache.delete(cls.refresh_lock_key)
         if quotes:
             snapshot = {"updated_at": timezone.now().isoformat(), "quotes": quotes}
             cache.set(cls.fresh_cache_key, snapshot, settings.MARKET_DATA_CACHE_SECONDS)
@@ -211,6 +226,23 @@ class MarketQuoteService:
             )
             return cls._response(snapshot, symbols, False)
 
+        fallback = cls._last_known(symbols)
+        if fallback is not None:
+            return fallback
+
+        if cache.add("market:v3:quotes:unavailable-log", True, timeout=300):
+            logger.warning(
+                "Market quotes unavailable generic_configured=%s brsapi_configured=%s "
+                "tgju_enabled=%s provider_errors=%s",
+                bool(settings.MARKET_DATA_PROVIDER_URL and settings.MARKET_DATA_API_KEY),
+                bool(settings.BRSAPI_API_KEY),
+                bool(settings.TGJU_ENABLED),
+                ",".join(provider_errors) or "none",
+            )
+        return cls._unavailable_response()
+
+    @classmethod
+    def _last_known(cls, symbols):
         stale = cache.get(cls.stale_cache_key)
         if stale:
             return cls._response(stale, symbols, True)
@@ -222,16 +254,10 @@ class MarketQuoteService:
             }
             cache.set(cls.stale_cache_key, snapshot, settings.MARKET_DATA_STALE_SECONDS)
             return cls._response(snapshot, symbols, True)
+        return None
 
-        if cache.add("market:v3:quotes:unavailable-log", True, timeout=300):
-            logger.warning(
-                "Market quotes unavailable generic_configured=%s brsapi_configured=%s "
-                "tgju_enabled=%s provider_errors=%s",
-                bool(settings.MARKET_DATA_PROVIDER_URL and settings.MARKET_DATA_API_KEY),
-                bool(settings.BRSAPI_API_KEY),
-                bool(settings.TGJU_ENABLED),
-                ",".join(provider_errors) or "none",
-            )
+    @staticmethod
+    def _unavailable_response():
         return {
             "updated_at": timezone.now().isoformat(),
             "available": False,
@@ -281,7 +307,13 @@ class MarketQuoteService:
     def _tgju_provider(cls):
         if not settings.TGJU_ENABLED:
             return {}
-        payload = _request_json(settings.TGJU_API_URL)
+        # TGJU is an optional fallback. Never let it tie up a web worker for
+        # the global provider timeout/retry budget.
+        payload = _request_json(
+            settings.TGJU_API_URL,
+            timeout=min(settings.MARKET_DATA_TIMEOUT_SECONDS, 4),
+            retries=0,
+        )
         return _extract_rows(payload, cls.aliases, "TGJU", rial_prices=True)
 
     @staticmethod
