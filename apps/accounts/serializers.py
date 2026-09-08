@@ -1,3 +1,5 @@
+from datetime import date
+
 from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import (
     validate_password,
@@ -43,6 +45,61 @@ from apps.activity.models import UserActivity
 from apps.activity.services import ActivityService
 
 User = get_user_model()
+
+
+_LOCALIZED_DIGITS = str.maketrans(
+    "۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩",
+    "01234567890123456789",
+)
+
+
+def _jalali_to_gregorian(jy, jm, jd):
+    """Convert a validated Solar Hijri date without adding a dependency."""
+    jy += 1595
+    days = -355668 + (365 * jy) + ((jy // 33) * 8) + (((jy % 33) + 3) // 4) + jd
+    days += (jm - 1) * 31 if jm < 7 else ((jm - 7) * 30) + 186
+    gy = 400 * (days // 146097)
+    days %= 146097
+    if days > 36524:
+        gy += 100 * ((days - 1) // 36524)
+        days = (days - 1) % 36524
+        if days >= 365:
+            days += 1
+    gy += 4 * (days // 1461)
+    days %= 1461
+    if days > 365:
+        gy += (days - 1) // 365
+        days = (days - 1) % 365
+    gd = days + 1
+    month_days = [0, 31, 29 if gy % 400 == 0 or (gy % 4 == 0 and gy % 100 != 0) else 28,
+                  31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
+    gm = 1
+    while gm <= 12 and gd > month_days[gm]:
+        gd -= month_days[gm]
+        gm += 1
+    return date(gy, gm, gd)
+
+
+class LocalizedNullableDateField(serializers.DateField):
+    """Accept empty, Gregorian ISO/slash dates and Persian Jalali dates."""
+
+    def to_internal_value(self, value):
+        if value is None or (isinstance(value, str) and not value.strip()):
+            return None
+        if isinstance(value, str):
+            normalized = value.strip().translate(_LOCALIZED_DIGITS).replace("/", "-").replace(".", "-")
+            parts = normalized.split("-")
+            if len(parts) == 3 and all(part.isdigit() for part in parts):
+                year, month, day = map(int, parts)
+                if 1200 <= year <= 1600:
+                    if not 1 <= month <= 12 or not 1 <= day <= (31 if month <= 6 else 30):
+                        self.fail("invalid", format="YYYY-MM-DD")
+                    try:
+                        return _jalali_to_gregorian(year, month, day)
+                    except (TypeError, ValueError):
+                        self.fail("invalid", format="YYYY-MM-DD")
+            value = normalized
+        return super().to_internal_value(value)
 
 
 class LoginIdentifierConflict(APIException):
@@ -685,6 +742,7 @@ class UserCustomRoleUpdateSerializer(serializers.Serializer):
 
 
 class UserProfileDetailsSerializer(serializers.ModelSerializer):
+    birth_date = LocalizedNullableDateField(required=False, allow_null=True)
     country = serializers.CharField(required=False, allow_blank=True, max_length=100)
     income_currency = serializers.CharField(required=False, allow_blank=True, max_length=10)
     username = serializers.CharField(

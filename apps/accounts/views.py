@@ -619,9 +619,10 @@ class FinancialPersonalitySubmitView(generics.GenericAPIView):
 class LogoutView(
     generics.GenericAPIView
 ):
-    permission_classes = [
-        IsAuthenticated,
-    ]
+    # A stale access token must not prevent the owner of a valid refresh token
+    # from ending the session. Possession and validation of refresh is enough.
+    authentication_classes = []
+    permission_classes = [AllowAny]
     serializer_class = LogoutSerializer
 
     def post(self, request):
@@ -634,17 +635,22 @@ class LogoutView(
         )
         serializer.save()
 
-        ActivityService.record(
-            request.user,
-            UserActivity.Type.LOGOUT,
-            "Account logout",
-            ip_address=ActivityService.client_ip(request),
-        )
+        token_user = User.objects.filter(
+            pk=serializer.token.get("user_id")
+        ).first()
 
-        UserDevice.objects.filter(
-            user=request.user,
-            refresh_jti=str(serializer.token.get("jti", "")),
-        ).update(revoked_at=timezone.now())
+        if token_user is not None:
+            ActivityService.record(
+                token_user,
+                UserActivity.Type.LOGOUT,
+                "Account logout",
+                ip_address=ActivityService.client_ip(request),
+            )
+
+            UserDevice.objects.filter(
+                user=token_user,
+                refresh_jti=str(serializer.token.get("jti", "")),
+            ).update(revoked_at=timezone.now())
 
         return Response(
             {

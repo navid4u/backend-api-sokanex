@@ -177,6 +177,7 @@ class ObservabilityTests(TestCase):
         self.assertTrue(User.objects.filter(pk=user_id).exists())
 
     def test_frontend_ingest_remains_public(self):
+        self.client.credentials(HTTP_AUTHORIZATION="Bearer expired-or-malformed")
         response = self.client.post(
             "/api/observability/frontend/",
             {"category": "network_error", "message": "Public frontend report"},
@@ -184,3 +185,19 @@ class ObservabilityTests(TestCase):
             HTTP_ORIGIN="https://app.sokanex.com",
         )
         self.assertEqual(response.status_code, 202)
+
+    def test_sanitizer_preserves_status_code_and_redacts_otp_code(self):
+        response = self.client.post(
+            "/api/observability/frontend/",
+            {
+                "category": "api_error",
+                "message": "Provider failed",
+                "context": {"status_code": 503, "otp_code": "123456"},
+            },
+            format="json",
+            HTTP_ORIGIN="https://m.sokanex.com",
+        )
+        self.assertEqual(response.status_code, 202)
+        event = LogEvent.objects.get(message="Provider failed")
+        self.assertEqual(event.context["status_code"], 503)
+        self.assertEqual(event.context["otp_code"], "[REDACTED]")

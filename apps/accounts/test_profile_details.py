@@ -158,6 +158,22 @@ class UserProfileDetailsAPITests(APITestCase):
         self.assertEqual(response.data["country"], "IR")
         self.assertEqual(response.data["income_currency"], "IRT")
 
+    def test_profile_accepts_blank_birth_date_as_null(self):
+        self.authenticate(self.user)
+        response = self.client.patch(
+            reverse("profile-details"), {"birth_date": "", "city": "Tehran"}, format="json"
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIsNone(response.data["birth_date"])
+
+    def test_profile_accepts_localized_jalali_birth_date(self):
+        self.authenticate(self.user)
+        response = self.client.patch(
+            reverse("profile-details"), {"birth_date": "۱۴۰۰/۰۱/۰۱"}, format="json"
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["birth_date"], "2021-03-21")
+
     def test_regular_user_cannot_read_another_profile(self):
         self.authenticate(self.user)
         response = self.client.get(

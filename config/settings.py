@@ -36,8 +36,11 @@ DEBUG = config(
 
 ALLOWED_HOSTS = get_list_setting(
     "ALLOWED_HOSTS",
-    "127.0.0.1,localhost,api.sokanex.com",
+    "127.0.0.1,localhost,api.sokanex.com,m.sokanex.com",
 )
+for trusted_host in ("api.sokanex.com", "m.sokanex.com"):
+    if trusted_host not in ALLOWED_HOSTS:
+        ALLOWED_HOSTS.append(trusted_host)
 
 
 # --------------------------------------------------
@@ -421,10 +424,13 @@ CORS_ALLOWED_ORIGINS = get_list_setting(
         "http://localhost:5173,"
         "http://127.0.0.1:5173,"
         "https://sokanex.com,"
-        "https://www.sokanex.com"
-        ",https://app.sokanex.com"
+        "https://www.sokanex.com,"
+        "https://app.sokanex.com,"
+        "https://m.sokanex.com"
     ),
 )
+if "https://m.sokanex.com" not in CORS_ALLOWED_ORIGINS:
+    CORS_ALLOWED_ORIGINS.append("https://m.sokanex.com")
 
 CSRF_TRUSTED_ORIGINS = get_list_setting(
     "CSRF_TRUSTED_ORIGINS",
@@ -433,10 +439,13 @@ CSRF_TRUSTED_ORIGINS = get_list_setting(
         "http://localhost:5173,"
         "http://127.0.0.1:5173,"
         "https://sokanex.com,"
-        "https://www.sokanex.com"
-        ",https://app.sokanex.com"
+        "https://www.sokanex.com,"
+        "https://app.sokanex.com,"
+        "https://m.sokanex.com"
     ),
 )
+if "https://m.sokanex.com" not in CSRF_TRUSTED_ORIGINS:
+    CSRF_TRUSTED_ORIGINS.append("https://m.sokanex.com")
 
 # React sends JWT in the Authorization header.
 CORS_ALLOW_CREDENTIALS = False

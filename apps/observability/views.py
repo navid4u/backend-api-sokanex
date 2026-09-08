@@ -24,13 +24,20 @@ from .throttles import FrontendLogThrottle
 
 
 class FrontendLogIngestView(generics.GenericAPIView):
+    # Reporting must work even when the browser carries an expired JWT.
+    authentication_classes = []
     permission_classes = [AllowAny]
     throttle_classes = [FrontendLogThrottle]
     serializer_class = FrontendLogSerializer
 
     def post(self, request):
         origin = request.headers.get("Origin", "")
-        allowed = {"https://app.sokanex.com", "http://localhost:5173", "http://127.0.0.1:5173"}
+        allowed = {
+            "https://app.sokanex.com",
+            "https://m.sokanex.com",
+            "http://localhost:5173",
+            "http://127.0.0.1:5173",
+        }
         if origin and origin not in allowed:
             return Response({"detail": "Origin is not allowed."}, status=status.HTTP_403_FORBIDDEN)
         serializer = self.get_serializer(data=request.data)

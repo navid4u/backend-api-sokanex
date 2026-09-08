@@ -10,7 +10,7 @@ from .models import LogEvent
 
 
 SENSITIVE_KEY = re.compile(
-    r"(authorization|cookie|password|passwd|secret|token|api[_-]?key|otp|code|refresh|access)",
+    r"(authorization|cookie|password|passwd|secret|token|api[_-]?key|otp|refresh|access|(?:verification|recovery)[_-]?code)",
     re.IGNORECASE,
 )
 
