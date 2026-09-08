@@ -102,6 +102,35 @@ def _extract_rows(payload, aliases, source, rial_prices=False):
     found = {}
     reverse = {alias.lower(): symbol for symbol, values in aliases.items() for alias in values}
     now = timezone.now().isoformat()
+
+    # Some providers identify instruments with the parent mapping key (for
+    # example current.price_dollar_rl), not with a symbol field in the row.
+    for container in _walk(payload):
+        if not isinstance(container, dict):
+            continue
+        for identity, raw_row in container.items():
+            symbol = reverse.get(str(identity).lower())
+            if not symbol or symbol in found or not isinstance(raw_row, dict):
+                continue
+            keys = {str(key).lower(): value for key, value in raw_row.items()}
+            price = _number(keys.get("price") or keys.get("value") or keys.get("current") or keys.get("p"))
+            if price is None:
+                continue
+            change = _number(keys.get("change") or keys.get("d") or 0) or 0
+            if rial_prices:
+                price /= 10
+                change /= 10
+            found[symbol] = {
+                "symbol": symbol,
+                "name": keys.get("name_fa") or keys.get("title") or symbol,
+                "price": price,
+                "unit": "تومان" if symbol in {"usd-irr", "gold-18k", "half-coin", "coin-emami"} else keys.get("unit", ""),
+                "change": change,
+                "change_percent": _number(keys.get("change_percent") or keys.get("percent") or keys.get("dp") or 0) or 0,
+                "market_status": keys.get("market_status", "delayed"),
+                "source_timestamp": keys.get("source_timestamp") or keys.get("time") or keys.get("ts") or now,
+                "source": source,
+            }
     for row in _walk(payload):
         keys = {str(key).lower(): value for key, value in row.items()}
         identity = str(keys.get("symbol") or keys.get("name") or keys.get("key") or keys.get("title") or "").lower()
@@ -142,7 +171,7 @@ class MarketQuoteService:
     stale_cache_key = "market:v3:quotes:last-known"
     aliases = {
         "usd-irr": {"usd-irr", "price_dollar_rl", "usd", "دلار"},
-        "gold-18k": {"gold-18k", "geram18", "geram_18", "طلای 18 عیار"},
+        "gold-18k": {"gold-18k", "geram18", "geram_18", "tgju_gold_irg18", "طلای 18 عیار"},
         "coin-emami": {"coin-emami", "sekee", "sekke_emami", "سکه امامی"},
         "half-coin": {"half-coin", "nim", "نیم سکه"},
         "car-index": {"car-index", "car_index"},

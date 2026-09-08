@@ -8,7 +8,7 @@ from django.utils import timezone
 from rest_framework.test import APIClient
 
 from .models import MarketQuoteSnapshot, NewsArticle, NewsSource
-from .services import BASE_SYMBOLS, MarketQuoteService
+from .services import BASE_SYMBOLS, MarketQuoteService, _extract_rows
 
 
 class MarketV2Tests(TestCase):
@@ -53,6 +53,18 @@ class MarketV2Tests(TestCase):
         self.assertTrue(response.data["available"])
         self.assertTrue(response.data["is_stale"])
         self.assertEqual(response.data["results"][0]["price"], 100000)
+
+    def test_tgju_keyed_payload_extracts_current_prices_in_toman(self):
+        payload = {
+            "current": {
+                "price_dollar_rl": {"p": "2,185,000", "d": "35,000", "dp": 1.6, "ts": "2026-09-08 14:42:00"},
+                "tgju_gold_irg18": {"p": "235,091,000", "d": "5,150,000", "dp": 2.24, "ts": "2026-09-08 14:42:00"},
+            }
+        }
+        rows = _extract_rows(payload, MarketQuoteService.aliases, "TGJU", rial_prices=True)
+        self.assertEqual(rows["usd-irr"]["price"], 218500)
+        self.assertEqual(rows["gold-18k"]["price"], 23509100)
+        self.assertEqual(rows["usd-irr"]["source_timestamp"], "2026-09-08 14:42:00")
 
     def test_news_without_approved_sources_is_an_empty_real_list(self):
         response = self.client.get("/api/market/news/")
