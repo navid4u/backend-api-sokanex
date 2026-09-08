@@ -28,6 +28,11 @@ class ObservabilityMiddleware:
         response["X-Request-ID"] = request_id
         status_code = getattr(response, "status_code", 200)
         slow_ms = getattr(settings, "OBSERVABILITY_SLOW_REQUEST_MS", 2000)
+        if request.path.startswith("/api/market/"):
+            slow_ms = max(
+                slow_ms,
+                getattr(settings, "OBSERVABILITY_MARKET_SLOW_REQUEST_MS", 5000),
+            )
         # Authentication expiry, permission denials, missing routes, conflicts
         # and rate limits are normal API outcomes, not application failures.
         # Validation errors are logged by the DRF exception handler with useful

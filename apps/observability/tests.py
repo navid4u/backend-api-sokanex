@@ -251,3 +251,25 @@ class ObservabilityTests(TestCase):
             response = middleware(request)
             self.assertEqual(response.status_code, response_status)
         self.assertEqual(LogEvent.objects.count(), 0)
+
+    @override_settings(
+        OBSERVABILITY_SLOW_REQUEST_MS=2000,
+        OBSERVABILITY_MARKET_SLOW_REQUEST_MS=5000,
+    )
+    def test_successful_market_request_uses_provider_aware_slow_threshold(self):
+        factory = RequestFactory()
+        request = factory.get("/api/market/crypto-snapshot/")
+        middleware = ObservabilityMiddleware(lambda incoming: JsonResponse({"available": True}))
+        with patch("apps.observability.middleware.time.monotonic", side_effect=(10.0, 12.4)):
+            response = middleware(request)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(LogEvent.objects.count(), 0)
+
+    def test_invalid_otp_is_not_recorded_as_observability_failure(self):
+        response = self.client.post(
+            "/api/accounts/auth/otp/verify/",
+            {"phone": "09120000000", "code": "000000"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(LogEvent.objects.count(), 0)

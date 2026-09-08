@@ -96,6 +96,11 @@ def custom_exception_handler(
     request = context.get("request")
     request_path = getattr(request, "path", "")
     expected_user_input_error = request_path.startswith("/api/accounts/auth/otp/")
+    if expected_user_input_error:
+        request._observability_skip = True
+        underlying_request = getattr(request, "_request", None)
+        if underlying_request is not None:
+            underlying_request._observability_skip = True
 
     if (
         response.status_code == status.HTTP_400_BAD_REQUEST

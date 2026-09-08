@@ -736,6 +736,9 @@ DEFAULT_AUTO_FIELD = (
 OBSERVABILITY_ENABLED = config("OBSERVABILITY_ENABLED", default=True, cast=bool)
 OBSERVABILITY_RETENTION_DAYS = config("OBSERVABILITY_RETENTION_DAYS", default=5, cast=int)
 OBSERVABILITY_SLOW_REQUEST_MS = config("OBSERVABILITY_SLOW_REQUEST_MS", default=2000, cast=int)
+OBSERVABILITY_MARKET_SLOW_REQUEST_MS = config(
+    "OBSERVABILITY_MARKET_SLOW_REQUEST_MS", default=5000, cast=int
+)
 # --------------------------------------------------
 # Logging
 # --------------------------------------------------
