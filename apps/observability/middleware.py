@@ -28,7 +28,16 @@ class ObservabilityMiddleware:
         response["X-Request-ID"] = request_id
         status_code = getattr(response, "status_code", 200)
         slow_ms = getattr(settings, "OBSERVABILITY_SLOW_REQUEST_MS", 2000)
-        should_log = status_code >= 400 or duration_ms >= slow_ms
+        # Authentication expiry, permission denials, missing routes, conflicts
+        # and rate limits are normal API outcomes, not application failures.
+        # Validation errors are logged by the DRF exception handler with useful
+        # field context; 5xx and genuinely slow requests remain observable here.
+        expected_status = status_code in {401, 403, 404, 409, 429}
+        should_log = (
+            status_code >= 500
+            or (status_code == 400 and not getattr(request, "_observability_logged", False))
+            or (duration_ms >= slow_ms and not expected_status)
+        )
         if should_log and not getattr(request, "_observability_logged", False):
             user = getattr(request, "user", None)
             if not getattr(user, "is_authenticated", False):

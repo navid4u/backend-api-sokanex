@@ -6,10 +6,13 @@ from unittest.mock import patch
 from django.contrib.auth import get_user_model
 from django.core.management import call_command
 from django.test import TestCase, override_settings
+from django.http import JsonResponse
+from django.test import RequestFactory
 from django.utils import timezone
 from rest_framework.test import APIClient
 
 from .models import LogEvent
+from .middleware import ObservabilityMiddleware
 
 
 User = get_user_model()
@@ -201,3 +204,17 @@ class ObservabilityTests(TestCase):
         event = LogEvent.objects.get(message="Provider failed")
         self.assertEqual(event.context["status_code"], 503)
         self.assertEqual(event.context["otp_code"], "[REDACTED]")
+
+    def test_expected_auth_and_rate_limit_responses_are_not_error_logs(self):
+        factory = RequestFactory()
+        for path, response_status in (
+            ("/api/token/refresh/", 401),
+            ("/api/accounts/auth/otp/request/", 429),
+        ):
+            request = factory.post(path)
+            middleware = ObservabilityMiddleware(
+                lambda incoming, code=response_status: JsonResponse({"detail": "expected"}, status=code)
+            )
+            response = middleware(request)
+            self.assertEqual(response.status_code, response_status)
+        self.assertEqual(LogEvent.objects.count(), 0)

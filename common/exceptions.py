@@ -93,12 +93,15 @@ def custom_exception_handler(
     if extra_payload:
         payload.update(extra_payload)
 
-    if response.status_code == status.HTTP_400_BAD_REQUEST:
+    request = context.get("request")
+    request_path = getattr(request, "path", "")
+    expected_user_input_error = request_path.startswith("/api/accounts/auth/otp/")
+
+    if response.status_code == status.HTTP_400_BAD_REQUEST and not expected_user_input_error:
         try:
             from apps.observability.models import LogEvent
             from apps.observability.services import ObservabilityService
 
-            request = context.get("request")
             user = getattr(request, "user", None)
             if not getattr(user, "is_authenticated", False):
                 user = None
