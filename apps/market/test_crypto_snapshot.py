@@ -57,8 +57,25 @@ class CryptoSnapshotTests(APITestCase):
         response = self.client.get("/api/market/crypto-snapshot/")
         self.assertEqual(response.status_code, 200)
         self.assertTrue(response.data["stale"])
+        _fetch.assert_not_called()
 
     @patch("apps.market.services.CryptoSnapshotService._fetch", side_effect=TimeoutError)
     def test_no_history_returns_503(self, _fetch):
         response = self.client.get("/api/market/crypto-snapshot/")
         self.assertEqual(response.status_code, 503)
+
+    @patch("apps.market.services.CryptoSnapshotService._fetch")
+    def test_refresh_lock_returns_persisted_snapshot_without_provider_call(self, fetch):
+        CryptoMarketSnapshot.objects.create(market_cap=1000, market_cap_change_24h=1, volume_24h=200, volume_change_24h=2, btc_dominance=50, eth_dominance=10, tether_price_irr=900000, fear_greed_value=10)
+        cache.set(CryptoSnapshotService.refresh_lock_key, True, 30)
+        payload = CryptoSnapshotService.refresh_snapshot()
+        self.assertTrue(payload["stale"])
+        fetch.assert_not_called()
+
+    @override_settings(MARKET_SNAPSHOT_PROVIDER_TIMEOUT_SECONDS=9)
+    @patch("apps.market.services._request_json", return_value={})
+    def test_snapshot_provider_calls_are_capped_and_not_retried(self, request_json):
+        CryptoSnapshotService._provider_json("https://provider.example/data")
+        request_json.assert_called_once_with(
+            "https://provider.example/data", timeout=4, retries=0
+        )

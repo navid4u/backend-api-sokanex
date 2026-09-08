@@ -1,0 +1,12 @@
+[Unit]
+Description=Refresh Sokanex crypto market snapshot every two minutes
+
+[Timer]
+OnBootSec=30s
+OnUnitActiveSec=2min
+RandomizedDelaySec=10s
+Persistent=true
+Unit=sokanex-market-snapshot-refresh.service
+
+[Install]
+WantedBy=timers.target

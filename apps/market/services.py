@@ -346,29 +346,48 @@ class MarketQuoteService:
 class CryptoSnapshotService:
     cache_key = "market:v3:crypto-snapshot"
     circuit_key = "market:v3:crypto-snapshot:circuit"
+    refresh_lock_key = "market:v3:crypto-snapshot:refresh-lock"
 
     @classmethod
     def get_snapshot(cls):
         cached = cache.get(cls.cache_key)
         if cached:
             return {**cached, "stale": False}
-        state = cache.get(cls.circuit_key) or {"failures": 0, "opened_until": 0}
-        if state["opened_until"] <= int(timezone.now().timestamp()):
-            try:
-                snapshot = cls._fetch()
-                row = CryptoMarketSnapshot.objects.create(**snapshot)
-                payload = cls._serialize(row, False)
-                cache.set(cls.cache_key, payload, settings.MARKET_SNAPSHOT_CACHE_SECONDS)
-                cache.delete(cls.circuit_key)
-                return payload
-            except (HTTPError, URLError, TimeoutError, ValueError, KeyError, OSError, TypeError):
-                failures = state["failures"] + 1
-                opened = int(timezone.now().timestamp()) + settings.MARKET_CIRCUIT_BREAKER_SECONDS if failures >= settings.MARKET_CIRCUIT_BREAKER_FAILURES else 0
-                cache.set(cls.circuit_key, {"failures": failures, "opened_until": opened}, settings.MARKET_CIRCUIT_BREAKER_SECONDS)
+        # Scheduled refreshes own third-party network I/O. Public requests use
+        # the persisted value so synchronous Gunicorn workers remain available.
         last = CryptoMarketSnapshot.objects.first()
         if last and last.captured_at >= timezone.now() - timedelta(seconds=settings.MARKET_SNAPSHOT_STALE_SECONDS):
-            return cls._serialize(last, True)
-        raise MarketProviderUnavailable("No crypto market snapshot is available.")
+            payload = cls._serialize(last, True)
+            cache.set(cls.cache_key, payload, settings.MARKET_SNAPSHOT_FALLBACK_CACHE_SECONDS)
+            return payload
+        return cls.refresh_snapshot()
+
+    @classmethod
+    def refresh_snapshot(cls):
+        last = CryptoMarketSnapshot.objects.first()
+        if not cache.add(cls.refresh_lock_key, True, timeout=settings.MARKET_SNAPSHOT_REFRESH_LOCK_SECONDS):
+            if last and last.captured_at >= timezone.now() - timedelta(seconds=settings.MARKET_SNAPSHOT_STALE_SECONDS):
+                return cls._serialize(last, True)
+            raise MarketProviderUnavailable("Crypto market snapshot refresh is already in progress.")
+        state = cache.get(cls.circuit_key) or {"failures": 0, "opened_until": 0}
+        try:
+            if state["opened_until"] <= int(timezone.now().timestamp()):
+                try:
+                    snapshot = cls._fetch()
+                    row = CryptoMarketSnapshot.objects.create(**snapshot)
+                    payload = cls._serialize(row, False)
+                    cache.set(cls.cache_key, payload, settings.MARKET_SNAPSHOT_CACHE_SECONDS)
+                    cache.delete(cls.circuit_key)
+                    return payload
+                except (HTTPError, URLError, TimeoutError, ValueError, KeyError, OSError, TypeError):
+                    failures = state["failures"] + 1
+                    opened = int(timezone.now().timestamp()) + settings.MARKET_CIRCUIT_BREAKER_SECONDS if failures >= settings.MARKET_CIRCUIT_BREAKER_FAILURES else 0
+                    cache.set(cls.circuit_key, {"failures": failures, "opened_until": opened}, settings.MARKET_CIRCUIT_BREAKER_SECONDS)
+            if last and last.captured_at >= timezone.now() - timedelta(seconds=settings.MARKET_SNAPSHOT_STALE_SECONDS):
+                return cls._serialize(last, True)
+            raise MarketProviderUnavailable("No crypto market snapshot is available.")
+        finally:
+            cache.delete(cls.refresh_lock_key)
 
     @classmethod
     def _fetch(cls):
@@ -376,7 +395,7 @@ class CryptoSnapshotService:
             global_data = cls._coinpaprika_global()
         except (HTTPError, URLError, TimeoutError, ValueError, KeyError, OSError, TypeError):
             global_data = cls._coingecko_global()
-        fear = _request_json(settings.FEAR_GREED_URL)["data"][0]
+        fear = cls._provider_json(settings.FEAR_GREED_URL)["data"][0]
         tether = cls._tether_irt_price()
         if not tether:
             raise ValueError("Tether IRR price is unavailable.")
@@ -423,7 +442,7 @@ class CryptoSnapshotService:
     def _tabdeal_tether():
         if not settings.TABDEAL_USDT_IRT_URL:
             return None
-        payload = _request_json(settings.TABDEAL_USDT_IRT_URL)
+        payload = CryptoSnapshotService._provider_json(settings.TABDEAL_USDT_IRT_URL)
         bid = _number(payload["bids"][0][0])
         ask = _number(payload["asks"][0][0])
         return (bid + ask) / 2 if bid and ask else bid or ask
@@ -432,7 +451,7 @@ class CryptoSnapshotService:
     def _wallex_tether():
         if not settings.WALLEX_USDT_TMN_URL:
             return None
-        payload = _request_json(settings.WALLEX_USDT_TMN_URL)
+        payload = CryptoSnapshotService._provider_json(settings.WALLEX_USDT_TMN_URL)
         result = payload["result"]
         bid = _number(result["bid"][0]["price"])
         ask = _number(result["ask"][0]["price"])
@@ -442,14 +461,14 @@ class CryptoSnapshotService:
     def _nobitex_tether():
         if not settings.NOBITEX_USDT_IRT_URL:
             return None
-        payload = _request_json(settings.NOBITEX_USDT_IRT_URL)
+        payload = CryptoSnapshotService._provider_json(settings.NOBITEX_USDT_IRT_URL)
         if payload.get("status") != "ok":
             raise ValueError("Nobitex returned an unsuccessful status.")
         return _number(payload.get("lastTradePrice"))
 
     @staticmethod
     def _coingecko_global():
-        data = _request_json(settings.COINGECKO_GLOBAL_URL)["data"]
+        data = CryptoSnapshotService._provider_json(settings.COINGECKO_GLOBAL_URL)["data"]
         return {
             "market_cap": data["total_market_cap"]["usd"],
             "volume_24h": data["total_volume"]["usd"],
@@ -461,8 +480,8 @@ class CryptoSnapshotService:
 
     @staticmethod
     def _coinpaprika_global():
-        data = _request_json(settings.COINPAPRIKA_GLOBAL_URL)
-        eth = _request_json(settings.COINPAPRIKA_ETH_TICKER_URL)
+        data = CryptoSnapshotService._provider_json(settings.COINPAPRIKA_GLOBAL_URL)
+        eth = CryptoSnapshotService._provider_json(settings.COINPAPRIKA_ETH_TICKER_URL)
         market_cap = float(data["market_cap_usd"])
         eth_market_cap = float(eth["quotes"]["USD"]["market_cap"])
         return {
@@ -473,6 +492,14 @@ class CryptoSnapshotService:
             "btc_dominance": data["bitcoin_dominance_percentage"],
             "eth_dominance": eth_market_cap / market_cap * 100,
         }
+
+    @staticmethod
+    def _provider_json(url):
+        return _request_json(
+            url,
+            timeout=max(1, min(settings.MARKET_SNAPSHOT_PROVIDER_TIMEOUT_SECONDS, 4)),
+            retries=0,
+        )
 
     @staticmethod
     def _label(value):

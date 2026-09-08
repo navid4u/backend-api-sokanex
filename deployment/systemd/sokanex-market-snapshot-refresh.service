@@ -1,0 +1,15 @@
+[Unit]
+Description=Refresh Sokanex crypto market snapshot
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=tradingapp
+Group=tradingapp
+WorkingDirectory=/srv/trading-platform/backend
+EnvironmentFile=-/srv/trading-platform/backend/.env
+ExecStart=/srv/trading-platform/venv/bin/python manage.py refresh_crypto_market_snapshot
+NoNewPrivileges=true
+PrivateTmp=true
+UMask=0027
