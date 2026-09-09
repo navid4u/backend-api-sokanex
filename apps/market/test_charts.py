@@ -8,6 +8,7 @@ from rest_framework.test import APITestCase
 
 from apps.accounts.models import User
 from .chart_services import MarketChartService
+from .models import MarketChartSnapshot
 
 
 class MarketChartAPITests(APITestCase):
@@ -58,6 +59,18 @@ class MarketChartAPITests(APITestCase):
             response = self.client.get(self.url, self.params)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertTrue(response.data["data"]["is_stale"])
+
+    def test_last_known_database_snapshot_survives_cache_loss(self):
+        with patch.object(MarketChartService, "_coingecko", return_value=self.points):
+            self.client.get(self.url, self.params)
+        cache.clear()
+        with patch.object(MarketChartService, "_coingecko", side_effect=URLError("down")), patch.object(
+            MarketChartService, "_coinbase", side_effect=URLError("down")
+        ):
+            response = self.client.get(self.url, self.params)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(MarketChartSnapshot.objects.count(), 1)
+        self.assertFalse(response.data["data"]["is_stale"])
 
     def test_invalid_symbol_is_rejected_before_provider_call(self):
         with patch.object(MarketChartService, "_coingecko") as provider:

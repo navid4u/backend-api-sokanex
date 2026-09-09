@@ -265,6 +265,16 @@ class ObservabilityTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(LogEvent.objects.count(), 0)
 
+    @override_settings(OBSERVABILITY_SLOW_REQUEST_MS=2000)
+    def test_successful_assistant_provider_latency_is_not_an_error_log(self):
+        factory = RequestFactory()
+        request = factory.post("/api/assistant/technical-analysis/")
+        middleware = ObservabilityMiddleware(lambda incoming: JsonResponse({"result": "ok"}))
+        with patch("apps.observability.middleware.time.monotonic", side_effect=(10.0, 19.0)):
+            response = middleware(request)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(LogEvent.objects.count(), 0)
+
     def test_invalid_otp_is_not_recorded_as_observability_failure(self):
         response = self.client.post(
             "/api/accounts/auth/otp/verify/",

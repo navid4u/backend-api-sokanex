@@ -9,6 +9,8 @@ from django.core.cache import cache
 from django.utils import timezone
 from rest_framework.exceptions import ValidationError
 
+from .models import MarketChartSnapshot
+
 
 CHART_SYMBOLS = {
     "crypto": {
@@ -82,18 +84,36 @@ class MarketChartService:
         if fresh:
             return {**fresh, "is_stale": False}
 
+        interval_key = interval or ""
+        persisted = MarketChartSnapshot.objects.filter(
+            market=market,
+            symbol=symbol,
+            range_value=range_value,
+            interval=interval_key,
+        ).first()
+        ttl = (
+            settings.MARKET_CHART_CRYPTO_TTL
+            if market == "crypto"
+            else settings.MARKET_CHART_FOREX_TTL
+        )
+        if persisted and persisted.updated_at >= timezone.now() - timedelta(seconds=ttl):
+            cache.set(fresh_key, persisted.payload, ttl)
+            return {**persisted.payload, "is_stale": False}
+
         providers = cls._providers(market, symbol)
         for source, provider in providers:
             try:
                 points = provider(symbol, range_value, interval)
                 normalized = cls._normalize(market, symbol, points, source)
-                ttl = (
-                    settings.MARKET_CHART_CRYPTO_TTL
-                    if market == "crypto"
-                    else settings.MARKET_CHART_FOREX_TTL
-                )
                 cache.set(fresh_key, normalized, ttl)
                 cache.set(stale_key, normalized, settings.MARKET_CHART_STALE_TTL)
+                MarketChartSnapshot.objects.update_or_create(
+                    market=market,
+                    symbol=symbol,
+                    range_value=range_value,
+                    interval=interval_key,
+                    defaults={"payload": normalized},
+                )
                 return {**normalized, "is_stale": False}
             except (HTTPError, URLError, TimeoutError, OSError, ValueError, KeyError, TypeError, json.JSONDecodeError):
                 continue
@@ -101,6 +121,9 @@ class MarketChartService:
         stale = cache.get(stale_key)
         if stale:
             return {**stale, "is_stale": True}
+        if persisted and persisted.updated_at >= timezone.now() - timedelta(seconds=settings.MARKET_CHART_STALE_TTL):
+            cache.set(stale_key, persisted.payload, settings.MARKET_CHART_STALE_TTL)
+            return {**persisted.payload, "is_stale": True}
         raise MarketChartUnavailable()
 
     @classmethod

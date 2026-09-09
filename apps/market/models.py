@@ -100,3 +100,23 @@ class MarketQuoteSnapshot(models.Model):
 
     class Meta:
         ordering = ["-source_updated_at", "-id"]
+
+
+class MarketChartSnapshot(models.Model):
+    """Last successful chart response shared across workers and restarts."""
+
+    market = models.CharField(max_length=20)
+    symbol = models.CharField(max_length=50)
+    range_value = models.CharField(max_length=10)
+    interval = models.CharField(max_length=10, blank=True)
+    payload = models.JSONField(default=dict)
+    updated_at = models.DateTimeField(auto_now=True, db_index=True)
+
+    class Meta:
+        ordering = ["-updated_at", "-id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["market", "symbol", "range_value", "interval"],
+                name="unique_market_chart_snapshot",
+            )
+        ]
