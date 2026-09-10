@@ -66,6 +66,7 @@ class PremiumUsdAPITests(APITestCase):
         self.assertEqual(response.data["wallet"]["balance_usd"], "0.00")
         self.assertTrue(response.data["subscription"]["active"])
         self.assertEqual(response.data["subscription"]["tier"], "GOLD")
+        self.assertEqual(response.data["subscription"]["access_level"], 5)
         self.user.refresh_from_db()
         self.assertEqual(self.user.access_level, 5)
         purchase = UpgradeRequest.objects.get(user=self.user, request_type="PREMIUM")

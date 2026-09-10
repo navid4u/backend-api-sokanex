@@ -49,12 +49,16 @@ class WalletService:
             status=UpgradeRequest.Status.APPROVED,
         ).select_related("plan").order_by("-reviewed_at", "-created_at", "-pk").first()
         if not purchase:
-            return {"active": False, "tier": None, "plan_id": None, "purchased_at": None}
+            return {
+                "active": False, "tier": None, "plan_id": None,
+                "purchased_at": None, "access_level": user.access_level,
+            }
         return {
             "active": user.access_level == 5,
             "tier": "GOLD" if user.access_level == 5 else None,
             "plan_id": purchase.plan_id,
             "purchased_at": purchase.reviewed_at or purchase.created_at,
+            "access_level": user.access_level,
         }
 
     @staticmethod
