@@ -107,6 +107,13 @@ class WalletService:
                             "IDEMPOTENCY_CONFLICT",
                             409,
                         )
+                    if (
+                        replay.request_type == UpgradeRequest.Type.PREMIUM
+                        and replay.status == UpgradeRequest.Status.APPROVED
+                        and locked_user.access_level != 5
+                    ):
+                        locked_user.access_level = 5
+                        locked_user.save(update_fields=["access_level", "updated_at"])
                     return replay, wallet, False
 
                 active_purchase = UpgradeRequest.objects.select_related("plan").filter(
@@ -114,7 +121,10 @@ class WalletService:
                     request_type=UpgradeRequest.Type.PREMIUM,
                     status=UpgradeRequest.Status.APPROVED,
                 ).order_by("-reviewed_at", "-pk").first()
-                if active_purchase and locked_user.access_level == 5:
+                if active_purchase:
+                    if locked_user.access_level != 5:
+                        locked_user.access_level = 5
+                        locked_user.save(update_fields=["access_level", "updated_at"])
                     return active_purchase, wallet, False
 
                 plans = UpgradePlan.objects.select_for_update().filter(

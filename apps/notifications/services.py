@@ -102,7 +102,15 @@ class NotificationService:
                 ),
                 is_active=True,
             ).filter(
-                **{f"allowed_level_{user.access_level}": True}
+                (
+                    Q(allowed_level_1=True)
+                    | Q(allowed_level_2=True)
+                    | Q(allowed_level_3=True)
+                    | Q(allowed_level_4=True)
+                    | Q(allowed_level_5=True)
+                )
+                if user.access_level == User.AccessLevel.LEVEL_5
+                else Q(**{f"allowed_level_{user.access_level}": True})
             ).filter(Q(expires_at__isnull=True) | Q(expires_at__gt=timezone.now()))
             .select_related("created_by")
             .annotate(
@@ -181,7 +189,10 @@ class NotificationService:
         if notification.target_role:
             return queryset.filter(role=notification.target_role)
         if notification.allowed_levels:
-            return queryset.filter(access_level__in=notification.allowed_levels)
+            levels = list(notification.allowed_levels)
+            if any(level in levels for level in (1, 2, 3, 4)) and 5 not in levels:
+                levels.append(5)
+            return queryset.filter(access_level__in=levels)
         return queryset
 
     @classmethod

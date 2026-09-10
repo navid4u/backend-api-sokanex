@@ -101,6 +101,25 @@ class PremiumUsdAPITests(APITestCase):
         self.assertEqual(UpgradeRequest.objects.filter(user=self.user, request_type="PREMIUM").count(), 1)
         self.assertEqual(UsdLedgerEntry.objects.filter(wallet=self.wallet, kind="PREMIUM_PURCHASE").count(), 1)
 
+    def test_existing_approved_premium_repairs_level_without_second_debit(self):
+        purchase = UpgradeRequest.objects.create(
+            user=self.user,
+            request_type=UpgradeRequest.Type.PREMIUM,
+            requested_level=5,
+            plan=self.plan,
+            status=UpgradeRequest.Status.APPROVED,
+            purchase_idempotency_key="legacy-approved",
+        )
+        User.objects.filter(pk=self.user.pk).update(access_level=2)
+        response = self.client.post(
+            self.url, {"idempotency_key": "new-click"}, format="json"
+        )
+        self.user.refresh_from_db()
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(self.user.access_level, 5)
+        self.assertEqual(response.data["upgrade_request"]["id"], purchase.pk)
+        self.assertFalse(UsdLedgerEntry.objects.filter(wallet=self.wallet, kind="PREMIUM_PURCHASE").exists())
+
     def test_existing_pending_premium_request_is_finalized_not_duplicated(self):
         pending = UpgradeRequest.objects.create(
             user=self.user,

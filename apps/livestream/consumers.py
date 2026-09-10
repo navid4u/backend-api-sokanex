@@ -35,11 +35,12 @@ class LivestreamConsumer(AsyncJsonWebsocketConsumer):
     @database_sync_to_async
     def event_id(self, slug, event_id, user_id):
         from apps.accounts.models import User
+        from common.content_access import user_can_access_levels
         try:
             user = User.objects.get(pk=user_id, is_active=True)
             event = LiveEvent.objects.get(pk=event_id, slug=slug, is_active=True)
         except (User.DoesNotExist, LiveEvent.DoesNotExist):
             return None
-        if user.is_staff or user.access_level in event.allowed_levels:
+        if user_can_access_levels(user, event.allowed_levels):
             return event.pk
         return None

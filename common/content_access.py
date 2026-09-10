@@ -74,6 +74,24 @@ def restrict_queryset_for_user(queryset, user):
     if level not in LEVELS:
         return queryset.none()
 
-    return queryset.filter(
-        Q(**{f"allowed_level_{level}": True})
+    # GOLD/PREMIUM is level 5 and includes every lower content entitlement.
+    # Lower levels retain the existing exact-checkbox behavior.
+    if level == User.AccessLevel.LEVEL_5:
+        return queryset.filter(
+            Q(allowed_level_1=True)
+            | Q(allowed_level_2=True)
+            | Q(allowed_level_3=True)
+            | Q(allowed_level_4=True)
+            | Q(allowed_level_5=True)
+        )
+    return queryset.filter(Q(**{f"allowed_level_{level}": True}))
+
+
+def user_can_access_levels(user, allowed_levels):
+    if user.is_staff or user.is_superuser:
+        return True
+    levels = set(allowed_levels or [])
+    return user.access_level in levels or (
+        user.access_level == User.AccessLevel.LEVEL_5
+        and bool(levels.intersection(LEVELS))
     )

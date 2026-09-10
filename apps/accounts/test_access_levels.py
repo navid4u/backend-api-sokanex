@@ -89,6 +89,22 @@ class AccessLevelAPITests(APITestCase):
         response = self.client.get("/api/signals/")
         self.assertEqual(response.data["count"], 1)
 
+    def test_level_five_sees_content_allowed_for_any_lower_level(self):
+        for level in range(1, 5):
+            flags = {f"allowed_level_{item}": item == level for item in range(1, 6)}
+            Article.objects.create(
+                title=f"Level {level}",
+                content="Inherited by gold",
+                status=Article.Status.PUBLISHED,
+                published_at="2026-01-01T00:00:00Z",
+                **flags,
+            )
+        self.user.access_level = 5
+        self.user.save(update_fields=["access_level", "updated_at"])
+        self.authenticate(self.user)
+        response = self.client.get("/api/articles/")
+        self.assertEqual(response.data["count"], 4)
+
     def test_only_one_pending_request_is_allowed(self):
         self.authenticate(self.user)
         response = self.client.post(
