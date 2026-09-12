@@ -45,9 +45,17 @@ class ObservabilityMiddleware:
         # Validation errors are logged by the DRF exception handler with useful
         # field context; 5xx and genuinely slow requests remain observable here.
         expected_status = status_code in {401, 403, 404, 409, 429}
+        public_probe = (
+            not request.path.startswith("/api/")
+            or request.method.upper() not in {"GET", "HEAD", "OPTIONS", "POST", "PUT", "PATCH", "DELETE"}
+        )
         should_log = (
             status_code >= 500
-            or (status_code == 400 and not getattr(request, "_observability_logged", False))
+            or (
+                status_code == 400
+                and not public_probe
+                and not getattr(request, "_observability_logged", False)
+            )
             or (duration_ms >= slow_ms and not expected_status and not successful_external_api)
         )
         if (

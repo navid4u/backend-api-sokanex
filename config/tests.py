@@ -75,3 +75,12 @@ class HealthCheckTests(TestCase):
             "Database unavailable",
             status_code=503,
         )
+
+
+class PublicMetadataTests(TestCase):
+    def test_robots_txt_is_plain_text_and_blocks_api_crawling(self):
+        response = self.client.get(reverse("robots-txt"), HTTP_HOST="www.sokanex.com")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response["Content-Type"].startswith("text/plain"))
+        self.assertContains(response, "Disallow: /api/")

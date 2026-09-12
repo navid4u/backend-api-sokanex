@@ -2,7 +2,7 @@ from django.db import (
     DatabaseError,
     connection,
 )
-from django.http import JsonResponse
+from django.http import HttpResponse, JsonResponse
 from django.utils import timezone
 from django.views.decorators.http import (
     require_GET,
@@ -51,4 +51,12 @@ def health_check(request):
             ),
         },
         status=http_status,
+    )
+
+
+@require_GET
+def robots_txt(request):
+    return HttpResponse(
+        "User-agent: *\nDisallow: /admin/\nDisallow: /api/\n",
+        content_type="text/plain; charset=utf-8",
     )

@@ -252,6 +252,16 @@ class ObservabilityTests(TestCase):
             self.assertEqual(response.status_code, response_status)
         self.assertEqual(LogEvent.objects.count(), 0)
 
+    def test_non_api_scanner_bad_requests_are_not_persisted(self):
+        factory = RequestFactory()
+        for request in (factory.generic("CONNECT", "/"), factory.get("/robots.txt")):
+            middleware = ObservabilityMiddleware(
+                lambda incoming: JsonResponse({"detail": "bad request"}, status=400)
+            )
+            self.assertEqual(middleware(request).status_code, 400)
+
+        self.assertEqual(LogEvent.objects.count(), 0)
+
     @override_settings(
         OBSERVABILITY_SLOW_REQUEST_MS=2000,
         OBSERVABILITY_MARKET_SLOW_REQUEST_MS=5000,

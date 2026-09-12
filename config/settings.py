@@ -36,9 +36,9 @@ DEBUG = config(
 
 ALLOWED_HOSTS = get_list_setting(
     "ALLOWED_HOSTS",
-    "127.0.0.1,localhost,api.sokanex.com,m.sokanex.com",
+    "127.0.0.1,localhost,api.sokanex.com,m.sokanex.com,www.sokanex.com",
 )
-for trusted_host in ("api.sokanex.com", "m.sokanex.com"):
+for trusted_host in ("api.sokanex.com", "m.sokanex.com", "www.sokanex.com"):
     if trusted_host not in ALLOWED_HOSTS:
         ALLOWED_HOSTS.append(trusted_host)
 

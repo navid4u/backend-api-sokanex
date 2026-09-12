@@ -18,10 +18,12 @@ from apps.accounts.jwt import DeviceAwareTokenRefreshView
 from .views import (
     health_check,
     home,
+    robots_txt,
 )
 
 urlpatterns = [
     path("", home),
+    path("robots.txt", robots_txt, name="robots-txt"),
 
     path(
         "api/health/",
