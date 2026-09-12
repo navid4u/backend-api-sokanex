@@ -1,4 +1,5 @@
 from rest_framework import serializers
+from django.conf import settings
 
 from common.validators import (
     validate_attachment_upload,
@@ -63,6 +64,9 @@ class SignalListSerializer(
             "result_price",
             "result_percent",
             "closed_at",
+            "description",
+            "source",
+            "external_id",
             "allowed_levels",
             "trader",
             "created_at",
@@ -224,7 +228,19 @@ class SignalDetailSerializer(
             "reviewed_by",
             "created_at",
             "updated_at",
+            "source",
+            "external_id",
         )
+
+
+class SignalIngestionSerializer(serializers.Serializer):
+    external_id = serializers.CharField(max_length=150, required=False, allow_blank=False)
+    title = serializers.CharField(max_length=200, allow_blank=False, trim_whitespace=True)
+    description = serializers.CharField(max_length=20000, allow_blank=False, trim_whitespace=True)
+    image = serializers.ImageField(required=False, allow_null=True)
+
+    def validate_image(self, value):
+        return validate_image_upload(value, max_size_mb=settings.MEDIA_MAX_IMAGE_MB, file_label="Signal image")
 
 
 class SignalManagementSerializer(SignalDetailSerializer):

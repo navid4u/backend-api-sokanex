@@ -33,8 +33,13 @@ class ChannelPost(models.Model):
     class Scope(models.TextChoices):
         DOLLAR = "DOLLAR", "دلار"
         GOLD = "GOLD", "طلا"
-        STOCK = "STOCK", "بورس"
+        STOCK = "STOCK", "بورس ایران"
+        FOREX = "FOREX", "فارکس"
         HOUSING = "HOUSING", "مسکن"
+
+    class Source(models.TextChoices):
+        LEGACY = "LEGACY", "سامانه داخلی"
+        TELEGRAM_API = "TELEGRAM_API", "API تلگرام"
 
     class Status(models.TextChoices):
         DRAFT = "DRAFT", "پیش‌نویس"
@@ -55,6 +60,8 @@ class ChannelPost(models.Model):
     is_pinned = models.BooleanField(default=False)
     published_at = models.DateTimeField(null=True, blank=True, db_index=True)
     views_count = models.PositiveIntegerField(default=0)
+    source = models.CharField(max_length=20, choices=Source.choices, default=Source.LEGACY, db_index=True)
+    external_id = models.CharField(max_length=150, null=True, blank=True, unique=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

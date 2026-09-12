@@ -30,4 +30,5 @@ class SignalFilter(django_filters.FilterSet):
             "created_by",
             "created_after",
             "created_before",
+            "source",
         ]

@@ -27,6 +27,9 @@ from common.permissions import (
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.pagination import PageNumberPagination
+from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
+from rest_framework.throttling import ScopedRateThrottle
+from django.db import transaction
 from django.db.models import Count
 from apps.accounts.models import User
 
@@ -41,8 +44,10 @@ from .serializers import (
     SignalManagementSerializer,
     SignalListSerializer,
     SignalUpdateSerializer,
+    SignalIngestionSerializer,
 )
 from .services import SignalService
+from common.ingestion import FixedIngestionKeyAuthentication
 
 
 class SignalPagination(PageNumberPagination):
@@ -112,6 +117,36 @@ class SignalListCreateView(
             self.request.user,
             serializer,
         )
+
+
+class SignalIngestionView(APIView):
+    authentication_classes = [FixedIngestionKeyAuthentication]
+    permission_classes = [IsAuthenticated]
+    parser_classes = [JSONParser, MultiPartParser, FormParser]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "content_ingestion"
+
+    @extend_schema(request=SignalIngestionSerializer, responses={200: SignalListSerializer, 201: SignalListSerializer})
+    def post(self, request):
+        serializer = SignalIngestionSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        values = dict(serializer.validated_data)
+        external_id = values.pop("external_id", None)
+        defaults = {
+            **values, "created_by": request.user, "approved_by": request.user,
+            "source": Signal.Source.TELEGRAM_API, "status": "approved",
+            "symbol": "", "market": "crypto", "direction": "buy",
+            "entry_price": 0, "stop_loss": 0, "take_profit": 0,
+            "allowed_level_1": True, "allowed_level_2": True,
+            "allowed_level_3": True, "allowed_level_4": True,
+            "allowed_level_5": True,
+        }
+        with transaction.atomic():
+            if external_id:
+                signal, created = Signal.objects.get_or_create(external_id=external_id, defaults=defaults)
+            else:
+                signal, created = Signal.objects.create(**defaults), True
+        return Response(SignalListSerializer(signal, context={"request": request}).data, status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)
 
 
 class SignalDetailView(

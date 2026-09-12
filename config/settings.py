@@ -365,6 +365,7 @@ REST_FRAMEWORK = {
         "assistant_chat": config("ASSISTANT_CHAT_THROTTLE_RATE", default="30/minute"),
         "assistant_image": config("ASSISTANT_IMAGE_THROTTLE_RATE", default="10/minute"),
         "frontend_logs": config("FRONTEND_LOG_THROTTLE_RATE", default="30/minute"),
+        "content_ingestion": config("CONTENT_INGESTION_THROTTLE_RATE", default="60/minute"),
     },
 }
 
@@ -377,7 +378,7 @@ SIMPLE_JWT = {
     "ACCESS_TOKEN_LIFETIME": timedelta(
         minutes=config(
             "JWT_ACCESS_MINUTES",
-            default=30,
+            default=60,
             cast=int,
         )
     ),
@@ -385,7 +386,7 @@ SIMPLE_JWT = {
     "REFRESH_TOKEN_LIFETIME": timedelta(
         days=config(
             "JWT_REFRESH_DAYS",
-            default=30,
+            default=90,
             cast=int,
         )
     ),
@@ -544,6 +545,10 @@ CHANNEL_LAYERS = {
 MEDIA_MAX_IMAGE_MB = config("MEDIA_MAX_IMAGE_MB", default=10, cast=int)
 MEDIA_MAX_AUDIO_MB = config("MEDIA_MAX_AUDIO_MB", default=50, cast=int)
 MEDIA_MAX_VIDEO_MB = config("MEDIA_MAX_VIDEO_MB", default=1024, cast=int)
+CONTENT_INGESTION_API_KEY = config("CONTENT_INGESTION_API_KEY", default="")
+CONTENT_INGESTION_AUTHOR_USERNAME = config(
+    "CONTENT_INGESTION_AUTHOR_USERNAME", default="sokanex-feed-bot"
+)
 
 
 # --------------------------------------------------

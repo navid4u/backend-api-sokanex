@@ -62,9 +62,9 @@ class InternalAnalysisPostSerializer(serializers.ModelSerializer):
             "id", "title", "body", "scope", "scope_display", "status",
             "status_display", "image", "video", "audio", "cover", "is_pinned",
             "author", "author_name", "published_at", "views_count", "created_at",
-            "updated_at",
+            "updated_at", "source", "external_id",
         )
-        read_only_fields = ("id", "author", "author_name", "views_count", "created_at", "updated_at")
+        read_only_fields = ("id", "author", "author_name", "views_count", "created_at", "updated_at", "source", "external_id")
 
     def get_author_name(self, obj) -> str:
         return obj.author.get_full_name().strip() or obj.author.username
@@ -92,3 +92,22 @@ class InternalAnalysisPostSerializer(serializers.ModelSerializer):
         if status_value == ChannelPost.Status.PUBLISHED and not published_at:
             attrs["published_at"] = timezone.now()
         return attrs
+
+
+class InternalAnalysisIngestionSerializer(serializers.Serializer):
+    external_id = serializers.CharField(max_length=150, required=False, allow_blank=False)
+    scope = serializers.ChoiceField(choices=ChannelPost.Scope.choices)
+    title = serializers.CharField(max_length=250, allow_blank=False, trim_whitespace=True)
+    body = serializers.CharField(allow_blank=False, trim_whitespace=True, max_length=20000)
+    image = serializers.ImageField(required=False, allow_null=True)
+    video = serializers.FileField(required=False, allow_null=True)
+    audio = serializers.FileField(required=False, allow_null=True)
+
+    def validate_image(self, value):
+        return validate_image_upload(value, max_size_mb=settings.MEDIA_MAX_IMAGE_MB, file_label="Analysis image")
+
+    def validate_video(self, value):
+        return validate_video_upload(value, max_size_mb=settings.MEDIA_MAX_VIDEO_MB, file_label="Analysis video")
+
+    def validate_audio(self, value):
+        return validate_audio_upload(value, max_size_mb=settings.MEDIA_MAX_AUDIO_MB, file_label="Analysis audio")

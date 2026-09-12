@@ -34,6 +34,10 @@ class Direction(models.TextChoices):
 
 class Signal(LevelRestrictedContent):
 
+    class Source(models.TextChoices):
+        LEGACY = "LEGACY", "سامانه داخلی"
+        TELEGRAM_API = "TELEGRAM_API", "API تلگرام"
+
     signal_id = models.CharField(max_length=20, unique=True, null=True, blank=True)
 
     def save(self, *args, **kwargs):
@@ -94,6 +98,8 @@ class Signal(LevelRestrictedContent):
     rejection_reason = models.TextField(
         blank=True,
     )
+    source = models.CharField(max_length=20, choices=Source.choices, default=Source.LEGACY, db_index=True)
+    external_id = models.CharField(max_length=150, null=True, blank=True, unique=True)
     result_price = models.DecimalField(max_digits=20, decimal_places=8, null=True, blank=True)
     result_percent = models.DecimalField(max_digits=10, decimal_places=4, null=True, blank=True)
     closed_at = models.DateTimeField(null=True, blank=True)

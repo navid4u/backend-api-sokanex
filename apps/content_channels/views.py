@@ -8,13 +8,15 @@ from django.utils import timezone
 from rest_framework import generics, serializers, status
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.accounts.models import User
 from common.permissions import CanManageInternalAnalysis, IsEmployee
 from .models import Channel, ChannelPost
-from .serializers import ChannelPostSerializer, InternalAnalysisPostSerializer
+from .serializers import ChannelPostSerializer, InternalAnalysisIngestionSerializer, InternalAnalysisPostSerializer
+from common.ingestion import FixedIngestionKeyAuthentication
 from common.serializers import EmptySerializer
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
@@ -58,6 +60,9 @@ class ChannelPostListCreateView(generics.ListCreateAPIView):
         scope = self.request.query_params.get("scope")
         if scope:
             queryset = queryset.filter(scope=scope)
+        source = self.request.query_params.get("source")
+        if source:
+            queryset = queryset.filter(source=source)
         return queryset
 
     def get_serializer_context(self):
@@ -71,12 +76,37 @@ class ChannelPostListCreateView(generics.ListCreateAPIView):
         publish_channel_event(post.channel.slug, "post.created", ChannelPostSerializer(post, context={"request": self.request}).data)
 
 
+class InternalAnalysisIngestionView(APIView):
+    authentication_classes = [FixedIngestionKeyAuthentication]
+    permission_classes = [IsAuthenticated]
+    parser_classes = [JSONParser, MultiPartParser, FormParser]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "content_ingestion"
+
+    @extend_schema(request=InternalAnalysisIngestionSerializer, responses={200: InternalAnalysisPostSerializer, 201: InternalAnalysisPostSerializer})
+    def post(self, request):
+        serializer = InternalAnalysisIngestionSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        values = dict(serializer.validated_data)
+        external_id = values.pop("external_id", None)
+        channel = get_object_or_404(Channel, slug="internal-analysis", is_active=True)
+        defaults = {**values, "channel": channel, "author": request.user, "source": ChannelPost.Source.TELEGRAM_API, "status": ChannelPost.Status.PUBLISHED, "published_at": timezone.now()}
+        with transaction.atomic():
+            if external_id:
+                post, created = ChannelPost.objects.get_or_create(external_id=external_id, defaults=defaults)
+            else:
+                post, created = ChannelPost.objects.create(**defaults), True
+        if created:
+            publish_channel_event(channel.slug, "post.created", InternalAnalysisPostSerializer(post, context={"request": request}).data)
+        return Response(InternalAnalysisPostSerializer(post, context={"request": request}).data, status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)
+
 class VIPSignalChannelView(ChannelPostListCreateView):
     channel_slug = "vip-signals"
 
 
 @extend_schema_view(get=extend_schema(parameters=[
-    OpenApiParameter("scope", str, required=False, enum=["DOLLAR", "GOLD", "STOCK", "HOUSING"]),
+    OpenApiParameter("scope", str, required=False, enum=["DOLLAR", "GOLD", "STOCK", "FOREX", "HOUSING"]),
+    OpenApiParameter("source", str, required=False, enum=["LEGACY", "TELEGRAM_API"]),
     OpenApiParameter("page", int, required=False),
     OpenApiParameter("page_size", int, required=False),
 ]))
@@ -96,11 +126,14 @@ class InternalAnalysisChannelView(generics.ListAPIView):
         scope = self.request.query_params.get("scope")
         if scope:
             queryset = queryset.filter(scope=scope)
+        source = self.request.query_params.get("source")
+        if source:
+            queryset = queryset.filter(source=source)
         return queryset
 
 
 @extend_schema_view(get=extend_schema(parameters=[
-    OpenApiParameter("scope", str, required=False, enum=["DOLLAR", "GOLD", "STOCK", "HOUSING"]),
+    OpenApiParameter("scope", str, required=False, enum=["DOLLAR", "GOLD", "STOCK", "FOREX", "HOUSING"]),
     OpenApiParameter("status", str, required=False, enum=["DRAFT", "SCHEDULED", "PUBLISHED"]),
     OpenApiParameter("search", str, required=False),
     OpenApiParameter("is_pinned", bool, required=False),
