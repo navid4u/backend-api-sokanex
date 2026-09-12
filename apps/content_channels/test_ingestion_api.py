@@ -1,4 +1,5 @@
 from django.test import override_settings
+from unittest.mock import patch
 from rest_framework.test import APITestCase
 
 from apps.accounts.models import User
@@ -38,6 +39,20 @@ class InternalAnalysisIngestionTests(APITestCase):
         self.assertEqual(self.client.post(self.url, payload, format="json", **self.headers).status_code, 201)
         self.assertEqual(self.client.post(self.url, payload, format="json", **self.headers).status_code, 200)
         self.assertEqual(ChannelPost.objects.filter(external_id="telegram-analysis-retry").count(), 1)
+
+    @patch("apps.content_channels.views.get_channel_layer")
+    def test_realtime_failure_does_not_fail_persisted_ingestion(self, get_channel_layer):
+        get_channel_layer.side_effect = ConnectionError("redis unavailable")
+
+        response = self.client.post(
+            self.url,
+            {"external_id": "telegram-analysis-realtime-failure", "scope": "GOLD", "title": "طلا", "body": "تحلیل"},
+            format="json",
+            **self.headers,
+        )
+
+        self.assertEqual(response.status_code, 201)
+        self.assertTrue(ChannelPost.objects.filter(external_id="telegram-analysis-realtime-failure").exists())
 
     def test_invalid_key_is_rejected(self):
         response = self.client.post(self.url, {"scope": "GOLD", "title": "x", "body": "y"}, format="json", HTTP_X_SOKANEX_INGEST_KEY="wrong")

@@ -1,3 +1,5 @@
+import logging
+
 from django.conf import settings
 from django.core.cache import cache
 from django.core import signing
@@ -23,11 +25,27 @@ from channels.layers import get_channel_layer
 from drf_spectacular.utils import OpenApiParameter, extend_schema, extend_schema_view
 
 
+logger = logging.getLogger(__name__)
+
+
 def publish_channel_event(slug, event_type, data):
-    async_to_sync(get_channel_layer().group_send)(
-        f"content_channel_{slug.replace('-', '_')}",
-        {"type": "channel.event", "payload": {"type": event_type, "data": data}},
-    )
+    try:
+        channel_layer = get_channel_layer()
+        if channel_layer is None:
+            return False
+        async_to_sync(channel_layer.group_send)(
+            f"content_channel_{slug.replace('-', '_')}",
+            {"type": "channel.event", "payload": {"type": event_type, "data": data}},
+        )
+        return True
+    except Exception:
+        # Realtime fan-out is best-effort. A Redis/channel-layer outage must not
+        # turn an already-persisted post create/update/delete into an HTTP 500.
+        logger.exception(
+            "Content channel realtime event delivery failed",
+            extra={"channel_slug": slug, "channel_event_type": event_type},
+        )
+        return False
 
 
 def accessible_channel(user, slug):
