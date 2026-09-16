@@ -1,3 +1,5 @@
+import logging
+
 from django.shortcuts import get_object_or_404
 
 from django_filters.rest_framework import (
@@ -53,6 +55,9 @@ from common.ingestion import FixedIngestionKeyAuthentication
 from common.pagination import DefaultPagination
 
 
+logger = logging.getLogger(__name__)
+
+
 class SignalPagination(PageNumberPagination):
     page_size = 20
     page_size_query_param = "page_size"
@@ -87,6 +92,27 @@ class ManualSignalPostListCreateView(generics.ListCreateAPIView):
             author=self.request.user,
             source=ManualSignalPost.Source.SUPER_ADMIN_MANUAL,
         )
+
+
+class ManualSignalPostDeleteView(generics.DestroyAPIView):
+    permission_classes = [IsAuthenticated, IsSuperAdmin]
+    queryset = ManualSignalPost.objects.all()
+
+    def perform_destroy(self, instance):
+        storage = instance.image.storage if instance.image else None
+        image_name = instance.image.name if instance.image else ""
+        instance.delete()
+        if storage and image_name:
+            def delete_image():
+                try:
+                    storage.delete(image_name)
+                except Exception:
+                    logger.exception(
+                        "Failed to delete manual signal post image",
+                        extra={"image_name": image_name},
+                    )
+
+            transaction.on_commit(delete_image)
 
 
 class SignalListCreateView(

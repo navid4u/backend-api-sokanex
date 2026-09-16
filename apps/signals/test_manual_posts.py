@@ -7,7 +7,7 @@ from rest_framework.test import APITestCase
 
 from apps.accounts.models import User
 
-from .models import ManualSignalPost
+from .models import ManualSignalPost, Signal
 
 
 PNG_BYTES = base64.b64decode(
@@ -36,6 +36,11 @@ class ManualSignalPostAPITests(APITestCase):
             username="manual-post-admin", password="Pass123!"
         )
         self.user = User.objects.create_user(username="manual-post-user", password="Pass123!")
+        self.role_superadmin = User.objects.create_user(
+            username="manual-post-role-superadmin",
+            password="Pass123!",
+            role=User.Role.SUPER_ADMIN,
+        )
 
     def image(self, *, name="valid.png", content=PNG_BYTES, content_type="image/png"):
         return SimpleUploadedFile(name, content, content_type=content_type)
@@ -101,3 +106,46 @@ class ManualSignalPostAPITests(APITestCase):
         )
         self.assertEqual(response.status_code, 400)
         self.assertEqual(ManualSignalPost.objects.count(), 0)
+
+    def test_only_superadmin_can_delete_post_and_dependent_image(self):
+        post = ManualSignalPost.objects.create(
+            author=self.superadmin,
+            image=self.image(),
+        )
+        storage = post.image.storage
+        image_name = post.image.name
+        self.assertTrue(storage.exists(image_name))
+
+        self.client.force_authenticate(self.user)
+        self.assertEqual(self.client.delete(f"{self.url}{post.pk}/").status_code, 403)
+        self.client.force_authenticate(self.role_superadmin)
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.client.delete(f"{self.url}{post.pk}/")
+
+        self.assertEqual(response.status_code, 204)
+        self.assertFalse(ManualSignalPost.objects.filter(pk=post.pk).exists())
+        self.assertFalse(storage.exists(image_name))
+
+    def test_role_superadmin_can_delete_telegram_signal_but_regular_user_cannot(self):
+        signal = Signal.objects.create(
+            title="Telegram signal",
+            symbol="",
+            market="crypto",
+            direction="buy",
+            entry_price=0,
+            stop_loss=0,
+            take_profit=0,
+            description="Imported",
+            status="approved",
+            source=Signal.Source.TELEGRAM_API,
+            external_id="telegram-delete-test",
+            created_by=self.user,
+        )
+        detail_url = f"/api/signals/{signal.pk}/"
+
+        other = User.objects.create_user(username="manual-post-other", password="Pass123!")
+        self.client.force_authenticate(other)
+        self.assertEqual(self.client.delete(detail_url).status_code, 403)
+        self.client.force_authenticate(self.role_superadmin)
+        self.assertEqual(self.client.delete(detail_url).status_code, 204)
+        self.assertFalse(Signal.objects.filter(pk=signal.pk).exists())

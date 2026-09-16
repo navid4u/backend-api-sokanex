@@ -180,6 +180,7 @@ class IsSignalOwnerOrEmployee(BasePermission):
             user.is_authenticated
             and (
                 user.is_superuser
+                or user.role == User.Role.SUPER_ADMIN
                 or user.has_platform_permission(
                     User.Permission.CONTENT_MANAGE
                 )
