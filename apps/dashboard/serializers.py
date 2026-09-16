@@ -16,9 +16,7 @@ from apps.livestream.serializers import (
 from apps.notifications.serializers import (
     NotificationSerializer,
 )
-from apps.signals.serializers import (
-    SignalListSerializer,
-)
+from apps.signals.serializers import VIPSignalPostSerializer
 from apps.videos.serializers import (
     VideoListSerializer,
 )
@@ -147,7 +145,7 @@ class DashboardSerializer(
 
     finance = DashboardFinanceSerializer()
 
-    recent_signals = SignalListSerializer(
+    recent_signals = VIPSignalPostSerializer(
         many=True,
     )
 

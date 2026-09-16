@@ -33,3 +33,24 @@ class FixedIngestionKeyAuthentication(BaseAuthentication):
             raise IngestionNotConfigured("Content ingestion author is missing.") from exc
         fingerprint = hashlib.sha256(configured_key.encode()).hexdigest()[:12]
         return user, f"ingestion-key:{fingerprint}"
+
+
+class FixedSignalChannelKeyAuthentication(FixedIngestionKeyAuthentication):
+    header = "HTTP_X_SOKANEX_SIGNAL_KEY"
+
+    def authenticate_header(self, request):
+        return "X-Sokanex-Signal-Key"
+
+    def authenticate(self, request):
+        configured_key = settings.SIGNAL_CHANNEL_INGESTION_API_KEY
+        if not configured_key:
+            raise IngestionNotConfigured("Signal channel ingestion is not configured.")
+        supplied_key = request.META.get(self.header, "")
+        if not supplied_key or not secrets.compare_digest(supplied_key, configured_key):
+            raise AuthenticationFailed("Invalid signal channel API key.")
+        try:
+            user = User.objects.get(username=settings.CONTENT_INGESTION_AUTHOR_USERNAME)
+        except User.DoesNotExist as exc:
+            raise IngestionNotConfigured("Signal ingestion author is missing.") from exc
+        fingerprint = hashlib.sha256(configured_key.encode()).hexdigest()[:12]
+        return user, f"signal-ingestion-key:{fingerprint}"

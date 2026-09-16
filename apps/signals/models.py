@@ -17,6 +17,11 @@ def manual_signal_post_upload(instance, filename):
     return f"signals/manual/{uuid.uuid4().hex}{extension}"
 
 
+def vip_signal_post_upload(instance, filename):
+    extension = Path(filename).suffix.lower()
+    return f"signals/vip/{instance.channel.lower()}/{uuid.uuid4().hex}{extension}"
+
+
 class SignalStatus(models.TextChoices):
     DRAFT = "draft", "Draft"
     PENDING = "pending", "Pending"
@@ -194,3 +199,46 @@ class ManualSignalPost(models.Model):
 
     def __str__(self):
         return self.text[:80] or f"Manual signal post {self.pk}"
+
+
+class VIPSignalPost(models.Model):
+    class Channel(models.TextChoices):
+        CRYPTO = "CRYPTO", "کانال وی آی پی سوکانکس (کریپتو)"
+        FOREX = "FOREX", "کانال وی آی پی سوکانکس (فارکس)"
+
+    class Source(models.TextChoices):
+        TELEGRAM_API = "TELEGRAM_API", "API تلگرام"
+
+    channel = models.CharField(max_length=10, choices=Channel.choices, db_index=True)
+    text = models.TextField(max_length=20000)
+    image = models.ImageField(upload_to=vip_signal_post_upload, null=True, blank=True)
+    external_id = models.CharField(max_length=180, null=True, blank=True)
+    source = models.CharField(
+        max_length=20,
+        choices=Source.choices,
+        default=Source.TELEGRAM_API,
+        editable=False,
+    )
+    is_active = models.BooleanField(default=True, db_index=True)
+    published_at = models.DateTimeField(default=timezone.now, db_index=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-published_at", "-id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["channel", "external_id"],
+                condition=models.Q(external_id__isnull=False),
+                name="uniq_vip_signal_channel_external",
+            )
+        ]
+        indexes = [
+            models.Index(
+                fields=["channel", "is_active", "-published_at"],
+                name="vip_signal_channel_feed_idx",
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.channel}: {self.text[:80]}"

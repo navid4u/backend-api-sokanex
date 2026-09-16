@@ -13,7 +13,62 @@ from .models import (
     ManualSignalPost,
     Signal,
     SignalUpdate,
+    VIPSignalPost,
 )
+
+
+class VIPSignalPostSerializer(serializers.ModelSerializer):
+    kind = serializers.SerializerMethodField()
+    channel_label = serializers.CharField(source="get_channel_display", read_only=True)
+    excerpt = serializers.SerializerMethodField()
+
+    class Meta:
+        model = VIPSignalPost
+        fields = (
+            "id", "kind", "channel", "channel_label", "text", "excerpt",
+            "image", "source", "published_at", "created_at",
+        )
+        read_only_fields = fields
+
+    def get_excerpt(self, obj):
+        words = obj.text.split()
+        return " ".join(words[:30]) + ("…" if len(words) > 30 else "")
+
+    def get_kind(self, obj):
+        return "VIP_CHANNEL_POST"
+
+
+class VIPSignalPostIngestionSerializer(serializers.Serializer):
+    external_id = serializers.CharField(max_length=180, required=False, allow_blank=False)
+    text = serializers.CharField(max_length=20000, allow_blank=False, trim_whitespace=True)
+    image = serializers.ImageField(required=False, allow_null=True)
+    published_at = serializers.DateTimeField(required=False)
+
+    def validate_text(self, value):
+        value = strip_tags(value).replace("\x00", "").strip()
+        if not value:
+            raise serializers.ValidationError("متن پست الزامی است.")
+        return value
+
+    def validate_image(self, value):
+        return validate_image_upload(value, max_size_mb=8, file_label="VIP signal image")
+
+
+class VIPSignalPostManagementSerializer(VIPSignalPostSerializer):
+    class Meta(VIPSignalPostSerializer.Meta):
+        fields = VIPSignalPostSerializer.Meta.fields + (
+            "external_id", "is_active", "updated_at",
+        )
+        read_only_fields = (
+            "id", "kind", "channel", "channel_label", "excerpt", "image",
+            "source", "external_id", "published_at", "created_at", "updated_at",
+        )
+
+    def validate_text(self, value):
+        value = strip_tags(value).replace("\x00", "").strip()
+        if not value:
+            raise serializers.ValidationError("متن پست الزامی است.")
+        return value
 
 
 class ManualSignalPostSerializer(serializers.ModelSerializer):

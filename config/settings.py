@@ -547,6 +547,10 @@ MEDIA_MAX_IMAGE_MB = config("MEDIA_MAX_IMAGE_MB", default=10, cast=int)
 MEDIA_MAX_AUDIO_MB = config("MEDIA_MAX_AUDIO_MB", default=50, cast=int)
 MEDIA_MAX_VIDEO_MB = config("MEDIA_MAX_VIDEO_MB", default=1024, cast=int)
 CONTENT_INGESTION_API_KEY = config("CONTENT_INGESTION_API_KEY", default="")
+SIGNAL_CHANNEL_INGESTION_API_KEY = config(
+    "SIGNAL_CHANNEL_INGESTION_API_KEY",
+    default="",
+)
 CONTENT_INGESTION_AUTHOR_USERNAME = config(
     "CONTENT_INGESTION_AUTHOR_USERNAME", default="sokanex-feed-bot"
 )

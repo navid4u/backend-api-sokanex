@@ -16,6 +16,7 @@ from apps.signals.models import (
     MarketType,
     Signal,
     SignalStatus,
+    VIPSignalPost,
 )
 from apps.videos.models import Video
 from apps.wallet.models import Wallet
@@ -77,6 +78,10 @@ class DashboardAPITests(APITestCase):
             take_profit=Decimal("1.08000000"),
             status=SignalStatus.PENDING,
             created_by=self.trader,
+        )
+        self.vip_signal = VIPSignalPost.objects.create(
+            channel=VIPSignalPost.Channel.CRYPTO,
+            text="Published VIP crypto channel post",
         )
 
         self.article = Article.objects.create(
@@ -236,7 +241,7 @@ class DashboardAPITests(APITestCase):
         data = response.data["data"]
         capabilities = data["capabilities"]
 
-        self.assertTrue(
+        self.assertFalse(
             capabilities["can_submit_signals"]
         )
         self.assertFalse(
@@ -248,10 +253,7 @@ class DashboardAPITests(APITestCase):
         self.assertFalse(
             capabilities["can_manage_users"]
         )
-        self.assertEqual(
-            data["stats"]["my_signals"],
-            2,
-        )
+        self.assertEqual(data["stats"]["my_signals"], 0)
         self.assertEqual(
             data["stats"]["pending_signals"],
             0,
@@ -279,10 +281,7 @@ class DashboardAPITests(APITestCase):
         self.assertFalse(
             capabilities["can_manage_users"]
         )
-        self.assertEqual(
-            data["stats"]["pending_signals"],
-            1,
-        )
+        self.assertEqual(data["stats"]["pending_signals"], 0)
 
     def test_super_admin_has_all_capabilities(self):
         self.authenticate(self.super_admin)
@@ -295,7 +294,7 @@ class DashboardAPITests(APITestCase):
             response.data["data"]["capabilities"]
         )
 
-        self.assertTrue(
+        self.assertFalse(
             capabilities["can_submit_signals"]
         )
         self.assertTrue(
@@ -319,7 +318,7 @@ class DashboardAPITests(APITestCase):
 
         self.assertEqual(
             data["recent_signals"][0]["id"],
-            self.approved_signal.pk,
+            self.vip_signal.pk,
         )
         self.assertEqual(
             data["recent_articles"][0]["id"],

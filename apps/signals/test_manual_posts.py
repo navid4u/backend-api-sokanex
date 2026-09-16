@@ -16,7 +16,7 @@ PNG_BYTES = base64.b64decode(
 
 
 class ManualSignalPostAPITests(APITestCase):
-    url = "/api/signals/manual-posts/"
+    url = "/api/signals/legacy/manual-posts/"
 
     @classmethod
     def setUpClass(cls):
@@ -141,7 +141,7 @@ class ManualSignalPostAPITests(APITestCase):
             external_id="telegram-delete-test",
             created_by=self.user,
         )
-        detail_url = f"/api/signals/{signal.pk}/"
+        detail_url = f"/api/signals/legacy/{signal.pk}/"
 
         other = User.objects.create_user(username="manual-post-other", password="Pass123!")
         self.client.force_authenticate(other)

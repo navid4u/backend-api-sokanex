@@ -1,6 +1,5 @@
 from apps.accounts.models import FinancialPersonalityAssessment, User
-from apps.signals.models import Signal, SignalStatus
-from apps.signals.services import SignalService
+from apps.signals.models import VIPSignalPost
 from apps.wallet.services import WalletService
 from apps.articles.services import ArticleService
 from apps.videos.services import VideoService
@@ -20,11 +19,9 @@ class DashboardService:
             or user.role == User.Role.SUPER_ADMIN
         )
 
-        can_submit_signals = (
-            user.has_platform_permission(
-                User.Permission.SIGNAL_SUBMIT
-            )
-        )
+        # VIP channel posts are created only through the server-to-server
+        # ingestion API. Interactive trading-signal submission is legacy.
+        can_submit_signals = False
 
         can_review_signals = (
             user.has_platform_permission(
@@ -32,11 +29,8 @@ class DashboardService:
             )
         )
 
-        approved_signals = SignalService.list_signals(user)
-
-        recent_signals = approved_signals.select_related(
-            "created_by"
-        )[:5]
+        visible_signals = VIPSignalPost.objects.filter(is_active=True)
+        recent_signals = visible_signals[:5]
 
         wallet = WalletService.get_wallet(user)
         broker = BrokerConnection.objects.filter(user=user).first()
@@ -77,21 +71,11 @@ class DashboardService:
 
                 "wallet_currency": wallet.currency,
 
-                "signals": approved_signals.count(),
+                "signals": visible_signals.count(),
 
-                "my_signals": (
-                    user.signals.count()
-                    if can_submit_signals
-                    else 0
-                ),
+                "my_signals": 0,
 
-                "pending_signals": (
-                    Signal.objects.filter(
-                        status=SignalStatus.PENDING
-                    ).count()
-                    if can_review_signals
-                    else 0
-                ),
+                "pending_signals": 0,
 
                 "articles": published_articles.count(),
 

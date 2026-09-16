@@ -10,7 +10,7 @@ from .models import Signal
 class SignalIngestionTests(APITestCase):
     def setUp(self):
         User.objects.get_or_create(username="sokanex-feed-bot", defaults={"password": "!", "is_active": False})
-        self.url = "/api/signals/ingest/"
+        self.url = "/api/signals/legacy/ingest/"
         self.headers = {"HTTP_X_SOKANEX_INGEST_KEY": "test-secret-key"}
 
     def test_minimal_signal_is_approved_and_visible_to_every_level(self):
@@ -35,6 +35,6 @@ class SignalIngestionTests(APITestCase):
     def test_feed_filter_excludes_legacy_signals(self):
         viewer = User.objects.create_user(username="signal-viewer", password="pass")
         self.client.force_authenticate(viewer)
-        response = self.client.get("/api/signals/?source=TELEGRAM_API")
+        response = self.client.get("/api/signals/legacy/?source=TELEGRAM_API")
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data["count"], 0)

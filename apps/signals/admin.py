@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Signal, SignalUpdate
+from .models import Signal, SignalUpdate, VIPSignalPost
 
 admin.site.register(SignalUpdate)
 
@@ -33,3 +33,11 @@ class SignalAdmin(admin.ModelAdmin):
         "title",
         "symbol",
     )
+
+
+@admin.register(VIPSignalPost)
+class VIPSignalPostAdmin(admin.ModelAdmin):
+    list_display = ("id", "channel", "is_active", "published_at", "external_id")
+    list_filter = ("channel", "is_active", "source")
+    search_fields = ("text", "external_id")
+    readonly_fields = ("source", "created_at", "updated_at")
