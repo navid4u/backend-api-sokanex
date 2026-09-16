@@ -1,11 +1,20 @@
-from django.db import models
-from django.conf import settings
-from common.content_access import LevelRestrictedContent
+from pathlib import Path
 import uuid
+
+from django.conf import settings
+from django.db import models
+from django.utils import timezone
+
+from common.content_access import LevelRestrictedContent
 
 
 def generate_signal_id():
     return f"SIG-{uuid.uuid4().hex[:12].upper()}"
+
+
+def manual_signal_post_upload(instance, filename):
+    extension = Path(filename).suffix.lower()
+    return f"signals/manual/{uuid.uuid4().hex}{extension}"
 
 
 class SignalStatus(models.TextChoices):
@@ -146,3 +155,37 @@ class SignalUpdate(models.Model):
 
     class Meta:
         ordering = ["created_at", "id"]
+
+
+class ManualSignalPost(models.Model):
+    class Source(models.TextChoices):
+        SUPER_ADMIN_MANUAL = "SUPER_ADMIN_MANUAL", "ثبت دستی سوپر ادمین"
+
+    author = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="manual_signal_posts",
+    )
+    text = models.TextField(blank=True, max_length=4000)
+    image = models.ImageField(
+        upload_to=manual_signal_post_upload,
+        null=True,
+        blank=True,
+    )
+    source = models.CharField(
+        max_length=30,
+        choices=Source.choices,
+        default=Source.SUPER_ADMIN_MANUAL,
+        editable=False,
+    )
+    is_active = models.BooleanField(default=True, db_index=True)
+    published_at = models.DateTimeField(default=timezone.now, db_index=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-published_at", "-id"]
+        indexes = [models.Index(fields=["is_active", "-published_at"])]
+
+    def __str__(self):
+        return self.text[:80] or f"Manual signal post {self.pk}"

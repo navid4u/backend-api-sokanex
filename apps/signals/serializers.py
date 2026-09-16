@@ -1,5 +1,6 @@
 from rest_framework import serializers
 from django.conf import settings
+from django.utils.html import strip_tags
 
 from common.validators import (
     validate_attachment_upload,
@@ -9,9 +10,53 @@ from common.content_access import AllowedLevelsSerializerMixin
 
 from .models import (
     Direction,
+    ManualSignalPost,
     Signal,
     SignalUpdate,
 )
+
+
+class ManualSignalPostSerializer(serializers.ModelSerializer):
+    kind = serializers.SerializerMethodField()
+    author_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ManualSignalPost
+        fields = (
+            "id", "kind", "source", "text", "image", "author_name",
+            "published_at", "created_at",
+        )
+
+    def to_internal_value(self, data):
+        unexpected = set(data.keys()) - {"text", "image"}
+        if unexpected:
+            raise serializers.ValidationError({
+                field: ["ارسال این فیلد مجاز نیست."] for field in sorted(unexpected)
+            })
+        return super().to_internal_value(data)
+        read_only_fields = (
+            "id", "kind", "source", "author_name", "published_at", "created_at",
+        )
+
+    def get_kind(self, obj) -> str:
+        return "MANUAL_POST"
+
+    def get_author_name(self, obj) -> str:
+        return obj.author.get_full_name().strip() or obj.author.username
+
+    def validate_text(self, value):
+        return strip_tags(value).replace("\x00", "").strip()
+
+    def validate_image(self, value):
+        return validate_image_upload(value, max_size_mb=8, file_label="Manual signal image")
+
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        if not attrs.get("text") and not attrs.get("image"):
+            raise serializers.ValidationError(
+                {"non_field_errors": ["حداقل یکی از متن یا تصویر الزامی است."]}
+            )
+        return attrs
 
 
 class SignalUpdateSerializer(serializers.ModelSerializer):

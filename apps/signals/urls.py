@@ -11,10 +11,12 @@ from .views import (
     SignalUpdateDetailView,
     SignalManagementListView,
     SignalIngestionView,
+    ManualSignalPostListCreateView,
 )
 
 
 urlpatterns = [
+    path("manual-posts/", ManualSignalPostListCreateView.as_view(), name="manual-signal-post-list-create"),
     path("ingest/", SignalIngestionView.as_view(), name="signal-ingest"),
     path("manage/", SignalManagementListView.as_view(), name="signal-management-list"),
     path("<int:pk>/updates/", SignalUpdateListCreateView.as_view(), name="signal-update-list-create"),

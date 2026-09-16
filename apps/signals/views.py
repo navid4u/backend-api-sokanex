@@ -22,6 +22,7 @@ from common.permissions import (
     IsEmployee,
     CanReviewSignals,
     IsSignalOwnerOrEmployee,
+    IsSuperAdmin,
     IsTrader,
 )
 from rest_framework.response import Response
@@ -36,8 +37,9 @@ from apps.accounts.models import User
 
 
 from .filters import SignalFilter
-from .models import Signal, SignalUpdate
+from .models import ManualSignalPost, Signal, SignalUpdate
 from .serializers import (
+    ManualSignalPostSerializer,
     SignalCreateSerializer,
     SignalDetailSerializer,
     SignalEditSerializer,
@@ -48,6 +50,7 @@ from .serializers import (
 )
 from .services import SignalService
 from common.ingestion import FixedIngestionKeyAuthentication
+from common.pagination import DefaultPagination
 
 
 class SignalPagination(PageNumberPagination):
@@ -64,6 +67,26 @@ class SignalPagination(PageNumberPagination):
         response = super().get_paginated_response(data)
         response.data["summary"] = summary
         return response
+
+
+class ManualSignalPostListCreateView(generics.ListCreateAPIView):
+    serializer_class = ManualSignalPostSerializer
+    pagination_class = DefaultPagination
+    parser_classes = [MultiPartParser, FormParser]
+
+    def get_permissions(self):
+        if self.request.method == "POST":
+            return [IsAuthenticated(), IsSuperAdmin()]
+        return [IsAuthenticated()]
+
+    def get_queryset(self):
+        return ManualSignalPost.objects.filter(is_active=True).select_related("author")
+
+    def perform_create(self, serializer):
+        serializer.save(
+            author=self.request.user,
+            source=ManualSignalPost.Source.SUPER_ADMIN_MANUAL,
+        )
 
 
 class SignalListCreateView(
