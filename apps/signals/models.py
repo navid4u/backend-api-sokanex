@@ -185,7 +185,12 @@ class ManualSignalPost(models.Model):
 
     class Meta:
         ordering = ["-published_at", "-id"]
-        indexes = [models.Index(fields=["is_active", "-published_at"])]
+        indexes = [
+            models.Index(
+                fields=["is_active", "-published_at"],
+                name="signals_man_is_acti_81b9bb_idx",
+            )
+        ]
 
     def __str__(self):
         return self.text[:80] or f"Manual signal post {self.pk}"
