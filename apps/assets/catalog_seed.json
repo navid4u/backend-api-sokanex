@@ -1,0 +1,2204 @@
+[
+  {
+    "code": "gold",
+    "title": "طلا",
+    "items": [
+      {
+        "code": "gold-001",
+        "name": "طلای ۱۸ عیار",
+        "risk": "MEDIUM",
+        "unit": "GRAM"
+      },
+      {
+        "code": "gold-002",
+        "name": "اونس طلا",
+        "risk": "MEDIUM",
+        "unit": "ASSET_UNIT"
+      },
+      {
+        "code": "gold-003",
+        "name": "طلای ۲۴ عیار",
+        "risk": "MEDIUM",
+        "unit": "GRAM"
+      },
+      {
+        "code": "gold-004",
+        "name": "مثقال طلا",
+        "risk": "MEDIUM",
+        "unit": "GRAM"
+      }
+    ]
+  },
+  {
+    "code": "coin",
+    "title": "سکه",
+    "items": [
+      {
+        "code": "coin-001",
+        "name": "سکه امامی طرح جدید",
+        "risk": "MEDIUM_HIGH",
+        "unit": "COUNT"
+      },
+      {
+        "code": "coin-002",
+        "name": "نیم‌سکه طرح جدید",
+        "risk": "MEDIUM_HIGH",
+        "unit": "COUNT"
+      },
+      {
+        "code": "coin-003",
+        "name": "ربع‌سکه طرح جدید",
+        "risk": "MEDIUM_HIGH",
+        "unit": "COUNT"
+      },
+      {
+        "code": "coin-004",
+        "name": "سکه بهار آزادی",
+        "risk": "MEDIUM_HIGH",
+        "unit": "COUNT"
+      },
+      {
+        "code": "coin-005",
+        "name": "سکه امامی طرح قدیم",
+        "risk": "MEDIUM_HIGH",
+        "unit": "COUNT"
+      },
+      {
+        "code": "coin-006",
+        "name": "نیم‌سکه طرح قدیم",
+        "risk": "MEDIUM_HIGH",
+        "unit": "COUNT"
+      },
+      {
+        "code": "coin-007",
+        "name": "ربع‌سکه طرح قدیم",
+        "risk": "MEDIUM_HIGH",
+        "unit": "COUNT"
+      },
+      {
+        "code": "coin-008",
+        "name": "سکه گرمی",
+        "risk": "MEDIUM_HIGH",
+        "unit": "COUNT"
+      }
+    ]
+  },
+  {
+    "code": "silver",
+    "title": "نقره",
+    "items": [
+      {
+        "code": "silver-001",
+        "name": "نقره ۹۹۹",
+        "risk": "MEDIUM_HIGH",
+        "unit": "GRAM"
+      },
+      {
+        "code": "silver-002",
+        "name": "گواهی سپرده پیوسته شمش نقره",
+        "risk": "MEDIUM_HIGH",
+        "unit": "ASSET_UNIT"
+      },
+      {
+        "code": "silver-003",
+        "name": "اونس نقره",
+        "risk": "MEDIUM_HIGH",
+        "unit": "ASSET_UNIT"
+      }
+    ]
+  },
+  {
+    "code": "currency",
+    "title": "ارز",
+    "items": [
+      {
+        "code": "currency-001",
+        "name": "دلار آمریکا",
+        "risk": "MEDIUM_HIGH",
+        "unit": "CURRENCY_UNIT"
+      },
+      {
+        "code": "currency-002",
+        "name": "یورو",
+        "risk": "MEDIUM_HIGH",
+        "unit": "CURRENCY_UNIT"
+      },
+      {
+        "code": "currency-003",
+        "name": "درهم امارات متحده عربی",
+        "risk": "MEDIUM_HIGH",
+        "unit": "CURRENCY_UNIT"
+      },
+      {
+        "code": "currency-004",
+        "name": "روبل روسیه",
+        "risk": "MEDIUM_HIGH",
+        "unit": "CURRENCY_UNIT"
+      },
+      {
+        "code": "currency-005",
+        "name": "بات تایلند",
+        "risk": "MEDIUM_HIGH",
+        "unit": "CURRENCY_UNIT"
+      },
+      {
+        "code": "currency-006",
+        "name": "ریال عمان",
+        "risk": "MEDIUM_HIGH",
+        "unit": "CURRENCY_UNIT"
+      },
+      {
+        "code": "currency-007",
+        "name": "مانات آذربایجان",
+        "risk": "MEDIUM_HIGH",
+        "unit": "CURRENCY_UNIT"
+      },
+      {
+        "code": "currency-008",
+        "name": "درام ارمنستان",
+        "risk": "MEDIUM_HIGH",
+        "unit": "CURRENCY_UNIT"
+      },
+      {
+        "code": "currency-009",
+        "name": "رینگیت مالزی",
+        "risk": "MEDIUM_HIGH",
+        "unit": "CURRENCY_UNIT"
+      },
+      {
+        "code": "currency-010",
+        "name": "دلار کانادا",
+        "risk": "MEDIUM_HIGH",
+        "unit": "CURRENCY_UNIT"
+      },
+      {
+        "code": "currency-011",
+        "name": "ین ژاپن",
+        "risk": "MEDIUM_HIGH",
+        "unit": "CURRENCY_UNIT"
+      },
+      {
+        "code": "currency-012",
+        "name": "روپیه هند",
+        "risk": "MEDIUM_HIGH",
+        "unit": "CURRENCY_UNIT"
+      },
+      {
+        "code": "currency-013",
+        "name": "پوند انگلیس",
+        "risk": "MEDIUM_HIGH",
+        "unit": "CURRENCY_UNIT"
+      },
+      {
+        "code": "currency-014",
+        "name": "افغانی افغانستان",
+        "risk": "MEDIUM_HIGH",
+        "unit": "CURRENCY_UNIT"
+      },
+      {
+        "code": "currency-015",
+        "name": "لیر ترکیه",
+        "risk": "MEDIUM_HIGH",
+        "unit": "CURRENCY_UNIT"
+      },
+      {
+        "code": "currency-016",
+        "name": "دینار عراق",
+        "risk": "MEDIUM_HIGH",
+        "unit": "CURRENCY_UNIT"
+      },
+      {
+        "code": "currency-017",
+        "name": "دلار استرالیا",
+        "risk": "MEDIUM_HIGH",
+        "unit": "CURRENCY_UNIT"
+      },
+      {
+        "code": "currency-018",
+        "name": "یوان چین",
+        "risk": "MEDIUM_HIGH",
+        "unit": "CURRENCY_UNIT"
+      },
+      {
+        "code": "currency-019",
+        "name": "ریال عربستان",
+        "risk": "MEDIUM_HIGH",
+        "unit": "CURRENCY_UNIT"
+      },
+      {
+        "code": "currency-020",
+        "name": "کرون سوئد",
+        "risk": "MEDIUM_HIGH",
+        "unit": "CURRENCY_UNIT"
+      },
+      {
+        "code": "currency-021",
+        "name": "دینار کویت",
+        "risk": "MEDIUM_HIGH",
+        "unit": "CURRENCY_UNIT"
+      },
+      {
+        "code": "currency-022",
+        "name": "کرون دانمارک",
+        "risk": "MEDIUM_HIGH",
+        "unit": "CURRENCY_UNIT"
+      },
+      {
+        "code": "currency-023",
+        "name": "فرانک سوئیس",
+        "risk": "MEDIUM_HIGH",
+        "unit": "CURRENCY_UNIT"
+      },
+      {
+        "code": "currency-024",
+        "name": "دلار هنگ کنگ",
+        "risk": "MEDIUM_HIGH",
+        "unit": "CURRENCY_UNIT"
+      },
+      {
+        "code": "currency-025",
+        "name": "کرون نروژ",
+        "risk": "MEDIUM_HIGH",
+        "unit": "CURRENCY_UNIT"
+      },
+      {
+        "code": "currency-026",
+        "name": "دینار بحرین",
+        "risk": "MEDIUM_HIGH",
+        "unit": "CURRENCY_UNIT"
+      },
+      {
+        "code": "currency-027",
+        "name": "دلار سنگاپور",
+        "risk": "MEDIUM_HIGH",
+        "unit": "CURRENCY_UNIT"
+      },
+      {
+        "code": "currency-028",
+        "name": "ریال قطر",
+        "risk": "MEDIUM_HIGH",
+        "unit": "CURRENCY_UNIT"
+      },
+      {
+        "code": "currency-029",
+        "name": "لاری گرجستان",
+        "risk": "MEDIUM_HIGH",
+        "unit": "CURRENCY_UNIT"
+      }
+    ]
+  },
+  {
+    "code": "fixed-income-fund",
+    "title": "صندوق‌های با درآمد ثابت",
+    "items": [
+      {
+        "code": "fixed-income-fund-001",
+        "name": "صندوق پارند",
+        "risk": "LOW_MEDIUM",
+        "unit": "SHARE"
+      },
+      {
+        "code": "fixed-income-fund-002",
+        "name": "صندوق کاج",
+        "risk": "LOW_MEDIUM",
+        "unit": "SHARE"
+      },
+      {
+        "code": "fixed-income-fund-003",
+        "name": "صندوق آسود",
+        "risk": "LOW_MEDIUM",
+        "unit": "SHARE"
+      },
+      {
+        "code": "fixed-income-fund-004",
+        "name": "صندوق درین",
+        "risk": "LOW_MEDIUM",
+        "unit": "SHARE"
+      },
+      {
+        "code": "fixed-income-fund-005",
+        "name": "صندوق تداوم",
+        "risk": "LOW_MEDIUM",
+        "unit": "SHARE"
+      },
+      {
+        "code": "fixed-income-fund-006",
+        "name": "صندوق لبخند",
+        "risk": "LOW_MEDIUM",
+        "unit": "SHARE"
+      },
+      {
+        "code": "fixed-income-fund-007",
+        "name": "صندوق رشد",
+        "risk": "LOW_MEDIUM",
+        "unit": "SHARE"
+      },
+      {
+        "code": "fixed-income-fund-008",
+        "name": "صندوق خاتم",
+        "risk": "LOW_MEDIUM",
+        "unit": "SHARE"
+      },
+      {
+        "code": "fixed-income-fund-009",
+        "name": "صندوق بمان",
+        "risk": "LOW_MEDIUM",
+        "unit": "SHARE"
+      },
+      {
+        "code": "fixed-income-fund-010",
+        "name": "صندوق صایند",
+        "risk": "LOW_MEDIUM",
+        "unit": "SHARE"
+      },
+      {
+        "code": "fixed-income-fund-011",
+        "name": "صندوق آتیه ملت",
+        "risk": "LOW_MEDIUM",
+        "unit": "SHARE"
+      },
+      {
+        "code": "fixed-income-fund-012",
+        "name": "صندوق یاقوت",
+        "risk": "LOW_MEDIUM",
+        "unit": "SHARE"
+      },
+      {
+        "code": "fixed-income-fund-013",
+        "name": "صندوق آسان",
+        "risk": "LOW_MEDIUM",
+        "unit": "SHARE"
+      },
+      {
+        "code": "fixed-income-fund-014",
+        "name": "صندوق سخند",
+        "risk": "LOW_MEDIUM",
+        "unit": "SHARE"
+      },
+      {
+        "code": "fixed-income-fund-015",
+        "name": "صندوق اونیکس",
+        "risk": "LOW_MEDIUM",
+        "unit": "SHARE"
+      },
+      {
+        "code": "fixed-income-fund-016",
+        "name": "صندوق ماکان",
+        "risk": "LOW_MEDIUM",
+        "unit": "SHARE"
+      },
+      {
+        "code": "fixed-income-fund-017",
+        "name": "صندوق اعتبار",
+        "risk": "LOW_MEDIUM",
+        "unit": "SHARE"
+      },
+      {
+        "code": "fixed-income-fund-018",
+        "name": "صندوق آلا",
+        "risk": "LOW_MEDIUM",
+        "unit": "SHARE"
+      },
+      {
+        "code": "fixed-income-fund-019",
+        "name": "صندوق گنجین",
+        "risk": "LOW_MEDIUM",
+        "unit": "SHARE"
+      },
+      {
+        "code": "fixed-income-fund-020",
+        "name": "صندوق اندوخته داریوش",
+        "risk": "LOW_MEDIUM",
+        "unit": "SHARE"
+      },
+      {
+        "code": "fixed-income-fund-021",
+        "name": "صندوق هدف",
+        "risk": "LOW_MEDIUM",
+        "unit": "SHARE"
+      },
+      {
+        "code": "fixed-income-fund-022",
+        "name": "صندوق دیبا",
+        "risk": "LOW_MEDIUM",
+        "unit": "SHARE"
+      },
+      {
+        "code": "fixed-income-fund-023",
+        "name": "صندوق کارآمد",
+        "risk": "LOW_MEDIUM",
+        "unit": "SHARE"
+      },
+      {
+        "code": "fixed-income-fund-024",
+        "name": "صندوق سپیدما",
+        "risk": "LOW_MEDIUM",
+        "unit": "SHARE"
+      },
+      {
+        "code": "fixed-income-fund-025",
+        "name": "صندوق ستاره",
+        "risk": "LOW_MEDIUM",
+        "unit": "SHARE"
+      },
+      {
+        "code": "fixed-income-fund-026",
+        "name": "صندوق فردا",
+        "risk": "LOW_MEDIUM",
+        "unit": "SHARE"
+      },
+      {
+        "code": "fixed-income-fund-027",
+        "name": "صندوق گنجینه",
+        "risk": "LOW_MEDIUM",
+        "unit": "SHARE"
+      },
+      {
+        "code": "fixed-income-fund-028",
+        "name": "صندوق توسکا",
+        "risk": "LOW_MEDIUM",
+        "unit": "SHARE"
+      },
+      {
+        "code": "fixed-income-fund-029",
+        "name": "صندوق خورشید",
+        "risk": "LOW_MEDIUM",
+        "unit": "SHARE"
+      },
+      {
+        "code": "fixed-income-fund-030",
+        "name": "صندوق پاسارگاد",
+        "risk": "LOW_MEDIUM",
+        "unit": "SHARE"
+      },
+      {
+        "code": "fixed-income-fund-031",
+        "name": "صندوق ارکیده",
+        "risk": "LOW_MEDIUM",
+        "unit": "SHARE"
+      },
+      {
+        "code": "fixed-income-fund-032",
+        "name": "صندوق آرامش",
+        "risk": "LOW_MEDIUM",
+        "unit": "SHARE"
+      },
+      {
+        "code": "fixed-income-fund-033",
+        "name": "صندوق کامیاب",
+        "risk": "LOW_MEDIUM",
+        "unit": "SHARE"
+      },
+      {
+        "code": "fixed-income-fund-034",
+        "name": "صندوق کارا",
+        "risk": "LOW_MEDIUM",
+        "unit": "SHARE"
+      },
+      {
+        "code": "fixed-income-fund-035",
+        "name": "صندوق بلوط",
+        "risk": "LOW_MEDIUM",
+        "unit": "SHARE"
+      },
+      {
+        "code": "fixed-income-fund-036",
+        "name": "صندوق داریک",
+        "risk": "LOW_MEDIUM",
+        "unit": "SHARE"
+      },
+      {
+        "code": "fixed-income-fund-037",
+        "name": "صندوق دارا",
+        "risk": "LOW_MEDIUM",
+        "unit": "SHARE"
+      },
+      {
+        "code": "fixed-income-fund-038",
+        "name": "صندوق پایش",
+        "risk": "LOW_MEDIUM",
+        "unit": "SHARE"
+      },
+      {
+        "code": "fixed-income-fund-039",
+        "name": "صندوق ثابت اکسیژن",
+        "risk": "LOW_MEDIUM",
+        "unit": "SHARE"
+      },
+      {
+        "code": "fixed-income-fund-040",
+        "name": "صندوق فیروزا",
+        "risk": "LOW_MEDIUM",
+        "unit": "SHARE"
+      },
+      {
+        "code": "fixed-income-fund-041",
+        "name": "صندوق زمرد کوروش",
+        "risk": "LOW_MEDIUM",
+        "unit": "SHARE"
+      },
+      {
+        "code": "fixed-income-fund-042",
+        "name": "صندوق آوند",
+        "risk": "LOW_MEDIUM",
+        "unit": "SHARE"
+      },
+      {
+        "code": "fixed-income-fund-043",
+        "name": "صندوق ساحل",
+        "risk": "LOW_MEDIUM",
+        "unit": "SHARE"
+      },
+      {
+        "code": "fixed-income-fund-044",
+        "name": "صندوق سام",
+        "risk": "LOW_MEDIUM",
+        "unit": "SHARE"
+      },
+      {
+        "code": "fixed-income-fund-045",
+        "name": "صندوق افران",
+        "risk": "LOW_MEDIUM",
+        "unit": "SHARE"
+      },
+      {
+        "code": "fixed-income-fund-046",
+        "name": "صندوق ثبات",
+        "risk": "LOW_MEDIUM",
+        "unit": "SHARE"
+      },
+      {
+        "code": "fixed-income-fund-047",
+        "name": "صندوق نشان",
+        "risk": "LOW_MEDIUM",
+        "unit": "SHARE"
+      },
+      {
+        "code": "fixed-income-fund-048",
+        "name": "صندوق آسامید",
+        "risk": "LOW_MEDIUM",
+        "unit": "SHARE"
+      },
+      {
+        "code": "fixed-income-fund-049",
+        "name": "صندوق کارما",
+        "risk": "LOW_MEDIUM",
+        "unit": "SHARE"
+      },
+      {
+        "code": "fixed-income-fund-050",
+        "name": "صندوق رابین",
+        "risk": "LOW_MEDIUM",
+        "unit": "SHARE"
+      },
+      {
+        "code": "fixed-income-fund-051",
+        "name": "صندوق نیک گستر",
+        "risk": "LOW_MEDIUM",
+        "unit": "SHARE"
+      },
+      {
+        "code": "fixed-income-fund-052",
+        "name": "صندوق آکورد",
+        "risk": "LOW_MEDIUM",
+        "unit": "SHARE"
+      },
+      {
+        "code": "fixed-income-fund-053",
+        "name": "صندوق رایکا",
+        "risk": "LOW_MEDIUM",
+        "unit": "SHARE"
+      },
+      {
+        "code": "fixed-income-fund-054",
+        "name": "صندوق پاداش",
+        "risk": "LOW_MEDIUM",
+        "unit": "SHARE"
+      },
+      {
+        "code": "fixed-income-fund-055",
+        "name": "صندوق دامون",
+        "risk": "LOW_MEDIUM",
+        "unit": "SHARE"
+      },
+      {
+        "code": "fixed-income-fund-056",
+        "name": "صندوق یارا",
+        "risk": "LOW_MEDIUM",
+        "unit": "SHARE"
+      },
+      {
+        "code": "fixed-income-fund-057",
+        "name": "صندوق شمیم",
+        "risk": "LOW_MEDIUM",
+        "unit": "SHARE"
+      },
+      {
+        "code": "fixed-income-fund-058",
+        "name": "صندوق پایا",
+        "risk": "LOW_MEDIUM",
+        "unit": "SHARE"
+      },
+      {
+        "code": "fixed-income-fund-059",
+        "name": "صندوق صنهال",
+        "risk": "LOW_MEDIUM",
+        "unit": "SHARE"
+      },
+      {
+        "code": "fixed-income-fund-060",
+        "name": "صندوق هامرز",
+        "risk": "LOW_MEDIUM",
+        "unit": "SHARE"
+      },
+      {
+        "code": "fixed-income-fund-061",
+        "name": "صندوق اطمینان",
+        "risk": "LOW_MEDIUM",
+        "unit": "SHARE"
+      },
+      {
+        "code": "fixed-income-fund-062",
+        "name": "صندوق طلوع",
+        "risk": "LOW_MEDIUM",
+        "unit": "SHARE"
+      },
+      {
+        "code": "fixed-income-fund-063",
+        "name": "صندوق اوصتا",
+        "risk": "LOW_MEDIUM",
+        "unit": "SHARE"
+      },
+      {
+        "code": "fixed-income-fund-064",
+        "name": "صندوق نخل",
+        "risk": "LOW_MEDIUM",
+        "unit": "SHARE"
+      },
+      {
+        "code": "fixed-income-fund-065",
+        "name": "صندوق فاخر",
+        "risk": "LOW_MEDIUM",
+        "unit": "SHARE"
+      },
+      {
+        "code": "fixed-income-fund-066",
+        "name": "صندوق سپنتارود",
+        "risk": "LOW_MEDIUM",
+        "unit": "SHARE"
+      },
+      {
+        "code": "fixed-income-fund-067",
+        "name": "صندوق سیناد",
+        "risk": "LOW_MEDIUM",
+        "unit": "SHARE"
+      },
+      {
+        "code": "fixed-income-fund-068",
+        "name": "صندوق ترنج ثابت",
+        "risk": "LOW_MEDIUM",
+        "unit": "SHARE"
+      },
+      {
+        "code": "fixed-income-fund-069",
+        "name": "صندوق بازده",
+        "risk": "LOW_MEDIUM",
+        "unit": "SHARE"
+      },
+      {
+        "code": "fixed-income-fund-070",
+        "name": "صندوق آفاق",
+        "risk": "LOW_MEDIUM",
+        "unit": "SHARE"
+      },
+      {
+        "code": "fixed-income-fund-071",
+        "name": "صندوق سپر",
+        "risk": "LOW_MEDIUM",
+        "unit": "SHARE"
+      },
+      {
+        "code": "fixed-income-fund-072",
+        "name": "صندوق اعتماد",
+        "risk": "LOW_MEDIUM",
+        "unit": "SHARE"
+      },
+      {
+        "code": "fixed-income-fund-073",
+        "name": "صندوق همای",
+        "risk": "LOW_MEDIUM",
+        "unit": "SHARE"
+      },
+      {
+        "code": "fixed-income-fund-074",
+        "name": "صندوق تصمیم",
+        "risk": "LOW_MEDIUM",
+        "unit": "SHARE"
+      },
+      {
+        "code": "fixed-income-fund-075",
+        "name": "صندوق امین یکم",
+        "risk": "LOW_MEDIUM",
+        "unit": "SHARE"
+      },
+      {
+        "code": "fixed-income-fund-076",
+        "name": "صندوق کیان",
+        "risk": "LOW_MEDIUM",
+        "unit": "SHARE"
+      },
+      {
+        "code": "fixed-income-fund-077",
+        "name": "صندوق نیلی",
+        "risk": "LOW_MEDIUM",
+        "unit": "SHARE"
+      },
+      {
+        "code": "fixed-income-fund-078",
+        "name": "صندوق ماهور",
+        "risk": "LOW_MEDIUM",
+        "unit": "SHARE"
+      },
+      {
+        "code": "fixed-income-fund-079",
+        "name": "صندوق ارمغان",
+        "risk": "LOW_MEDIUM",
+        "unit": "SHARE"
+      },
+      {
+        "code": "fixed-income-fund-080",
+        "name": "صندوق کارین",
+        "risk": "LOW_MEDIUM",
+        "unit": "SHARE"
+      },
+      {
+        "code": "fixed-income-fund-081",
+        "name": "صندوق کمند",
+        "risk": "LOW_MEDIUM",
+        "unit": "SHARE"
+      },
+      {
+        "code": "fixed-income-fund-082",
+        "name": "صندوق مانی",
+        "risk": "LOW_MEDIUM",
+        "unit": "SHARE"
+      },
+      {
+        "code": "fixed-income-fund-083",
+        "name": "صندوق آکام",
+        "risk": "LOW_MEDIUM",
+        "unit": "SHARE"
+      },
+      {
+        "code": "fixed-income-fund-084",
+        "name": "صندوق اصیل",
+        "risk": "LOW_MEDIUM",
+        "unit": "SHARE"
+      },
+      {
+        "code": "fixed-income-fund-085",
+        "name": "صندوق خزانه ملت",
+        "risk": "LOW_MEDIUM",
+        "unit": "SHARE"
+      },
+      {
+        "code": "fixed-income-fund-086",
+        "name": "صندوق همگام",
+        "risk": "LOW_MEDIUM",
+        "unit": "SHARE"
+      },
+      {
+        "code": "fixed-income-fund-087",
+        "name": "صندوق آسا",
+        "risk": "LOW_MEDIUM",
+        "unit": "SHARE"
+      }
+    ]
+  },
+  {
+    "code": "energy",
+    "title": "انرژی",
+    "items": [
+      {
+        "code": "energy-001",
+        "name": "گواهی نفت دیجیتال",
+        "risk": "HIGH",
+        "unit": "ASSET_UNIT"
+      },
+      {
+        "code": "energy-002",
+        "name": "نفت برنت",
+        "risk": "HIGH",
+        "unit": "ASSET_UNIT"
+      },
+      {
+        "code": "energy-003",
+        "name": "نفت WTI",
+        "risk": "HIGH",
+        "unit": "ASSET_UNIT"
+      },
+      {
+        "code": "energy-004",
+        "name": "نفت اوپک",
+        "risk": "HIGH",
+        "unit": "ASSET_UNIT"
+      }
+    ]
+  },
+  {
+    "code": "crypto",
+    "title": "رمزارز",
+    "items": [
+      {
+        "code": "crypto-001",
+        "name": "تتر (دلار مجازی)",
+        "risk": "MEDIUM",
+        "unit": "ASSET_UNIT"
+      },
+      {
+        "code": "crypto-002",
+        "name": "تترگلد (تتری)",
+        "risk": "MEDIUM_HIGH",
+        "unit": "ASSET_UNIT"
+      },
+      {
+        "code": "crypto-003",
+        "name": "تترگلد (تومانی)",
+        "risk": "MEDIUM_HIGH",
+        "unit": "ASSET_UNIT"
+      },
+      {
+        "code": "crypto-004",
+        "name": "بیت‌کوین (تتری)",
+        "risk": "VERY_HIGH",
+        "unit": "ASSET_UNIT"
+      },
+      {
+        "code": "crypto-005",
+        "name": "بیت‌کوین (تومانی)",
+        "risk": "VERY_HIGH",
+        "unit": "ASSET_UNIT"
+      },
+      {
+        "code": "crypto-006",
+        "name": "اتریوم (تومانی)",
+        "risk": "VERY_HIGH",
+        "unit": "ASSET_UNIT"
+      },
+      {
+        "code": "crypto-007",
+        "name": "اتریوم (تتری)",
+        "risk": "VERY_HIGH",
+        "unit": "ASSET_UNIT"
+      },
+      {
+        "code": "crypto-008",
+        "name": "ریپل (تومانی)",
+        "risk": "VERY_HIGH",
+        "unit": "ASSET_UNIT"
+      },
+      {
+        "code": "crypto-009",
+        "name": "ریپل (تتری)",
+        "risk": "VERY_HIGH",
+        "unit": "ASSET_UNIT"
+      },
+      {
+        "code": "crypto-010",
+        "name": "لایت‌کوین (تومانی)",
+        "risk": "VERY_HIGH",
+        "unit": "ASSET_UNIT"
+      },
+      {
+        "code": "crypto-011",
+        "name": "لایت‌کوین (تتری)",
+        "risk": "VERY_HIGH",
+        "unit": "ASSET_UNIT"
+      },
+      {
+        "code": "crypto-012",
+        "name": "بایننس‌کوین (تومانی)",
+        "risk": "VERY_HIGH",
+        "unit": "ASSET_UNIT"
+      },
+      {
+        "code": "crypto-013",
+        "name": "بایننس‌کوین (تتری)",
+        "risk": "VERY_HIGH",
+        "unit": "ASSET_UNIT"
+      },
+      {
+        "code": "crypto-014",
+        "name": "پکسوز گلد (تومانی)",
+        "risk": "VERY_HIGH",
+        "unit": "ASSET_UNIT"
+      },
+      {
+        "code": "crypto-015",
+        "name": "پکسوز گلد (تتری)",
+        "risk": "VERY_HIGH",
+        "unit": "ASSET_UNIT"
+      },
+      {
+        "code": "crypto-016",
+        "name": "بیت‌کوین‌کش (تومانی)",
+        "risk": "VERY_HIGH",
+        "unit": "ASSET_UNIT"
+      },
+      {
+        "code": "crypto-017",
+        "name": "بیت‌کوین‌کش (تتری)",
+        "risk": "VERY_HIGH",
+        "unit": "ASSET_UNIT"
+      }
+    ]
+  },
+  {
+    "code": "gold-fund",
+    "title": "صندوق طلا",
+    "items": [
+      {
+        "code": "gold-fund-001",
+        "name": "صندوق طلای میراث",
+        "risk": "MEDIUM_HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "gold-fund-002",
+        "name": "صندوق طلای رز گلد",
+        "risk": "MEDIUM_HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "gold-fund-003",
+        "name": "صندوق امرالد",
+        "risk": "MEDIUM_HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "gold-fund-004",
+        "name": "صندوق زروان",
+        "risk": "MEDIUM_HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "gold-fund-005",
+        "name": "صندوق زر",
+        "risk": "MEDIUM_HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "gold-fund-006",
+        "name": "صندوق آتش",
+        "risk": "MEDIUM_HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "gold-fund-007",
+        "name": "صندوق لیان",
+        "risk": "MEDIUM_HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "gold-fund-008",
+        "name": "صندوق گنج",
+        "risk": "MEDIUM_HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "gold-fund-009",
+        "name": "صندوق جواهر",
+        "risk": "MEDIUM_HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "gold-fund-010",
+        "name": "صندوق عیار",
+        "risk": "MEDIUM_HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "gold-fund-011",
+        "name": "صندوق زرفام",
+        "risk": "MEDIUM_HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "gold-fund-012",
+        "name": "صندوق زمرد",
+        "risk": "MEDIUM_HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "gold-fund-013",
+        "name": "صندوق طلا",
+        "risk": "MEDIUM_HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "gold-fund-014",
+        "name": "صندوق ناب",
+        "risk": "MEDIUM_HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "gold-fund-015",
+        "name": "صندوق مثقال",
+        "risk": "MEDIUM_HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "gold-fund-016",
+        "name": "صندوق آلتون",
+        "risk": "MEDIUM_HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "gold-fund-017",
+        "name": "صندوق گلدیس",
+        "risk": "MEDIUM_HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "gold-fund-018",
+        "name": "صندوق درخشان",
+        "risk": "MEDIUM_HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "gold-fund-019",
+        "name": "صندوق قیراط",
+        "risk": "MEDIUM_HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "gold-fund-020",
+        "name": "صندوق کهربا",
+        "risk": "MEDIUM_HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "gold-fund-021",
+        "name": "صندوق گوهر",
+        "risk": "MEDIUM_HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "gold-fund-022",
+        "name": "صندوق نفیس",
+        "risk": "MEDIUM_HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "gold-fund-023",
+        "name": "صندوق تابش",
+        "risk": "MEDIUM_HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "gold-fund-024",
+        "name": "صندوق جام طلا",
+        "risk": "MEDIUM_HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "gold-fund-025",
+        "name": "صندوق طلای درنا",
+        "risk": "MEDIUM_HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "gold-fund-026",
+        "name": "صندوق طلای دفینه",
+        "risk": "MEDIUM_HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "gold-fund-027",
+        "name": "صندوق طلای ریتون",
+        "risk": "MEDIUM_HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "gold-fund-028",
+        "name": "صندوق طلای زرگر",
+        "risk": "MEDIUM_HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "gold-fund-029",
+        "name": "صندوق طلای قلک گلد",
+        "risk": "MEDIUM_HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "gold-fund-030",
+        "name": "صندوق طلای گلدا",
+        "risk": "MEDIUM_HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "gold-fund-031",
+        "name": "صندوق طلای نگین فارس",
+        "risk": "MEDIUM_HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "gold-fund-032",
+        "name": "صندوق طلای همیان",
+        "risk": "MEDIUM_HIGH",
+        "unit": "SHARE"
+      }
+    ]
+  },
+  {
+    "code": "silver-fund",
+    "title": "صندوق نقره",
+    "items": [
+      {
+        "code": "silver-fund-001",
+        "name": "صندوق پلاتا",
+        "risk": "HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "silver-fund-002",
+        "name": "صندوق نقرابی",
+        "risk": "HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "silver-fund-003",
+        "name": "صندوق سیمین",
+        "risk": "HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "silver-fund-004",
+        "name": "صندوق سیلور",
+        "risk": "HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "silver-fund-005",
+        "name": "صندوق نقران",
+        "risk": "HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "silver-fund-006",
+        "name": "صندوق نقراط",
+        "risk": "HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "silver-fund-007",
+        "name": "صندوق نقرسا",
+        "risk": "HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "silver-fund-008",
+        "name": "صندوق نقرفام",
+        "risk": "HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "silver-fund-009",
+        "name": "صندوق نقرین",
+        "risk": "HIGH",
+        "unit": "SHARE"
+      }
+    ]
+  },
+  {
+    "code": "equity-fund",
+    "title": "صندوق‌های سهامی",
+    "items": [
+      {
+        "code": "equity-fund-001",
+        "name": "صندوق هیوا",
+        "risk": "HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "equity-fund-002",
+        "name": "صندوق سپینود",
+        "risk": "HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "equity-fund-003",
+        "name": "صندوق ثهام",
+        "risk": "HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "equity-fund-004",
+        "name": "صندوق درسا",
+        "risk": "HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "equity-fund-005",
+        "name": "صندوق داریوش",
+        "risk": "HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "equity-fund-006",
+        "name": "صندوق عرش",
+        "risk": "HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "equity-fund-007",
+        "name": "صندوق هامون",
+        "risk": "HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "equity-fund-008",
+        "name": "صندوق کاردان",
+        "risk": "HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "equity-fund-009",
+        "name": "صندوق جوانه کوچک",
+        "risk": "HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "equity-fund-010",
+        "name": "صندوق رخش",
+        "risk": "HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "equity-fund-011",
+        "name": "صندوق ابتکار",
+        "risk": "HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "equity-fund-012",
+        "name": "صندوق ویستا",
+        "risk": "HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "equity-fund-013",
+        "name": "صندوق پرتو",
+        "risk": "HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "equity-fund-014",
+        "name": "صندوق وبازار",
+        "risk": "HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "equity-fund-015",
+        "name": "صندوق هم‌وزن",
+        "risk": "HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "equity-fund-016",
+        "name": "صندوق ترمه",
+        "risk": "HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "equity-fund-017",
+        "name": "صندوق رونق",
+        "risk": "HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "equity-fund-018",
+        "name": "صندوق فیروزه",
+        "risk": "HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "equity-fund-019",
+        "name": "صندوق آرام",
+        "risk": "HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "equity-fund-020",
+        "name": "صندوق خبرگان",
+        "risk": "HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "equity-fund-021",
+        "name": "صندوق ارزش",
+        "risk": "HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "equity-fund-022",
+        "name": "صندوق تاراز",
+        "risk": "HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "equity-fund-023",
+        "name": "صندوق مروارید",
+        "risk": "HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "equity-fund-024",
+        "name": "صندوق الماس",
+        "risk": "HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "equity-fund-025",
+        "name": "صندوق فراز",
+        "risk": "HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "equity-fund-026",
+        "name": "صندوق پادا",
+        "risk": "HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "equity-fund-027",
+        "name": "صندوق آبنوس",
+        "risk": "HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "equity-fund-028",
+        "name": "صندوق سرو",
+        "risk": "HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "equity-fund-029",
+        "name": "صندوق مانا",
+        "risk": "HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "equity-fund-030",
+        "name": "صندوق زرین",
+        "risk": "HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "equity-fund-031",
+        "name": "صندوق اطلس",
+        "risk": "HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "equity-fund-032",
+        "name": "صندوق اکسیژن",
+        "risk": "HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "equity-fund-033",
+        "name": "صندوق جاودان",
+        "risk": "HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "equity-fund-034",
+        "name": "صندوق تکپاد",
+        "risk": "HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "equity-fund-035",
+        "name": "صندوق ثمین",
+        "risk": "HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "equity-fund-036",
+        "name": "صندوق پیروز",
+        "risk": "HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "equity-fund-037",
+        "name": "صندوق اوج",
+        "risk": "HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "equity-fund-038",
+        "name": "صندوق تیام",
+        "risk": "HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "equity-fund-039",
+        "name": "صندوق همتا",
+        "risk": "HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "equity-fund-040",
+        "name": "صندوق آس",
+        "risk": "HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "equity-fund-041",
+        "name": "صندوق خلیج",
+        "risk": "HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "equity-fund-042",
+        "name": "صندوق هومان",
+        "risk": "HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "equity-fund-043",
+        "name": "صندوق عقیق",
+        "risk": "HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "equity-fund-044",
+        "name": "صندوق انار",
+        "risk": "HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "equity-fund-045",
+        "name": "صندوق آوا",
+        "risk": "HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "equity-fund-046",
+        "name": "صندوق صدف",
+        "risk": "HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "equity-fund-047",
+        "name": "صندوق فرصت",
+        "risk": "HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "equity-fund-048",
+        "name": "صندوق افق ملت",
+        "risk": "HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "equity-fund-049",
+        "name": "صندوق آمیتیس",
+        "risk": "HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "equity-fund-050",
+        "name": "صندوق ثروتم",
+        "risk": "HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "equity-fund-051",
+        "name": "صندوق دیار",
+        "risk": "HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "equity-fund-052",
+        "name": "صندوق برلیان",
+        "risk": "HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "equity-fund-053",
+        "name": "صندوق آگاس",
+        "risk": "HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "equity-fund-054",
+        "name": "صندوق ثنا",
+        "risk": "HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "equity-fund-055",
+        "name": "صندوق هوشیار",
+        "risk": "HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "equity-fund-056",
+        "name": "صندوق رماس",
+        "risk": "HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "equity-fund-057",
+        "name": "صندوق آساس",
+        "risk": "HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "equity-fund-058",
+        "name": "صندوق سلام",
+        "risk": "HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "equity-fund-059",
+        "name": "صندوق مدیر",
+        "risk": "HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "equity-fund-060",
+        "name": "صندوق دریا",
+        "risk": "HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "equity-fund-061",
+        "name": "صندوق نارین",
+        "risk": "HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "equity-fund-062",
+        "name": "صندوق دی سهام",
+        "risk": "HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "equity-fund-063",
+        "name": "صندوق کاریس",
+        "risk": "HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "equity-fund-064",
+        "name": "صندوق سهامدار",
+        "risk": "HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "equity-fund-065",
+        "name": "صندوق آتیمس",
+        "risk": "HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "equity-fund-066",
+        "name": "صندوق ثروت ساز",
+        "risk": "HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "equity-fund-067",
+        "name": "صندوق بذر",
+        "risk": "HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "equity-fund-068",
+        "name": "صندوق رشدی کیان",
+        "risk": "HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "equity-fund-069",
+        "name": "صندوق پرتوسا",
+        "risk": "HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "equity-fund-070",
+        "name": "صندوق آوان",
+        "risk": "HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "equity-fund-071",
+        "name": "صندوق امتیاز",
+        "risk": "HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "equity-fund-072",
+        "name": "صندوق رویش همراه",
+        "risk": "HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "equity-fund-073",
+        "name": "صندوق سها",
+        "risk": "HIGH",
+        "unit": "SHARE"
+      }
+    ]
+  },
+  {
+    "code": "mixed-fund",
+    "title": "صندوق‌های مختلط",
+    "items": [
+      {
+        "code": "mixed-fund-001",
+        "name": "صندوق گارانتی",
+        "risk": "MEDIUM_HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "mixed-fund-002",
+        "name": "صندوق زیتون",
+        "risk": "MEDIUM_HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "mixed-fund-003",
+        "name": "صندوق آسام",
+        "risk": "MEDIUM_HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "mixed-fund-004",
+        "name": "صندوق آفرین",
+        "risk": "MEDIUM_HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "mixed-fund-005",
+        "name": "صندوق صنوین",
+        "risk": "MEDIUM_HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "mixed-fund-006",
+        "name": "صندوق هیبرید",
+        "risk": "MEDIUM_HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "mixed-fund-007",
+        "name": "صندوق ضمان",
+        "risk": "MEDIUM_HIGH",
+        "unit": "SHARE"
+      }
+    ]
+  },
+  {
+    "code": "leveraged-fund",
+    "title": "صندوق‌های اهرمی",
+    "items": [
+      {
+        "code": "leveraged-fund-001",
+        "name": "صندوق شتاب",
+        "risk": "VERY_HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "leveraged-fund-002",
+        "name": "صندوق جهش",
+        "risk": "VERY_HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "leveraged-fund-003",
+        "name": "صندوق دوایکس",
+        "risk": "VERY_HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "leveraged-fund-004",
+        "name": "صندوق توان",
+        "risk": "VERY_HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "leveraged-fund-005",
+        "name": "صندوق اهرم",
+        "risk": "VERY_HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "leveraged-fund-006",
+        "name": "صندوق نارنج اهرم",
+        "risk": "VERY_HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "leveraged-fund-007",
+        "name": "صندوق بیدار",
+        "risk": "VERY_HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "leveraged-fund-008",
+        "name": "صندوق موج",
+        "risk": "VERY_HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "leveraged-fund-009",
+        "name": "صندوق پیشران",
+        "risk": "VERY_HIGH",
+        "unit": "SHARE"
+      }
+    ]
+  },
+  {
+    "code": "sector-fund",
+    "title": "صندوق‌های بخشی",
+    "items": [
+      {
+        "code": "sector-fund-001",
+        "name": "صندوق خودران",
+        "risk": "HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "sector-fund-002",
+        "name": "صندوق پتروداریوش",
+        "risk": "HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "sector-fund-003",
+        "name": "صندوق بهین رو",
+        "risk": "HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "sector-fund-004",
+        "name": "صندوق رویین",
+        "risk": "HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "sector-fund-005",
+        "name": "صندوق بازبیمه",
+        "risk": "HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "sector-fund-006",
+        "name": "صندوق پتروفارس",
+        "risk": "HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "sector-fund-007",
+        "name": "صندوق فرا الگوریتم",
+        "risk": "HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "sector-fund-008",
+        "name": "صندوق فارمانی",
+        "risk": "HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "sector-fund-009",
+        "name": "صندوق پتروما",
+        "risk": "HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "sector-fund-010",
+        "name": "صندوق فارما کیان",
+        "risk": "HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "sector-fund-011",
+        "name": "صندوق استیل",
+        "risk": "HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "sector-fund-012",
+        "name": "صندوق فلزفارابی",
+        "risk": "HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "sector-fund-013",
+        "name": "صندوق پتروصبا",
+        "risk": "HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "sector-fund-014",
+        "name": "صندوق تخت گاز",
+        "risk": "HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "sector-fund-015",
+        "name": "صندوق پناه",
+        "risk": "HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "sector-fund-016",
+        "name": "صندوق سمان",
+        "risk": "HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "sector-fund-017",
+        "name": "صندوق پتروآبان",
+        "risk": "HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "sector-fund-018",
+        "name": "صندوق متال",
+        "risk": "HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "sector-fund-019",
+        "name": "صندوق دارا یکم",
+        "risk": "HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "sector-fund-020",
+        "name": "صندوق رسانا",
+        "risk": "HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "sector-fund-021",
+        "name": "صندوق آذرین",
+        "risk": "HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "sector-fund-022",
+        "name": "صندوق نبات",
+        "risk": "HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "sector-fund-023",
+        "name": "صندوق پالایش",
+        "risk": "HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "sector-fund-024",
+        "name": "صندوق پتروپاداش",
+        "risk": "HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "sector-fund-025",
+        "name": "صندوق سیمانیا",
+        "risk": "HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "sector-fund-026",
+        "name": "صندوق سیمانا",
+        "risk": "HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "sector-fund-027",
+        "name": "صندوق پتروآگاه",
+        "risk": "HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "sector-fund-028",
+        "name": "صندوق لذیذ",
+        "risk": "HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "sector-fund-029",
+        "name": "صندوق نفتوداریوش",
+        "risk": "HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "sector-fund-030",
+        "name": "صندوق بنکوداریوش",
+        "risk": "HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "sector-fund-031",
+        "name": "صندوق اتوداریوش",
+        "risk": "HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "sector-fund-032",
+        "name": "صندوق نمک",
+        "risk": "HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "sector-fund-033",
+        "name": "صندوق اتو آگاه",
+        "risk": "HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "sector-fund-034",
+        "name": "صندوق اکتان",
+        "risk": "HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "sector-fund-035",
+        "name": "صندوق امگا",
+        "risk": "HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "sector-fund-036",
+        "name": "صندوق بانکا",
+        "risk": "HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "sector-fund-037",
+        "name": "صندوق بانکدار",
+        "risk": "HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "sector-fund-038",
+        "name": "صندوق بانکو",
+        "risk": "HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "sector-fund-039",
+        "name": "صندوق بانکیا",
+        "risk": "HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "sector-fund-040",
+        "name": "صندوق چاشنی",
+        "risk": "HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "sector-fund-041",
+        "name": "صندوق دارونو",
+        "risk": "HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "sector-fund-042",
+        "name": "صندوق سورنافود",
+        "risk": "HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "sector-fund-043",
+        "name": "صندوق سیمانو",
+        "risk": "HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "sector-fund-044",
+        "name": "صندوق فلزا",
+        "risk": "HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "sector-fund-045",
+        "name": "صندوق مزه",
+        "risk": "HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "sector-fund-046",
+        "name": "صندوق مسگون",
+        "risk": "HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "sector-fund-047",
+        "name": "صندوق معدن",
+        "risk": "HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "sector-fund-048",
+        "name": "صندوق بنکر",
+        "risk": "HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "sector-fund-049",
+        "name": "صندوق آلکان",
+        "risk": "HIGH",
+        "unit": "SHARE"
+      }
+    ]
+  },
+  {
+    "code": "real-estate-fund",
+    "title": "صندوق‌های املاک",
+    "items": [
+      {
+        "code": "real-estate-fund-001",
+        "name": "صندوق دانیک",
+        "risk": "MEDIUM_HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "real-estate-fund-002",
+        "name": "صندوق ارزش مسکن",
+        "risk": "MEDIUM_HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "real-estate-fund-003",
+        "name": "صندوق مالک آتیه",
+        "risk": "MEDIUM_HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "real-estate-fund-004",
+        "name": "صندوق کلید",
+        "risk": "MEDIUM_HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "real-estate-fund-005",
+        "name": "صندوق امین شهر",
+        "risk": "MEDIUM_HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "real-estate-fund-006",
+        "name": "صندوق عمارت دی",
+        "risk": "MEDIUM_HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "real-estate-fund-007",
+        "name": "صندوق املاک کاخ",
+        "risk": "MEDIUM_HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "real-estate-fund-008",
+        "name": "صندوق املاک کاشانه",
+        "risk": "MEDIUM_HIGH",
+        "unit": "SHARE"
+      }
+    ]
+  },
+  {
+    "code": "energy-fund",
+    "title": "صندوق‌های انرژی",
+    "items": [
+      {
+        "code": "energy-fund-001",
+        "name": "سينرژی",
+        "risk": "HIGH",
+        "unit": "SHARE"
+      }
+    ]
+  },
+  {
+    "code": "stock-market",
+    "title": "بورس",
+    "items": [
+      {
+        "code": "stock-market-001",
+        "name": "صندوق صنم",
+        "risk": "HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "stock-market-002",
+        "name": "صندوق تمشک",
+        "risk": "HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "stock-market-003",
+        "name": "شاخص هم‌وزن",
+        "risk": "NOT_TRADABLE",
+        "unit": "INDEX_UNIT"
+      },
+      {
+        "code": "stock-market-004",
+        "name": "شاخص کل",
+        "risk": "NOT_TRADABLE",
+        "unit": "INDEX_UNIT"
+      }
+    ]
+  },
+  {
+    "code": "fund-of-funds",
+    "title": "فرا صندوق",
+    "items": [
+      {
+        "code": "fund-of-funds-001",
+        "name": "صندوق خوشه",
+        "risk": "MEDIUM_HIGH",
+        "unit": "SHARE"
+      }
+    ]
+  },
+  {
+    "code": "commodity",
+    "title": "کامودیتی (کالامحور)",
+    "items": [
+      {
+        "code": "commodity-001",
+        "name": "گواهی سپرده مس کاتد",
+        "risk": "HIGH",
+        "unit": "ASSET_UNIT"
+      },
+      {
+        "code": "commodity-002",
+        "name": "صندوق نهال",
+        "risk": "HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "commodity-003",
+        "name": "صندوق سافرون",
+        "risk": "HIGH",
+        "unit": "SHARE"
+      },
+      {
+        "code": "commodity-004",
+        "name": "گواهی مس دیجیتال",
+        "risk": "HIGH",
+        "unit": "ASSET_UNIT"
+      }
+    ]
+  }
+]

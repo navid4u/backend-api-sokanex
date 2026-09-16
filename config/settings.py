@@ -52,6 +52,7 @@ INSTALLED_APPS = [
     # Local user model
     "apps.accounts",
     "apps.activity",
+    "apps.assets.apps.AssetsConfig",
 
     # Django
     "django.contrib.admin",
