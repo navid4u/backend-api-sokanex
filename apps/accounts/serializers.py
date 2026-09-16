@@ -41,6 +41,12 @@ from .models import (
     UserProfile,
 )
 from .services import FinancialPersonalityService, ProfileCompletionService
+from .personality_risk import (
+    ASSESSMENT_VERSION,
+    ASSET_OPTIONS,
+    PROFILE_METADATA,
+    QUESTION_SCORES,
+)
 from apps.activity.models import UserActivity
 from apps.activity.services import ActivityService
 
@@ -1391,18 +1397,31 @@ class RegistrationOTPVerifyResponseSerializer(serializers.Serializer):
 
 class FinancialPersonalityAnswerSerializer(serializers.Serializer):
     question_id = serializers.IntegerField(min_value=1, max_value=20)
-    option_id = serializers.ChoiceField(choices=("a", "b", "c", "d"))
+    option_id = serializers.CharField(required=False)
+    option_ids = serializers.ListField(
+        child=serializers.CharField(), required=False, allow_empty=False
+    )
+
+    def to_internal_value(self, data):
+        if not isinstance(data, dict):
+            raise serializers.ValidationError("هر پاسخ باید یک شیء باشد.")
+        unexpected = set(data) - {"question_id", "option_id", "option_ids"}
+        if unexpected:
+            raise serializers.ValidationError({key: "این فیلد مجاز نیست." for key in unexpected})
+        return super().to_internal_value(data)
 
 
 class FinancialPersonalitySubmitSerializer(serializers.Serializer):
+    assessment_version = serializers.CharField(required=False)
     answers = FinancialPersonalityAnswerSerializer(many=True)
+    client_result = serializers.JSONField(required=False, write_only=True)
 
     def to_internal_value(self, data):
         if not isinstance(data, dict):
             raise serializers.ValidationError(
                 {"non_field_errors": ["بدنه درخواست باید یک شیء JSON باشد."]}
             )
-        unexpected_fields = set(data) - {"answers"}
+        unexpected_fields = set(data) - {"assessment_version", "answers", "client_result"}
         if unexpected_fields:
             raise serializers.ValidationError(
                 {
@@ -1413,14 +1432,55 @@ class FinancialPersonalitySubmitSerializer(serializers.Serializer):
         return super().to_internal_value(data)
 
     def validate_answers(self, value):
-        if len(value) != 20:
-            raise serializers.ValidationError("پاسخ هر ۲۰ سؤال الزامی است.")
+        # Legacy V1 validation is completed in validate(), once the version is known.
+        return value
+
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        value = attrs["answers"]
+        assessment_version = attrs.get("assessment_version")
+        if assessment_version in (None, ""):
+            if len(value) != 20:
+                raise serializers.ValidationError({"answers": "پاسخ هر ۲۰ سؤال الزامی است."})
+            question_ids = [answer["question_id"] for answer in value]
+            if len(question_ids) != len(set(question_ids)):
+                raise serializers.ValidationError({"answers": "هر سؤال فقط یک پاسخ می‌تواند داشته باشد."})
+            if set(question_ids) != set(range(1, 21)):
+                raise serializers.ValidationError({"answers": "شناسه سؤال‌ها باید دقیقاً از ۱ تا ۲۰ باشد."})
+            for index, answer in enumerate(value):
+                if set(answer) != {"question_id", "option_id"} or answer["option_id"] not in "abcd":
+                    raise serializers.ValidationError({"answers": {index: "گزینه پاسخ قدیمی نامعتبر است."}})
+            attrs["answers"] = sorted(value, key=lambda answer: answer["question_id"])
+            return attrs
+
+        if assessment_version != ASSESSMENT_VERSION:
+            raise serializers.ValidationError({"assessment_version": "نسخه ارزیابی پشتیبانی نمی‌شود."})
+        if len(value) != 18:
+            raise serializers.ValidationError({"answers": "پاسخ هر ۱۸ سؤال الزامی است."})
         question_ids = [answer["question_id"] for answer in value]
         if len(question_ids) != len(set(question_ids)):
-            raise serializers.ValidationError("هر سؤال فقط یک پاسخ می‌تواند داشته باشد.")
-        if set(question_ids) != set(range(1, 21)):
-            raise serializers.ValidationError("شناسه سؤال‌ها باید دقیقاً از ۱ تا ۲۰ باشد.")
-        return sorted(value, key=lambda answer: answer["question_id"])
+            raise serializers.ValidationError({"answers": "هر سؤال فقط یک پاسخ می‌تواند داشته باشد."})
+        if set(question_ids) != set(range(1, 19)):
+            raise serializers.ValidationError({"answers": "شناسه سؤال‌ها باید دقیقاً از ۱ تا ۱۸ باشد."})
+        for index, answer in enumerate(value):
+            question_id = answer["question_id"]
+            if question_id == 2:
+                options = answer.get("option_ids")
+                if "option_id" in answer or not options:
+                    raise serializers.ValidationError({"answers": {index: "سؤال ۲ فقط option_ids و حداقل یک گزینه می‌پذیرد."}})
+                if len(options) != len(set(options)):
+                    raise serializers.ValidationError({"answers": {index: "گزینه‌های سؤال ۲ نباید تکراری باشند."}})
+                unknown = set(options) - ASSET_OPTIONS
+                if unknown:
+                    raise serializers.ValidationError({"answers": {index: f"گزینه ناشناخته سؤال ۲: {sorted(unknown)[0]}"}})
+            else:
+                option_id = answer.get("option_id")
+                if "option_ids" in answer or not option_id:
+                    raise serializers.ValidationError({"answers": {index: "این سؤال فقط یک option_id می‌پذیرد."}})
+                if option_id not in QUESTION_SCORES[question_id]:
+                    raise serializers.ValidationError({"answers": {index: f"گزینه {option_id} برای سؤال {question_id} معتبر نیست."}})
+        attrs["answers"] = sorted(value, key=lambda answer: answer["question_id"])
+        return attrs
 
 
 class FinancialPersonalityResultSerializer(serializers.Serializer):
@@ -1431,6 +1491,23 @@ class FinancialPersonalityResultSerializer(serializers.Serializer):
     scores = serializers.SerializerMethodField()
     completed_at = serializers.DateTimeField()
     version = serializers.IntegerField()
+
+    def to_representation(self, obj):
+        if obj.assessment_version == ASSESSMENT_VERSION:
+            metadata = PROFILE_METADATA[obj.dominant_type]
+            return {
+                "assessment_version": obj.assessment_version,
+                "personality_type": obj.dominant_type,
+                "risk_profile": obj.dominant_type,
+                "title": metadata["title"],
+                "description": metadata["description"],
+                "dominant_percentage": obj.dominant_percentage,
+                "percentages": obj.percentages,
+                "scores": obj.raw_scores,
+                "asset_inventory": obj.asset_inventory,
+                "completed_at": serializers.DateTimeField().to_representation(obj.completed_at),
+            }
+        return super().to_representation(obj)
 
     def _metadata(self, obj):
         return FinancialPersonalityService.METADATA[obj.personality_type]

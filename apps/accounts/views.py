@@ -34,6 +34,7 @@ from rest_framework.permissions import (
     IsAuthenticated,
 )
 from rest_framework.response import Response
+from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 from rest_framework_simplejwt.views import (
     TokenObtainPairView,
@@ -554,7 +555,13 @@ class FinancialPersonalityCurrentView(generics.GenericAPIView):
         examples=[
             OpenApiExample(
                 "Personality test not completed",
-                value={"completed": False, "personality_type": None},
+                value={
+                    "completed": False,
+                    "personality_type": None,
+                    "risk_profile": None,
+                    "percentages": {},
+                    "asset_inventory": [],
+                },
                 response_only=True,
             )
         ],
@@ -564,13 +571,21 @@ class FinancialPersonalityCurrentView(generics.GenericAPIView):
             user=request.user, is_current=True
         ).first()
         if not assessment:
-            return Response({"completed": False, "personality_type": None})
+            return Response({
+                "completed": False,
+                "personality_type": None,
+                "risk_profile": None,
+                "percentages": {},
+                "asset_inventory": [],
+            })
         return Response({"completed": True, **self.get_serializer(assessment).data})
 
 
 class FinancialPersonalitySubmitView(generics.GenericAPIView):
     permission_classes = [IsAuthenticated]
     serializer_class = FinancialPersonalitySubmitSerializer
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "personality_submit"
 
     @extend_schema(
         request=FinancialPersonalitySubmitSerializer,
@@ -587,12 +602,14 @@ class FinancialPersonalitySubmitView(generics.GenericAPIView):
         },
         examples=[
             OpenApiExample(
-                "Twenty answers",
+                "Risk profile V2 answers",
                 value={
+                    "assessment_version": "RISK_PROFILE_V2",
                     "answers": [
-                        {"question_id": question_id, "option_id": "a"}
-                        for question_id in range(1, 21)
-                    ]
+                        {"question_id": 1, "option_id": "MEDIUM"},
+                        {"question_id": 2, "option_ids": ["ASSET_1", "ASSET_3"]},
+                        {"question_id": 3, "option_id": "AGREE"},
+                    ],
                 },
                 request_only=True,
             )
@@ -601,9 +618,14 @@ class FinancialPersonalitySubmitView(generics.GenericAPIView):
     def post(self, request):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        assessment = FinancialPersonalityService.submit(
-            request.user, serializer.validated_data["answers"]
-        )
+        if serializer.validated_data.get("assessment_version") == "RISK_PROFILE_V2":
+            assessment = FinancialPersonalityService.submit_risk_v2(
+                request.user, serializer.validated_data["answers"]
+            )
+        else:
+            assessment = FinancialPersonalityService.submit(
+                request.user, serializer.validated_data["answers"]
+            )
         ActivityService.record(
             request.user,
             UserActivity.Type.PERSONALITY_TEST_COMPLETED,

@@ -1,6 +1,7 @@
 from rest_framework import serializers
 
 from apps.accounts.serializers import (
+    FinancialPersonalityResultSerializer,
     UserSerializer,
 )
 from apps.articles.serializers import (
@@ -137,6 +138,8 @@ class DashboardSerializer(
     stats = DashboardStatsSerializer()
 
     premium_subscription = serializers.DictField()
+
+    personality_result = FinancialPersonalityResultSerializer(allow_null=True)
 
     capabilities = (
         DashboardCapabilitiesSerializer()

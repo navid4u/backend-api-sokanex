@@ -3,6 +3,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from .models import FinancialPersonalityAssessment, UpgradeRequest, User, UserProfile
+from .personality_risk import ASSESSMENT_VERSION, calculate_result
 
 
 class ProfileCompletionService:
@@ -106,6 +107,40 @@ class FinancialPersonalityService:
             score_discipline=scores["discipline"],
             score_learning=scores["learning"],
             answers=answers,
+            started_at=timezone.now(),
+            completed_at=timezone.now(),
+            is_current=True,
+        )
+
+    @classmethod
+    @transaction.atomic
+    def submit_risk_v2(cls, user, answers):
+        User.objects.select_for_update().only("pk").get(pk=user.pk)
+        scores, percentages, dominant_type = calculate_result(answers)
+        assets = next(
+            answer["option_ids"] for answer in answers if answer["question_id"] == 2
+        )
+        FinancialPersonalityAssessment.objects.select_for_update().filter(
+            user=user, is_current=True
+        ).update(is_current=False)
+        return FinancialPersonalityAssessment.objects.create(
+            user=user,
+            version=2,
+            assessment_version=ASSESSMENT_VERSION,
+            personality_type=dominant_type,
+            dominant_type=dominant_type,
+            dominant_percentage=percentages[
+                {
+                    "CAPITAL_GUARDIAN": "guardian",
+                    "BALANCED_SMART": "balanced",
+                    "FUTURE_GROWTH": "growth",
+                    "OPPORTUNITY_SEEKER": "opportunity",
+                }[dominant_type]
+            ],
+            answers=answers,
+            asset_inventory=assets,
+            raw_scores=scores,
+            percentages=percentages,
             started_at=timezone.now(),
             completed_at=timezone.now(),
             is_current=True,

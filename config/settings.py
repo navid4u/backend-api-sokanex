@@ -366,6 +366,7 @@ REST_FRAMEWORK = {
         "assistant_image": config("ASSISTANT_IMAGE_THROTTLE_RATE", default="10/minute"),
         "frontend_logs": config("FRONTEND_LOG_THROTTLE_RATE", default="30/minute"),
         "content_ingestion": config("CONTENT_INGESTION_THROTTLE_RATE", default="60/minute"),
+        "personality_submit": config("PERSONALITY_SUBMIT_THROTTLE_RATE", default="10/hour"),
     },
 }
 

@@ -576,12 +576,21 @@ class OTPChallenge(models.Model):
 
 
 class FinancialPersonalityAssessment(models.Model):
+    class RiskProfileType(models.TextChoices):
+        CAPITAL_GUARDIAN = "CAPITAL_GUARDIAN", "محافظ سرمایه"
+        BALANCED_SMART = "BALANCED_SMART", "متعادل و هوشمند"
+        FUTURE_GROWTH = "FUTURE_GROWTH", "رشدطلب آینده‌نگر"
+        OPPORTUNITY_SEEKER = "OPPORTUNITY_SEEKER", "فرصت‌جو"
+
     class PersonalityType(models.TextChoices):
         WEALTH_ARCHITECT = "WEALTH_ARCHITECT", "معمار ثروت"
         CAPITAL_GUARDIAN = "CAPITAL_GUARDIAN", "نگهبان سرمایه"
         OPPORTUNITY_HUNTER = "OPPORTUNITY_HUNTER", "شکارچی فرصت"
         DISCIPLINED_NAVIGATOR = "DISCIPLINED_NAVIGATOR", "ناوبر منضبط"
         MARKET_EXPLORER = "MARKET_EXPLORER", "کاوشگر بازار"
+        BALANCED_SMART = "BALANCED_SMART", "متعادل و هوشمند"
+        FUTURE_GROWTH = "FUTURE_GROWTH", "رشدطلب آینده‌نگر"
+        OPPORTUNITY_SEEKER = "OPPORTUNITY_SEEKER", "فرصت‌جو"
 
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -589,6 +598,7 @@ class FinancialPersonalityAssessment(models.Model):
         related_name="financial_personality_assessments",
     )
     version = models.PositiveSmallIntegerField(default=1)
+    assessment_version = models.CharField(max_length=40, default="LEGACY_V1", db_index=True)
     personality_type = models.CharField(max_length=30, choices=PersonalityType.choices)
     score_security = models.PositiveSmallIntegerField(default=0)
     score_planning = models.PositiveSmallIntegerField(default=0)
@@ -596,9 +606,18 @@ class FinancialPersonalityAssessment(models.Model):
     score_discipline = models.PositiveSmallIntegerField(default=0)
     score_learning = models.PositiveSmallIntegerField(default=0)
     answers = models.JSONField(default=list)
+    asset_inventory = models.JSONField(default=list, blank=True)
+    raw_scores = models.JSONField(default=dict, blank=True)
+    percentages = models.JSONField(default=dict, blank=True)
+    dominant_type = models.CharField(
+        max_length=30, choices=RiskProfileType.choices, blank=True
+    )
+    dominant_percentage = models.PositiveSmallIntegerField(default=0)
     started_at = models.DateTimeField(default=timezone.now)
     completed_at = models.DateTimeField(default=timezone.now)
     is_current = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         ordering = ["-completed_at", "-id"]

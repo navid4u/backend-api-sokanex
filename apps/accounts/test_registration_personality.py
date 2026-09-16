@@ -258,7 +258,13 @@ class FinancialPersonalityAPITests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(
             response.data,
-            {"completed": False, "personality_type": None},
+            {
+                "completed": False,
+                "personality_type": None,
+                "risk_profile": None,
+                "percentages": {},
+                "asset_inventory": [],
+            },
         )
 
     def test_server_calculated_fields_cannot_be_submitted(self):

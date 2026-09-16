@@ -1,4 +1,4 @@
-from apps.accounts.models import User
+from apps.accounts.models import FinancialPersonalityAssessment, User
 from apps.signals.models import Signal, SignalStatus
 from apps.signals.services import SignalService
 from apps.wallet.services import WalletService
@@ -41,6 +41,9 @@ class DashboardService:
         wallet = WalletService.get_wallet(user)
         broker = BrokerConnection.objects.filter(user=user).first()
         broker_connected = bool(broker and broker.status == BrokerConnection.Status.CONNECTED)
+        personality_result = FinancialPersonalityAssessment.objects.filter(
+            user=user, is_current=True
+        ).first()
 
         published_articles = (
             ArticleService.published_articles(user)
@@ -114,6 +117,8 @@ class DashboardService:
             },
 
             "premium_subscription": WalletService.premium_subscription(user),
+
+            "personality_result": personality_result,
 
             "capabilities": {
                 "can_submit_signals": (
