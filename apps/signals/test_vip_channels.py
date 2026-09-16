@@ -27,7 +27,10 @@ class VIPSignalChannelTests(APITestCase):
         super().tearDownClass()
 
     def setUp(self):
-        User.objects.create(username="sokanex-feed-bot", is_active=False)
+        User.objects.get_or_create(
+            username="sokanex-feed-bot",
+            defaults={"is_active": False},
+        )
         self.user = User.objects.create_user(username="viewer", password="pass")
         self.admin = User.objects.create_user(
             username="admin", password="pass", role=User.Role.ADMIN
