@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 from django.conf import settings
 from django.core.validators import MinValueValidator
 from django.db import models
@@ -77,7 +79,7 @@ class UserAssetHolding(models.Model):
     quantity = models.DecimalField(
         max_digits=28,
         decimal_places=8,
-        validators=[MinValueValidator(0.00000001)],
+        validators=[MinValueValidator(Decimal("0.00000001"))],
     )
     unit = models.CharField(max_length=20, choices=AssetUnit.choices)
     note = models.CharField(max_length=500, blank=True)
@@ -100,4 +102,3 @@ class UserAssetHolding(models.Model):
 
     def __str__(self):
         return f"{self.user_id}: {self.asset.code}"
-
