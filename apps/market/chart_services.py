@@ -1,4 +1,6 @@
 import json
+import math
+import time
 from datetime import timedelta, timezone as datetime_timezone
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
@@ -31,12 +33,20 @@ CHART_SYMBOLS = {
     },
 }
 
-RANGE_DAYS = {"1d": 1, "7d": 7, "30d": 30}
-COINBASE_GRANULARITY = {"1d": 3600, "7d": 21600, "30d": 86400}
+FOREX_SYMBOL_ALIASES = {
+    "EURUSD": "FX:EURUSD",
+    "GBPUSD": "FX:GBPUSD",
+    "USDJPY": "FX:USDJPY",
+    "USDCHF": "FX:USDCHF",
+    "AUDUSD": "FX:AUDUSD",
+    "XAUUSD": "OANDA:XAUUSD",
+}
+RANGE_DAYS = {"1d": 1, "5d": 5, "7d": 7, "30d": 30}
+COINBASE_GRANULARITY = {"1d": 3600, "5d": 3600, "7d": 21600, "30d": 86400}
 
 
 class MarketChartUnavailable(Exception):
-    pass
+    code = "historical_series_unavailable"
 
 
 def _request_json(url, headers=None):
@@ -66,7 +76,7 @@ class MarketChartService:
     @classmethod
     def get_chart(cls, market, symbol, range_value, interval=None):
         market = (market or "").lower()
-        symbol = (symbol or "").upper()
+        symbol = cls._normalize_symbol(market, symbol)
         range_value = (range_value or "").lower()
         if market not in CHART_SYMBOLS:
             raise ValidationError({"market": "Use crypto or forex."})
@@ -81,8 +91,8 @@ class MarketChartService:
         fresh_key = f"market:chart:v1:fresh:{suffix}"
         stale_key = f"market:chart:v1:last-known:{suffix}"
         fresh = cache.get(fresh_key)
-        if fresh:
-            return {**fresh, "is_stale": False}
+        if fresh and cls._is_usable_payload(market, fresh):
+            return cls._with_stale_state(fresh, False)
 
         interval_key = interval or ""
         persisted = MarketChartSnapshot.objects.filter(
@@ -96,9 +106,13 @@ class MarketChartService:
             if market == "crypto"
             else settings.MARKET_CHART_FOREX_TTL
         )
-        if persisted and persisted.updated_at >= timezone.now() - timedelta(seconds=ttl):
+        if (
+            persisted
+            and cls._is_usable_payload(market, persisted.payload)
+            and persisted.updated_at >= timezone.now() - timedelta(seconds=ttl)
+        ):
             cache.set(fresh_key, persisted.payload, ttl)
-            return {**persisted.payload, "is_stale": False}
+            return cls._with_stale_state(persisted.payload, False)
 
         providers = cls._providers(market, symbol)
         for source, provider in providers:
@@ -114,45 +128,117 @@ class MarketChartService:
                     interval=interval_key,
                     defaults={"payload": normalized},
                 )
-                return {**normalized, "is_stale": False}
+                return cls._with_stale_state(normalized, False)
             except (HTTPError, URLError, TimeoutError, OSError, ValueError, KeyError, TypeError, json.JSONDecodeError):
                 continue
 
         stale = cache.get(stale_key)
-        if stale:
-            return {**stale, "is_stale": True}
-        if persisted and persisted.updated_at >= timezone.now() - timedelta(seconds=settings.MARKET_CHART_STALE_TTL):
+        if stale and cls._is_usable_payload(market, stale):
+            return cls._with_stale_state(stale, True)
+        if (
+            persisted
+            and cls._is_usable_payload(market, persisted.payload)
+            and persisted.updated_at >= timezone.now() - timedelta(seconds=settings.MARKET_CHART_STALE_TTL)
+        ):
             cache.set(stale_key, persisted.payload, settings.MARKET_CHART_STALE_TTL)
-            return {**persisted.payload, "is_stale": True}
+            return cls._with_stale_state(persisted.payload, True)
         raise MarketChartUnavailable()
+
+    @staticmethod
+    def _normalize_symbol(market, symbol):
+        normalized = (symbol or "").strip().upper()
+        if market != "forex":
+            return normalized
+        bare = normalized.split(":", 1)[-1]
+        return FOREX_SYMBOL_ALIASES.get(bare, normalized)
+
+    @staticmethod
+    def _with_stale_state(payload, stale):
+        return {**payload, "stale": stale, "is_stale": stale}
+
+    @staticmethod
+    def _is_usable_payload(market, payload):
+        points = payload.get("points") if isinstance(payload, dict) else None
+        if not isinstance(points, list):
+            return False
+        if market == "forex":
+            return len(points) >= 24 and all(
+                isinstance(value, (int, float)) and math.isfinite(float(value))
+                for value in points
+            )
+        return len(points) >= 2
 
     @classmethod
     def _providers(cls, market, symbol):
         if market == "crypto":
             return (("coingecko", cls._coingecko), ("coinbase", cls._coinbase))
-        if CHART_SYMBOLS[market][symbol].get("gold"):
-            return (("gold-provider", cls._configured_gold),)
-        return (("frankfurter", cls._frankfurter), ("forex-provider", cls._configured_forex))
+        fallbacks = (
+            (("gold-provider", cls._configured_gold),)
+            if CHART_SYMBOLS[market][symbol].get("gold")
+            else (("forex-provider", cls._configured_forex),)
+        )
+        return (("TWELVE_DATA", cls._twelve_data),) + fallbacks
 
     @staticmethod
     def _normalize(market, symbol, points, source):
-        cleaned = sorted(
-            ({"timestamp": str(point["timestamp"]), "value": float(point["value"])} for point in points),
-            key=lambda point: point["timestamp"],
-        )
-        if not cleaned:
+        cleaned = []
+        seen = set()
+        for point in sorted(points, key=lambda item: str(item["timestamp"])):
+            try:
+                value = float(point["value"])
+                timestamp = str(point["timestamp"])
+            except (KeyError, TypeError, ValueError):
+                continue
+            if not timestamp or not math.isfinite(value) or timestamp in seen:
+                continue
+            seen.add(timestamp)
+            cleaned.append({"timestamp": timestamp, "value": value})
+        minimum = 24 if market == "forex" else 2
+        if len(cleaned) < minimum:
             raise ValueError("Provider returned no chart points.")
         first, last = cleaned[0]["value"], cleaned[-1]["value"]
         change = ((last - first) / first * 100) if first else 0
         return {
             "market": market,
-            "symbol": symbol,
+            "symbol": symbol.split(":", 1)[-1] if market == "forex" else symbol,
             "price": last,
             "change_percent": round(change, 4),
-            "points": cleaned,
+            "points": [point["value"] for point in cleaned] if market == "forex" else cleaned,
             "source": source,
             "updated_at": timezone.now().isoformat(),
         }
+
+    @staticmethod
+    def _twelve_data(symbol, range_value, interval):
+        if not settings.TWELVE_DATA_API_KEY:
+            raise ValueError("Twelve Data is not configured.")
+        metadata = CHART_SYMBOLS["forex"][symbol]
+        provider_symbol = f"{metadata['base']}/{metadata['quote']}"
+        interval_value = interval or "1h"
+        output_size = min(120, max(24, RANGE_DAYS[range_value] * 24))
+        params = {
+            "symbol": provider_symbol,
+            "interval": interval_value,
+            "outputsize": output_size,
+            "order": "ASC",
+            "apikey": settings.TWELVE_DATA_API_KEY,
+        }
+        url = f"{settings.TWELVE_DATA_BASE_URL.rstrip('/')}/time_series?{urlencode(params)}"
+        last_error = None
+        for attempt in range(2):
+            try:
+                payload = _request_json(url)
+                if payload.get("status") == "error":
+                    raise ValueError("Twelve Data returned an error.")
+                return [
+                    {"timestamp": row["datetime"], "value": row["close"]}
+                    for row in payload.get("values", [])
+                ]
+            except (HTTPError, URLError, TimeoutError, OSError, ValueError, KeyError, TypeError, json.JSONDecodeError) as exc:
+                last_error = exc
+                if attempt == 0:
+                    time.sleep(0.25)
+        raise ValueError("Twelve Data historical series is unavailable.") from last_error
 
     @staticmethod
     def _coingecko(symbol, range_value, interval):

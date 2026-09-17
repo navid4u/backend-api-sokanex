@@ -58,7 +58,7 @@ class MarketChartView(APIView):
         parameters=[
             OpenApiParameter("market", str, required=True, enum=["crypto", "forex"]),
             OpenApiParameter("symbol", str, required=True),
-            OpenApiParameter("range", str, required=True, enum=["1d", "7d", "30d"]),
+            OpenApiParameter("range", str, required=True, enum=["1d", "5d", "7d", "30d"]),
             OpenApiParameter("interval", str, required=False, enum=["5m", "15m", "1h", "4h", "1d"]),
         ],
         responses={
@@ -87,7 +87,8 @@ class MarketChartView(APIView):
             return Response({
                 "success": False,
                 "message": "Market data is temporarily unavailable",
-                "errors": {"source": ["No market provider is currently available."]},
+                "error_code": "historical_series_unavailable",
+                "errors": {"source": ["historical_series_unavailable"]},
             }, status=503)
         return Response({"success": True, "data": data})
 
