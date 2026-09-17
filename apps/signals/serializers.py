@@ -3,8 +3,10 @@ from django.conf import settings
 from django.utils.html import strip_tags
 
 from common.validators import (
+    validate_audio_upload,
     validate_attachment_upload,
     validate_image_upload,
+    validate_video_upload,
 )
 from common.content_access import AllowedLevelsSerializerMixin
 
@@ -26,7 +28,7 @@ class VIPSignalPostSerializer(serializers.ModelSerializer):
         model = VIPSignalPost
         fields = (
             "id", "kind", "channel", "channel_label", "text", "excerpt",
-            "image", "source", "published_at", "created_at",
+            "image", "video", "audio", "source", "published_at", "created_at",
         )
         read_only_fields = fields
 
@@ -42,6 +44,9 @@ class VIPSignalPostIngestionSerializer(serializers.Serializer):
     external_id = serializers.CharField(max_length=180, required=False, allow_blank=False)
     text = serializers.CharField(max_length=20000, allow_blank=False, trim_whitespace=True)
     image = serializers.ImageField(required=False, allow_null=True)
+    video = serializers.FileField(required=False, allow_null=True)
+    audio = serializers.FileField(required=False, allow_null=True)
+    voice = serializers.FileField(required=False, allow_null=True, write_only=True)
     published_at = serializers.DateTimeField(required=False)
 
     def validate_text(self, value):
@@ -53,6 +58,33 @@ class VIPSignalPostIngestionSerializer(serializers.Serializer):
     def validate_image(self, value):
         return validate_image_upload(value, max_size_mb=8, file_label="VIP signal image")
 
+    def validate_video(self, value):
+        return validate_video_upload(
+            value,
+            max_size_mb=settings.SIGNAL_CHANNEL_VIDEO_MAX_MB,
+            file_label="ویدئوی سیگنال",
+        )
+
+    def validate_audio(self, value):
+        return validate_audio_upload(
+            value,
+            max_size_mb=settings.SIGNAL_CHANNEL_AUDIO_MAX_MB,
+            file_label="فایل صوتی سیگنال",
+        )
+
+    def validate_voice(self, value):
+        return self.validate_audio(value)
+
+    def validate(self, attrs):
+        voice = attrs.pop("voice", serializers.empty)
+        if voice is not serializers.empty:
+            if "audio" in attrs:
+                raise serializers.ValidationError({
+                    "voice": "فقط یکی از فیلدهای audio یا voice را ارسال کنید."
+                })
+            attrs["audio"] = voice
+        return attrs
+
 
 class VIPSignalPostManagementSerializer(VIPSignalPostSerializer):
     class Meta(VIPSignalPostSerializer.Meta):
@@ -60,7 +92,7 @@ class VIPSignalPostManagementSerializer(VIPSignalPostSerializer):
             "external_id", "is_active", "updated_at",
         )
         read_only_fields = (
-            "id", "kind", "channel", "channel_label", "excerpt", "image",
+            "id", "kind", "channel", "channel_label", "excerpt", "image", "video", "audio",
             "source", "external_id", "published_at", "created_at", "updated_at",
         )
 

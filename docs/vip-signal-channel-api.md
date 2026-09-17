@@ -1,93 +1,125 @@
-# Sokanex VIP Signal Channel API
+# مستندات API کانال سیگنال VIP سوکانکس
 
-Production API base URL: `https://api.sokanex.com`
+## اتصال و امنیت
 
-Authentication is server-to-server. Send the shared key in this header on every request:
+- Base URL: `https://api.sokanex.com`
+- ارتباط: Server-to-Server
+- Header الزامی: `X-Sokanex-Signal-Key: YOUR_PRIVATE_KEY`
+- فرمت رسانه: `multipart/form-data`
+- متن: UTF-8
+
+کلید واقعی از متغیر محیطی `SIGNAL_CHANNEL_INGESTION_API_KEY` در اختیار مدیر ربات قرار
+می‌گیرد و نباید در فرانت، پیام تلگرام، مخزن عمومی یا log قرار گیرد.
+
+## آدرس‌ها
+
+کریپتو:
 
 ```http
-X-Sokanex-Signal-Key: YOUR_PRIVATE_KEY
+POST https://api.sokanex.com/api/signals/channels/crypto/ingest/
 ```
 
-Never place this key in Telegram messages, browser JavaScript, public repositories, or logs.
+فارکس:
 
-## Crypto channel
+```http
+POST https://api.sokanex.com/api/signals/channels/forex/ingest/
+```
 
-`POST https://api.sokanex.com/api/signals/channels/crypto/ingest/`
+## فیلدها
 
-## Forex channel
+| فیلد | نوع | الزام | توضیح |
+|---|---|---:|---|
+| `text` | string | بله | متن/caption تا ۲۰٬۰۰۰ کاراکتر؛ HTML پاک‌سازی می‌شود. |
+| `external_id` | string | توصیه اکید | شناسه پایدار تا ۱۸۰ کاراکتر؛ پیشنهاد: `chat_id:message_id`. |
+| `image` | file | خیر | JPG/JPEG/PNG/WebP، حداکثر ۸MB. |
+| `video` | file | خیر | MP4/MOV/WebM/MKV، سقف پیش‌فرض ۱۰۰MB. |
+| `audio` | file | خیر | MP3/M4A/WAV/OGG/OGA/WebM، سقف پیش‌فرض ۵۰MB. |
+| `voice` | file | خیر | alias ورودی برای `audio`، مناسب Telegram Voice؛ همزمان با `audio` ارسال نشود. |
+| `published_at` | ISO-8601 | خیر | مانند `2026-09-17T12:30:00+03:30`؛ پیش‌فرض زمان سرور. |
 
-`POST https://api.sokanex.com/api/signals/channels/forex/ingest/`
+عکس، ویدئو و صدا اختیاری هستند، اما `text` مطابق قرارداد فعلی الزامی است.
 
-Both endpoints accept the same fields:
-
-- `text` — required, UTF-8 text, maximum 20,000 characters.
-- `image` — optional image file, maximum 8 MB.
-- `external_id` — optional but strongly recommended. Use a stable value such as `channel_id:message_id`; retries with the same value do not create duplicates.
-- `published_at` — optional ISO-8601 timestamp. If omitted, the server receive time is used.
-
-Use `multipart/form-data` when sending an image. JSON is supported for text-only posts.
-
-### cURL with image
+## cURL کریپتو با ویدئو و Voice
 
 ```bash
-curl -X POST "https://api.sokanex.com/api/signals/channels/crypto/ingest/" \
+curl --fail-with-body -X POST \
+  "https://api.sokanex.com/api/signals/channels/crypto/ingest/" \
   -H "X-Sokanex-Signal-Key: YOUR_PRIVATE_KEY" \
   -F "external_id=-1001234567890:846" \
-  -F "text=متن کامل پست تلگرام" \
+  -F "text=متن کامل سیگنال کریپتو" \
   -F "published_at=2026-09-17T12:30:00+03:30" \
-  -F "image=@/absolute/path/post.jpg"
+  -F "video=@/absolute/path/signal.mp4;type=video/mp4" \
+  -F "voice=@/absolute/path/voice.oga;type=audio/ogg"
 ```
 
-For Forex, only change `crypto` to `forex` in the URL.
-
-### cURL text only
+## cURL فارکس با عکس و Audio
 
 ```bash
-curl -X POST "https://api.sokanex.com/api/signals/channels/forex/ingest/" \
+curl --fail-with-body -X POST \
+  "https://api.sokanex.com/api/signals/channels/forex/ingest/" \
+  -H "X-Sokanex-Signal-Key: YOUR_PRIVATE_KEY" \
+  -F "external_id=-1009876543210:125" \
+  -F "text=متن کامل سیگنال فارکس" \
+  -F "image=@/absolute/path/chart.webp;type=image/webp" \
+  -F "audio=@/absolute/path/explanation.mp3;type=audio/mpeg"
+```
+
+## فقط متن با JSON
+
+```bash
+curl --fail-with-body -X POST \
+  "https://api.sokanex.com/api/signals/channels/crypto/ingest/" \
   -H "X-Sokanex-Signal-Key: YOUR_PRIVATE_KEY" \
   -H "Content-Type: application/json" \
-  --data '{"external_id":"-1009876543210:125","text":"متن کامل پست فارکس"}'
+  --data '{"external_id":"-100123:999","text":"متن سیگنال"}'
 ```
 
-### Python example
+## نمونه Python برای ربات تلگرام
 
 ```python
+from contextlib import ExitStack
+from pathlib import Path
+import mimetypes
 import requests
 
-url = "https://api.sokanex.com/api/signals/channels/crypto/ingest/"
-headers = {"X-Sokanex-Signal-Key": "YOUR_PRIVATE_KEY"}
-data = {
-    "external_id": f"{telegram_channel_id}:{telegram_message_id}",
-    "text": telegram_post_text,
-}
+BASE_URL = "https://api.sokanex.com"
+API_KEY = "YOUR_PRIVATE_KEY"  # در عمل از env ربات خوانده شود.
 
-if image_path:
-    with open(image_path, "rb") as image_file:
+
+def publish_signal(channel, chat_id, message_id, text, *, image=None, video=None, voice=None):
+    if channel not in {"crypto", "forex"}:
+        raise ValueError("channel must be crypto or forex")
+
+    url = f"{BASE_URL}/api/signals/channels/{channel}/ingest/"
+    headers = {"X-Sokanex-Signal-Key": API_KEY}
+    data = {"external_id": f"{chat_id}:{message_id}", "text": text}
+
+    with ExitStack() as stack:
+        files = {}
+        for field, path_value in {"image": image, "video": video, "voice": voice}.items():
+            if not path_value:
+                continue
+            path = Path(path_value)
+            handle = stack.enter_context(path.open("rb"))
+            mime = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
+            files[field] = (path.name, handle, mime)
         response = requests.post(
-            url,
-            headers=headers,
-            data=data,
-            files={"image": ("telegram.jpg", image_file, "image/jpeg")},
-            timeout=30,
+            url, headers=headers, data=data, files=files or None, timeout=(10, 120)
         )
-else:
-    response = requests.post(url, headers=headers, json=data, timeout=30)
 
-response.raise_for_status()
-result = response.json()
+    if response.status_code in {429, 500, 502, 503, 504}:
+        raise RuntimeError(f"temporary failure: {response.status_code}")
+    response.raise_for_status()
+    return response.json()
 ```
 
-### Response and retries
+Telegram Voice معمولاً `.oga` با MIME برابر `audio/ogg` است. ربات باید فایل را از Telegram
+دانلود و بایت‌های فایل را با multipart ارسال کند؛ `file_id` یا URL تلگرام به‌تنهایی پذیرفته نیست.
 
-- `201 Created`: a new post was created.
-- `200 OK`: the same `external_id` was already received; the existing post is returned.
-- `400 Bad Request`: missing/invalid text, image, or timestamp.
-- `401 Unauthorized`: missing or incorrect API key.
-- `413 Request Entity Too Large`: proxy/server upload limit is smaller than the file.
-- `429 Too Many Requests`: sending rate exceeded; retry with exponential backoff.
-- `503 Service Unavailable`: server ingestion is not configured.
+## پاسخ
 
-Successful response:
+- `201 Created`: پست جدید ساخته شد.
+- `200 OK`: `external_id` قبلاً ثبت شده و همان رکورد برگردانده شد.
 
 ```json
 {
@@ -95,14 +127,36 @@ Successful response:
   "kind": "VIP_CHANNEL_POST",
   "channel": "CRYPTO",
   "channel_label": "کانال وی آی پی سوکانکس (کریپتو)",
-  "text": "متن کامل پست تلگرام",
+  "text": "متن کامل سیگنال",
   "excerpt": "۳۰ کلمه اول متن…",
-  "image": "https://api.sokanex.com/media/signals/vip/crypto/example.jpg",
+  "image": "https://api.sokanex.com/media/signals/vip/crypto/example.webp",
+  "video": "https://api.sokanex.com/media/signals/vip/crypto/video/example.mp4",
+  "audio": "https://api.sokanex.com/media/signals/vip/crypto/audio/example.oga",
   "source": "TELEGRAM_API",
   "published_at": "2026-09-17T12:30:00+03:30",
   "created_at": "2026-09-17T12:30:03+03:30"
 }
 ```
 
-The robot must retry only connection failures, `429`, and `5xx`. Reuse the same `external_id` on every retry. Do not retry validation `400` or authentication `401` until the request/key is corrected.
+رسانه ارسال‌نشده `null` است. `voice` فقط alias ورودی است و خروجی canonical آن `audio` است.
 
+## خطا و Retry
+
+- `400`: داده، MIME، پسوند یا حجم نامعتبر؛ پس از اصلاح payload دوباره ارسال شود.
+- `401`: کلید مفقود یا اشتباه است.
+- `413`: محدودیت آپلود CDN/Nginx کمتر از فایل است.
+- `429`: با exponential backoff و همان `external_id` retry شود.
+- `503`: ingestion روی Backend پیکربندی نشده است.
+- `5xx`: retry محدود با همان `external_id`.
+
+در هر retry همان `external_id` استفاده شود تا رکورد تکراری ساخته نشود.
+
+## API خواندن مخصوص فرانت
+
+```http
+GET https://api.sokanex.com/api/signals/?channel=crypto
+GET https://api.sokanex.com/api/signals/?channel=forex
+Authorization: Bearer USER_ACCESS_TOKEN
+```
+
+این endpointها JWT کاربر می‌خواهند؛ کلید ربات هرگز در فرانت استفاده نمی‌شود.

@@ -32,7 +32,7 @@ from rest_framework.views import APIView
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.throttling import ScopedRateThrottle
-from django.db import transaction
+from django.db import models, transaction
 from django.db.models import Count
 from apps.accounts.models import User
 
@@ -153,20 +153,30 @@ class VIPSignalPostManagementDetailView(generics.RetrieveUpdateDestroyAPIView):
     http_method_names = ["get", "patch", "delete", "head", "options"]
 
     def perform_destroy(self, instance):
-        storage = instance.image.storage if instance.image else None
-        image_name = instance.image.name if instance.image else ""
+        owned_files = [
+            (file_value.storage, file_value.name)
+            for file_value in (instance.image, instance.video, instance.audio)
+            if file_value and file_value.name.startswith(
+                f"signals/vip/{instance.channel.lower()}/"
+            )
+        ]
         instance.delete()
-        if storage and image_name:
-            def delete_image():
+        for storage, media_name in owned_files:
+            def delete_media(storage=storage, media_name=media_name):
                 try:
-                    storage.delete(image_name)
+                    if not VIPSignalPost.objects.filter(
+                        models.Q(image=media_name)
+                        | models.Q(video=media_name)
+                        | models.Q(audio=media_name)
+                    ).exists():
+                        storage.delete(media_name)
                 except Exception:
                     logger.exception(
-                        "Failed to delete VIP signal post image",
-                        extra={"image_name": image_name},
+                        "Failed to delete VIP signal post media",
+                        extra={"media_name": media_name},
                     )
 
-            transaction.on_commit(delete_image)
+            transaction.on_commit(delete_media)
 
 
 class SignalPagination(PageNumberPagination):

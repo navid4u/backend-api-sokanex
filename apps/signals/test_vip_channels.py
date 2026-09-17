@@ -74,6 +74,98 @@ class VIPSignalChannelTests(APITestCase):
         self.assertTrue(post.image.name.startswith("signals/vip/forex/"))
         self.assertTrue(response.data["image"].startswith("http"))
 
+    def test_crypto_ingestion_accepts_optional_video_and_audio(self):
+        response = self.client.post(
+            "/api/signals/channels/crypto/ingest/",
+            {
+                "external_id": "crypto-media-1",
+                "text": "سیگنال ویدئویی کریپتو",
+                "video": SimpleUploadedFile(
+                    "telegram.mp4", b"video-content", content_type="video/mp4"
+                ),
+                "audio": SimpleUploadedFile(
+                    "telegram.ogg", b"audio-content", content_type="audio/ogg"
+                ),
+            },
+            format="multipart",
+            secure=True,
+            **self.ingestion_headers,
+        )
+        self.assertEqual(response.status_code, 201, response.data)
+        self.assertTrue(response.data["video"].startswith("https://"))
+        self.assertTrue(response.data["audio"].startswith("https://"))
+        post = VIPSignalPost.objects.get(external_id="crypto-media-1")
+        self.assertTrue(post.video.name.startswith("signals/vip/crypto/video/"))
+        self.assertTrue(post.audio.name.startswith("signals/vip/crypto/audio/"))
+
+    def test_forex_ingestion_accepts_telegram_voice_alias(self):
+        response = self.client.post(
+            "/api/signals/channels/forex/ingest/",
+            {
+                "external_id": "forex-voice-1",
+                "text": "سیگنال صوتی فارکس",
+                "voice": SimpleUploadedFile(
+                    "voice.oga", b"voice-content", content_type="audio/ogg"
+                ),
+            },
+            format="multipart",
+            secure=True,
+            **self.ingestion_headers,
+        )
+        self.assertEqual(response.status_code, 201, response.data)
+        self.assertTrue(response.data["audio"].startswith("https://"))
+        self.assertNotIn("voice", response.data)
+
+        self.client.force_authenticate(self.user)
+        feed = self.client.get("/api/signals/?channel=forex", secure=True)
+        self.assertEqual(feed.status_code, 200)
+        self.assertTrue(feed.data["results"][0]["audio"].startswith("https://"))
+        self.assertIsNone(feed.data["results"][0]["video"])
+
+    @override_settings(SIGNAL_CHANNEL_VIDEO_MAX_MB=1, SIGNAL_CHANNEL_AUDIO_MAX_MB=1)
+    def test_ingestion_rejects_invalid_or_oversized_media_per_field(self):
+        invalid_video = self.client.post(
+            "/api/signals/channels/crypto/ingest/",
+            {
+                "text": "invalid video",
+                "video": SimpleUploadedFile(
+                    "video.exe", b"bad", content_type="application/octet-stream"
+                ),
+            },
+            format="multipart",
+            **self.ingestion_headers,
+        )
+        self.assertEqual(invalid_video.status_code, 400)
+        self.assertIn("video", invalid_video.data)
+
+        oversized_audio = self.client.post(
+            "/api/signals/channels/forex/ingest/",
+            {
+                "text": "large voice",
+                "voice": SimpleUploadedFile(
+                    "voice.ogg", b"x" * (1024 * 1024 + 1), content_type="audio/ogg"
+                ),
+            },
+            format="multipart",
+            **self.ingestion_headers,
+        )
+        self.assertEqual(oversized_audio.status_code, 400)
+        self.assertIn("voice", oversized_audio.data)
+
+    def test_audio_and_voice_cannot_be_sent_together(self):
+        response = self.client.post(
+            "/api/signals/channels/crypto/ingest/",
+            {
+                "text": "duplicate audio fields",
+                "audio": SimpleUploadedFile("audio.mp3", b"a", content_type="audio/mpeg"),
+                "voice": SimpleUploadedFile("voice.ogg", b"v", content_type="audio/ogg"),
+            },
+            format="multipart",
+            **self.ingestion_headers,
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("voice", response.data)
+
     def test_forex_feed_is_separate(self):
         VIPSignalPost.objects.create(channel="CRYPTO", text="crypto")
         VIPSignalPost.objects.create(channel="FOREX", text="forex")

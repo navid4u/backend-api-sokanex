@@ -22,6 +22,16 @@ def vip_signal_post_upload(instance, filename):
     return f"signals/vip/{instance.channel.lower()}/{uuid.uuid4().hex}{extension}"
 
 
+def vip_signal_video_upload(instance, filename):
+    extension = Path(filename).suffix.lower()
+    return f"signals/vip/{instance.channel.lower()}/video/{uuid.uuid4().hex}{extension}"
+
+
+def vip_signal_audio_upload(instance, filename):
+    extension = Path(filename).suffix.lower()
+    return f"signals/vip/{instance.channel.lower()}/audio/{uuid.uuid4().hex}{extension}"
+
+
 class SignalStatus(models.TextChoices):
     DRAFT = "draft", "Draft"
     PENDING = "pending", "Pending"
@@ -212,6 +222,8 @@ class VIPSignalPost(models.Model):
     channel = models.CharField(max_length=10, choices=Channel.choices, db_index=True)
     text = models.TextField(max_length=20000)
     image = models.ImageField(upload_to=vip_signal_post_upload, null=True, blank=True)
+    video = models.FileField(upload_to=vip_signal_video_upload, null=True, blank=True)
+    audio = models.FileField(upload_to=vip_signal_audio_upload, null=True, blank=True)
     external_id = models.CharField(max_length=180, null=True, blank=True)
     source = models.CharField(
         max_length=20,

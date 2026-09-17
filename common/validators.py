@@ -31,7 +31,7 @@ ALLOWED_VIDEO_CONTENT_TYPES = {
     "video/x-matroska",
 }
 
-ALLOWED_AUDIO_EXTENSIONS = {".mp3", ".m4a", ".wav", ".ogg", ".webm"}
+ALLOWED_AUDIO_EXTENSIONS = {".mp3", ".m4a", ".wav", ".ogg", ".oga", ".webm"}
 ALLOWED_AUDIO_CONTENT_TYPES = {
     "audio/mpeg", "audio/mp4", "audio/x-m4a", "audio/wav", "audio/x-wav",
     "audio/ogg", "audio/webm",
