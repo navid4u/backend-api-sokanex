@@ -136,7 +136,7 @@ class VIPSignalChannelTests(APITestCase):
             **self.ingestion_headers,
         )
         self.assertEqual(invalid_video.status_code, 400)
-        self.assertIn("video", invalid_video.data)
+        self.assertIn("video", invalid_video.data["errors"])
 
         oversized_audio = self.client.post(
             "/api/signals/channels/forex/ingest/",
@@ -150,7 +150,7 @@ class VIPSignalChannelTests(APITestCase):
             **self.ingestion_headers,
         )
         self.assertEqual(oversized_audio.status_code, 400)
-        self.assertIn("voice", oversized_audio.data)
+        self.assertIn("voice", oversized_audio.data["errors"])
 
     def test_audio_and_voice_cannot_be_sent_together(self):
         response = self.client.post(
@@ -164,7 +164,7 @@ class VIPSignalChannelTests(APITestCase):
             **self.ingestion_headers,
         )
         self.assertEqual(response.status_code, 400)
-        self.assertIn("voice", response.data)
+        self.assertIn("voice", response.data["errors"])
 
     def test_forex_feed_is_separate(self):
         VIPSignalPost.objects.create(channel="CRYPTO", text="crypto")
