@@ -98,6 +98,82 @@ class InternalAnalysisAPITests(APITestCase):
         self.assertEqual(self.client.delete(detail_url).status_code, status.HTTP_204_NO_CONTENT)
         self.assertFalse(ChannelPost.objects.filter(pk=post_id).exists())
 
+    def test_legacy_create_and_public_response_have_empty_opportunity_details(self):
+        self.authenticate(self.manager)
+        response = self.client.post(self.manage_url, {
+            "title": "Legacy compatible", "body": "Body", "scope": "GOLD",
+            "status": "PUBLISHED",
+        }, format="json")
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data["external_url"], "")
+        self.assertEqual(response.data["more_info_text"], "")
+        self.assertIsNone(response.data["more_info_video"])
+        self.assertEqual(response.data["usage_guide_text"], "")
+        self.assertIsNone(response.data["usage_guide_video"])
+
+    def test_multipart_create_and_partial_patch_preserve_detail_videos(self):
+        self.authenticate(self.manager)
+        response = self.client.post(self.manage_url, {
+            "title": "Opportunity", "body": "Body", "scope": "GOLD",
+            "status": "PUBLISHED", "external_url": "https://example.com/opportunity",
+            "more_info_text": "<b>More</b>", "usage_guide_text": "<script>x</script>Guide",
+            "more_info_video": SimpleUploadedFile(
+                "more.mp4", b"more-video", content_type="video/mp4"
+            ),
+            "usage_guide_video": SimpleUploadedFile(
+                "guide.webm", b"guide-video", content_type="video/webm"
+            ),
+        }, format="multipart", secure=True)
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+        self.assertEqual(response.data["external_url"], "https://example.com/opportunity")
+        self.assertEqual(response.data["more_info_text"], "More")
+        self.assertEqual(response.data["usage_guide_text"], "xGuide")
+        self.assertTrue(response.data["more_info_video"].startswith("https://"))
+        self.assertTrue(response.data["usage_guide_video"].startswith("https://"))
+
+        post = ChannelPost.objects.get(pk=response.data["id"])
+        original_more = post.more_info_video.name
+        original_guide = post.usage_guide_video.name
+        detail_url = reverse("internal-analysis-manage-detail", args=[post.pk])
+        patched = self.client.patch(
+            detail_url, {"more_info_text": "Updated only"}, format="multipart", secure=True
+        )
+        self.assertEqual(patched.status_code, status.HTTP_200_OK, patched.data)
+        post.refresh_from_db()
+        self.assertEqual(post.more_info_text, "Updated only")
+        self.assertEqual(post.more_info_video.name, original_more)
+        self.assertEqual(post.usage_guide_video.name, original_guide)
+
+    @override_settings(INTERNAL_ANALYSIS_DETAIL_VIDEO_MAX_MB=1)
+    def test_detail_video_validation_is_field_level(self):
+        self.authenticate(self.manager)
+        invalid_mime = self.client.post(self.manage_url, {
+            "title": "Invalid", "body": "Body", "scope": "GOLD", "status": "PUBLISHED",
+            "more_info_video": SimpleUploadedFile(
+                "bad.mp4", b"not-video", content_type="application/octet-stream"
+            ),
+        }, format="multipart")
+        self.assertEqual(invalid_mime.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("more_info_video", invalid_mime.data)
+
+        oversized = self.client.post(self.manage_url, {
+            "title": "Large", "body": "Body", "scope": "GOLD", "status": "PUBLISHED",
+            "usage_guide_video": SimpleUploadedFile(
+                "large.mov", b"x" * (1024 * 1024 + 1), content_type="video/quicktime"
+            ),
+        }, format="multipart")
+        self.assertEqual(oversized.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("usage_guide_video", oversized.data)
+
+    def test_invalid_external_url_scheme_is_rejected(self):
+        self.authenticate(self.manager)
+        response = self.client.post(self.manage_url, {
+            "title": "Bad URL", "body": "Body", "scope": "GOLD",
+            "status": "PUBLISHED", "external_url": "ftp://example.com/file",
+        }, format="json")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("external_url", response.data)
+
     def test_scheduled_validation_and_command(self):
         self.authenticate(self.manager)
         invalid = self.client.post(self.manage_url, {

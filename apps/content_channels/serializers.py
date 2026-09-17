@@ -2,8 +2,15 @@ from rest_framework import serializers
 
 from django.conf import settings
 from django.utils import timezone
+from django.utils.html import strip_tags
+from urllib.parse import urlparse
 
-from common.validators import validate_audio_upload, validate_image_upload, validate_video_upload
+from common.validators import (
+    validate_audio_upload,
+    validate_image_upload,
+    validate_uploaded_file,
+    validate_video_upload,
+)
 from .models import ChannelPost
 
 
@@ -21,6 +28,8 @@ class ChannelPostSerializer(serializers.ModelSerializer):
             "id", "channel", "title", "body", "image", "video", "audio", "cover",
             "author", "author_name", "published_at", "is_pinned", "signal",
             "signal_status", "signal_status_display", "scope", "scope_display", "created_at", "updated_at",
+            "external_url", "more_info_text", "more_info_video",
+            "usage_guide_text", "usage_guide_video",
         )
         read_only_fields = ("id", "channel", "author", "author_name", "created_at", "updated_at")
 
@@ -44,6 +53,41 @@ class ChannelPostSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("Audio cannot exceed 50 MB.")
         return value
 
+    def validate_external_url(self, value):
+        value = value.strip()
+        if value and urlparse(value).scheme.lower() not in {"http", "https"}:
+            raise serializers.ValidationError("لینک فقط باید با http یا https شروع شود.")
+        return value
+
+    def validate_more_info_text(self, value):
+        return strip_tags(value).replace("\x00", "").strip()
+
+    def validate_usage_guide_text(self, value):
+        return strip_tags(value).replace("\x00", "").strip()
+
+    def _validate_detail_video(self, value, label):
+        if value is None:
+            return value
+        try:
+            return validate_uploaded_file(
+                value,
+                max_size=settings.INTERNAL_ANALYSIS_DETAIL_VIDEO_MAX_MB * 1024 * 1024,
+                allowed_extensions={".mp4", ".webm", ".mov"},
+                allowed_content_types={"video/mp4", "video/webm", "video/quicktime"},
+                file_label=label,
+            )
+        except serializers.ValidationError as exc:
+            raise serializers.ValidationError(
+                f"{label} باید MP4، WebM یا QuickTime و حداکثر "
+                f"{settings.INTERNAL_ANALYSIS_DETAIL_VIDEO_MAX_MB} مگابایت باشد."
+            ) from exc
+
+    def validate_more_info_video(self, value):
+        return self._validate_detail_video(value, "ویدئوی معرفی بیشتر")
+
+    def validate_usage_guide_video(self, value):
+        return self._validate_detail_video(value, "ویدئوی راهنمای استفاده")
+
     def validate(self, attrs):
         channel = self.context.get("channel") or getattr(self.instance, "channel", None)
         if channel and channel.slug == "internal-analysis" and not attrs.get("scope", getattr(self.instance, "scope", "")):
@@ -63,6 +107,8 @@ class InternalAnalysisPostSerializer(serializers.ModelSerializer):
             "status_display", "image", "video", "audio", "cover", "is_pinned",
             "author", "author_name", "published_at", "views_count", "created_at",
             "updated_at", "source", "external_id",
+            "external_url", "more_info_text", "more_info_video",
+            "usage_guide_text", "usage_guide_video",
         )
         read_only_fields = ("id", "author", "author_name", "views_count", "created_at", "updated_at", "source", "external_id")
 
@@ -80,6 +126,41 @@ class InternalAnalysisPostSerializer(serializers.ModelSerializer):
 
     def validate_audio(self, value):
         return validate_audio_upload(value, max_size_mb=settings.MEDIA_MAX_AUDIO_MB, file_label="Analysis audio")
+
+    def validate_external_url(self, value):
+        value = value.strip()
+        if value and urlparse(value).scheme.lower() not in {"http", "https"}:
+            raise serializers.ValidationError("لینک فقط باید با http یا https شروع شود.")
+        return value
+
+    def validate_more_info_text(self, value):
+        return strip_tags(value).replace("\x00", "").strip()
+
+    def validate_usage_guide_text(self, value):
+        return strip_tags(value).replace("\x00", "").strip()
+
+    def _validate_detail_video(self, value, label):
+        if value is None:
+            return value
+        try:
+            return validate_uploaded_file(
+                value,
+                max_size=settings.INTERNAL_ANALYSIS_DETAIL_VIDEO_MAX_MB * 1024 * 1024,
+                allowed_extensions={".mp4", ".webm", ".mov"},
+                allowed_content_types={"video/mp4", "video/webm", "video/quicktime"},
+                file_label=label,
+            )
+        except serializers.ValidationError as exc:
+            raise serializers.ValidationError(
+                f"{label} باید MP4، WebM یا QuickTime و حداکثر "
+                f"{settings.INTERNAL_ANALYSIS_DETAIL_VIDEO_MAX_MB} مگابایت باشد."
+            ) from exc
+
+    def validate_more_info_video(self, value):
+        return self._validate_detail_video(value, "ویدئوی معرفی بیشتر")
+
+    def validate_usage_guide_video(self, value):
+        return self._validate_detail_video(value, "ویدئوی راهنمای استفاده")
 
     def validate(self, attrs):
         status_value = attrs.get("status", getattr(self.instance, "status", ChannelPost.Status.PUBLISHED))

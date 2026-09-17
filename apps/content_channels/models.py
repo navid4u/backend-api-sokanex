@@ -1,5 +1,6 @@
 from django.conf import settings
 from django.db import models
+from django.utils import timezone
 from uuid import uuid4
 from pathlib import Path
 
@@ -7,6 +8,18 @@ from pathlib import Path
 def secure_channel_upload(instance, filename):
     extension = Path(filename).suffix.lower()
     return f"channels/uploads/{uuid4().hex}{extension}"
+
+
+def secure_more_info_video_upload(instance, filename):
+    extension = Path(filename).suffix.lower()
+    date_path = timezone.now().strftime("%Y/%m")
+    return f"internal_analysis/more_info/{date_path}/{uuid4().hex}{extension}"
+
+
+def secure_usage_guide_video_upload(instance, filename):
+    extension = Path(filename).suffix.lower()
+    date_path = timezone.now().strftime("%Y/%m")
+    return f"internal_analysis/usage_guides/{date_path}/{uuid4().hex}{extension}"
 
 
 class Channel(models.Model):
@@ -62,6 +75,19 @@ class ChannelPost(models.Model):
     views_count = models.PositiveIntegerField(default=0)
     source = models.CharField(max_length=20, choices=Source.choices, default=Source.LEGACY, db_index=True)
     external_id = models.CharField(max_length=150, null=True, blank=True, unique=True)
+    external_url = models.URLField(max_length=1000, blank=True, default="")
+    more_info_text = models.TextField(blank=True, default="")
+    more_info_video = models.FileField(
+        upload_to=secure_more_info_video_upload,
+        blank=True,
+        null=True,
+    )
+    usage_guide_text = models.TextField(blank=True, default="")
+    usage_guide_video = models.FileField(
+        upload_to=secure_usage_guide_video_upload,
+        blank=True,
+        null=True,
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
