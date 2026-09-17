@@ -8,11 +8,10 @@ from common.content_access import LevelRestrictedContent
 class LiveEvent(LevelRestrictedContent):
 
     class Status(models.TextChoices):
-        SCHEDULED = "SCHEDULED", "Scheduled"
-        LIVE = "LIVE", "Live"
-        ENDED = "ENDED", "Ended"
-        CANCELLED = "CANCELLED", "Cancelled"
-        DISABLED = "DISABLED", "Disabled"
+        ACTIVE = "ACTIVE", "فعال"
+        ENDED = "ENDED", "پایان‌یافته"
+        UPCOMING = "UPCOMING", "به‌زودی"
+        WITHIN_HOUR = "WITHIN_HOUR", "تا ساعتی دیگر"
 
     title = models.CharField(
         max_length=250,
@@ -59,7 +58,7 @@ class LiveEvent(LevelRestrictedContent):
     status = models.CharField(
         max_length=20,
         choices=Status.choices,
-        default=Status.SCHEDULED,
+        default=Status.UPCOMING,
     )
 
     host = models.ForeignKey(
@@ -90,7 +89,7 @@ class LiveEvent(LevelRestrictedContent):
     )
 
     class Meta:
-        ordering = ["starts_at"]
+        ordering = ["-starts_at", "-id"]
 
         indexes = [
             models.Index(

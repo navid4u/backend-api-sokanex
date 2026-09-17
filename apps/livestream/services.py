@@ -1,6 +1,3 @@
-from django.db.models import Q
-from django.utils import timezone
-
 from .models import LiveEvent
 from common.content_access import restrict_queryset_for_user
 
@@ -13,13 +10,11 @@ class LiveEventService:
             LiveEvent.objects.filter(
                 is_active=True
             )
-            .exclude(
-                status__in=[LiveEvent.Status.CANCELLED, LiveEvent.Status.DISABLED]
-            )
             .select_related(
                 "host",
                 "created_by",
             )
+            .order_by("-starts_at", "-id")
         )
         if user is not None:
             queryset = restrict_queryset_for_user(queryset, user)
@@ -30,28 +25,14 @@ class LiveEventService:
         return LiveEvent.objects.select_related(
             "host",
             "created_by",
-        )
+        ).order_by("-starts_at", "-id")
 
     @staticmethod
     def live_now(user=None):
-        now = timezone.now()
-
-        return (
-            LiveEventService.public_events(user)
-            .filter(
-                starts_at__lte=now,
-            )
-            .filter(
-                Q(ends_at__isnull=True)
-                | Q(ends_at__gte=now)
-            )
-        )
+        return LiveEventService.public_events(user).filter(status=LiveEvent.Status.ACTIVE)
 
     @staticmethod
     def upcoming(user=None):
-        return (
-            LiveEventService.public_events(user)
-            .filter(
-                starts_at__gte=timezone.now(),
-            )
+        return LiveEventService.public_events(user).filter(
+            status__in=[LiveEvent.Status.UPCOMING, LiveEvent.Status.WITHIN_HOUR]
         )

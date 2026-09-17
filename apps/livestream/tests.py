@@ -39,7 +39,7 @@ class LiveEventAPITests(APITestCase):
             stream_url="https://stream.example.com/live",
             starts_at=now - timedelta(minutes=30),
             ends_at=now + timedelta(minutes=30),
-            status=LiveEvent.Status.LIVE,
+            status=LiveEvent.Status.ACTIVE,
             host=self.trader,
             created_by=self.employee,
             is_active=True,
@@ -47,21 +47,21 @@ class LiveEventAPITests(APITestCase):
         self.upcoming_event = LiveEvent.objects.create(
             title="Upcoming Trading Class",
             starts_at=now + timedelta(days=1),
-            status=LiveEvent.Status.SCHEDULED,
+            status=LiveEvent.Status.UPCOMING,
             created_by=self.employee,
             is_active=True,
         )
         self.cancelled_event = LiveEvent.objects.create(
             title="Cancelled Event",
             starts_at=now + timedelta(days=2),
-            status=LiveEvent.Status.CANCELLED,
+            status=LiveEvent.Status.UPCOMING,
             created_by=self.employee,
-            is_active=True,
+            is_active=False,
         )
         self.inactive_event = LiveEvent.objects.create(
             title="Inactive Event",
             starts_at=now + timedelta(days=3),
-            status=LiveEvent.Status.SCHEDULED,
+            status=LiveEvent.Status.UPCOMING,
             created_by=self.employee,
             is_active=False,
         )
@@ -207,7 +207,7 @@ class LiveEventAPITests(APITestCase):
             "title": "New Live Class",
             "description": "A new class",
             "starts_at": starts_at.isoformat(),
-            "status": LiveEvent.Status.SCHEDULED,
+            "status": LiveEvent.Status.UPCOMING,
             "host": self.trader.pk,
             "is_active": True,
         }
@@ -244,7 +244,7 @@ class LiveEventAPITests(APITestCase):
                 timezone.now()
                 + timedelta(days=5)
             ).isoformat(),
-            "status": LiveEvent.Status.SCHEDULED,
+            "status": LiveEvent.Status.UPCOMING,
         }
 
         for user in (
@@ -276,7 +276,7 @@ class LiveEventAPITests(APITestCase):
         payload = {
             "title": "Live Without URL",
             "starts_at": timezone.now().isoformat(),
-            "status": LiveEvent.Status.LIVE,
+            "status": LiveEvent.Status.ACTIVE,
         }
 
         response = self.client.post(
@@ -309,7 +309,7 @@ class LiveEventAPITests(APITestCase):
                 starts_at
                 - timedelta(hours=1)
             ).isoformat(),
-            "status": LiveEvent.Status.SCHEDULED,
+            "status": LiveEvent.Status.UPCOMING,
         }
 
         response = self.client.post(
@@ -340,7 +340,7 @@ class LiveEventAPITests(APITestCase):
         response = self.client.patch(
             url,
             {
-                "status": LiveEvent.Status.LIVE,
+                "status": LiveEvent.Status.ACTIVE,
                 "stream_url": (
                     "https://stream.example.com/"
                     "new-live"
@@ -358,7 +358,7 @@ class LiveEventAPITests(APITestCase):
 
         self.assertEqual(
             self.upcoming_event.status,
-            LiveEvent.Status.LIVE,
+            LiveEvent.Status.ACTIVE,
         )
         self.assertEqual(
             self.upcoming_event.stream_url,

@@ -1,5 +1,4 @@
 from django.contrib import admin
-from django.utils import timezone
 
 from .models import LiveChatMessage, LiveEvent, LivePresence, SpeakRequest
 
@@ -56,9 +55,10 @@ class LiveEventAdmin(admin.ModelAdmin):
     date_hierarchy = "starts_at"
 
     actions = (
-        "mark_as_live",
+        "mark_as_active",
         "mark_as_ended",
-        "mark_as_cancelled",
+        "mark_as_upcoming",
+        "mark_as_within_hour",
     )
 
     def save_model(
@@ -78,22 +78,20 @@ class LiveEventAdmin(admin.ModelAdmin):
             change,
         )
 
-    @admin.action(
-        description="Mark selected events as live"
-    )
-    def mark_as_live(
+    @admin.action(description="Mark selected events as active")
+    def mark_as_active(
         self,
         request,
         queryset,
     ):
         updated = queryset.update(
-            status=LiveEvent.Status.LIVE,
+            status=LiveEvent.Status.ACTIVE,
             is_active=True,
         )
 
         self.message_user(
             request,
-            f"{updated} event(s) marked as live.",
+            f"{updated} event(s) marked as active.",
         )
 
     @admin.action(
@@ -106,7 +104,6 @@ class LiveEventAdmin(admin.ModelAdmin):
     ):
         updated = queryset.update(
             status=LiveEvent.Status.ENDED,
-            ends_at=timezone.now(),
         )
 
         self.message_user(
@@ -115,18 +112,27 @@ class LiveEventAdmin(admin.ModelAdmin):
         )
 
     @admin.action(
-        description="Cancel selected events"
+        description="Mark selected events as upcoming"
     )
-    def mark_as_cancelled(
+    def mark_as_upcoming(
         self,
         request,
         queryset,
     ):
         updated = queryset.update(
-            status=LiveEvent.Status.CANCELLED,
+            status=LiveEvent.Status.UPCOMING,
+            is_active=True,
         )
 
         self.message_user(
             request,
-            f"{updated} event(s) cancelled.",
+            f"{updated} event(s) marked as upcoming.",
         )
+
+    @admin.action(description="Mark selected events as within one hour")
+    def mark_as_within_hour(self, request, queryset):
+        updated = queryset.update(
+            status=LiveEvent.Status.WITHIN_HOUR,
+            is_active=True,
+        )
+        self.message_user(request, f"{updated} event(s) marked as within one hour.")

@@ -10,6 +10,7 @@ from rest_framework.filters import (
 from rest_framework.permissions import (
     IsAuthenticated,
 )
+from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from django.shortcuts import get_object_or_404
@@ -28,6 +29,7 @@ from .filters import LiveEventFilter
 from .serializers import (
     LiveEventDetailSerializer,
     LiveEventListSerializer,
+    LiveEventManagementSerializer,
     LiveEventWriteSerializer,
     LivePresenceSerializer,
     SpeakRequestSerializer,
@@ -65,6 +67,8 @@ class LiveEventListCreateView(
         "created_at",
         "title",
     ]
+    ordering = ["-starts_at", "-id"]
+    parser_classes = [JSONParser, MultiPartParser, FormParser]
 
     def get_permissions(self):
         permissions = [
@@ -106,7 +110,7 @@ class LiveEventManagementListView(
         IsEmployee,
     ]
 
-    serializer_class = LiveEventListSerializer
+    serializer_class = LiveEventManagementSerializer
 
     filter_backends = [
         DjangoFilterBackend,
@@ -128,6 +132,7 @@ class LiveEventManagementListView(
         "updated_at",
         "title",
     ]
+    ordering = ["-starts_at", "-id"]
 
     def get_queryset(self):
         return LiveEventService.all_events()
@@ -138,6 +143,7 @@ class LiveEventDetailView(
 ):
 
     lookup_field = "slug"
+    parser_classes = [JSONParser, MultiPartParser, FormParser]
 
     def get_permissions(self):
         permissions = [
@@ -162,6 +168,12 @@ class LiveEventDetailView(
         ]:
             return LiveEventWriteSerializer
 
+        user = self.request.user
+        if user.is_staff or user.is_superuser or user.has_platform_permission(
+            User.Permission.CONTENT_MANAGE
+        ):
+            return LiveEventManagementSerializer
+
         return LiveEventDetailSerializer
 
     def get_queryset(self):
@@ -183,7 +195,11 @@ class LivePresenceView(APIView):
     serializer_class = LivePresenceSerializer
 
     def get(self, request, slug):
-        event = get_object_or_404(LiveEventService.public_events(request.user), slug=slug)
+        event = get_object_or_404(
+            LiveEventService.public_events(request.user),
+            slug=slug,
+            status=LiveEvent.Status.ACTIVE,
+        )
         LivePresence.objects.update_or_create(event=event, user=request.user, defaults={"left_at": None})
         active = LivePresence.objects.filter(event=event, left_at__isnull=True, last_seen_at__gte=timezone.now() - timedelta(minutes=2)).select_related("user")
         return Response({"viewer_count": active.count(), "results": LivePresenceSerializer(active, many=True).data})
@@ -194,7 +210,7 @@ class SpeakRequestCreateView(generics.CreateAPIView):
     serializer_class = SpeakRequestSerializer
 
     def perform_create(self, serializer):
-        event = get_object_or_404(LiveEventService.public_events(self.request.user), slug=self.kwargs["slug"], status=LiveEvent.Status.LIVE)
+        event = get_object_or_404(LiveEventService.public_events(self.request.user), slug=self.kwargs["slug"], status=LiveEvent.Status.ACTIVE)
         if SpeakRequest.objects.filter(event=event, user=self.request.user, status=SpeakRequest.Status.PENDING).exists():
             raise serializers.ValidationError("You already have a pending speak request.")
         serializer.save(event=event, user=self.request.user)
@@ -276,7 +292,11 @@ class LiveChatView(generics.ListCreateAPIView):
     serializer_class = LiveChatMessageSerializer
 
     def get_event(self):
-        return get_object_or_404(LiveEventService.public_events(self.request.user), slug=self.kwargs["slug"])
+        return get_object_or_404(
+            LiveEventService.public_events(self.request.user),
+            slug=self.kwargs["slug"],
+            status=LiveEvent.Status.ACTIVE,
+        )
 
     def get_queryset(self):
         if getattr(self, "swagger_fake_view", False):
@@ -297,6 +317,10 @@ class LiveTicketView(APIView):
     serializer_class = EmptySerializer
 
     def post(self, request, slug):
-        event = get_object_or_404(LiveEventService.public_events(request.user), slug=slug)
+        event = get_object_or_404(
+            LiveEventService.public_events(request.user),
+            slug=slug,
+            status=LiveEvent.Status.ACTIVE,
+        )
         ticket = signing.dumps({"user_id": request.user.pk, "event_id": event.pk}, salt="live-ws-ticket", compress=True)
         return Response({"ticket": ticket, "expires_in": settings.CHANNEL_TICKET_TTL_SECONDS})

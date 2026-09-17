@@ -38,7 +38,12 @@ class LivestreamConsumer(AsyncJsonWebsocketConsumer):
         from common.content_access import user_can_access_levels
         try:
             user = User.objects.get(pk=user_id, is_active=True)
-            event = LiveEvent.objects.get(pk=event_id, slug=slug, is_active=True)
+            event = LiveEvent.objects.get(
+                pk=event_id,
+                slug=slug,
+                is_active=True,
+                status=LiveEvent.Status.ACTIVE,
+            )
         except (User.DoesNotExist, LiveEvent.DoesNotExist):
             return None
         if user_can_access_levels(user, event.allowed_levels):

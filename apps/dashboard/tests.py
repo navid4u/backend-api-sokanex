@@ -118,14 +118,14 @@ class DashboardAPITests(APITestCase):
             stream_url="https://stream.example.com/live",
             starts_at=now - timedelta(minutes=10),
             ends_at=now + timedelta(minutes=50),
-            status=LiveEvent.Status.LIVE,
+            status=LiveEvent.Status.ACTIVE,
             created_by=self.employee,
             is_active=True,
         )
         self.upcoming_event = LiveEvent.objects.create(
             title="Dashboard upcoming event",
             starts_at=now + timedelta(days=1),
-            status=LiveEvent.Status.SCHEDULED,
+            status=LiveEvent.Status.UPCOMING,
             created_by=self.employee,
             is_active=True,
         )
