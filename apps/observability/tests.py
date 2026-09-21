@@ -13,6 +13,7 @@ from rest_framework.test import APIClient
 
 from .models import LogEvent
 from .middleware import ObservabilityMiddleware
+from .handlers import DatabaseLogHandler
 
 
 User = get_user_model()
@@ -136,6 +137,22 @@ class ObservabilityTests(TestCase):
     def test_python_warning_is_persisted(self):
         logging.getLogger("apps.test_component").warning("provider temporarily unavailable")
         self.assertTrue(LogEvent.objects.filter(category="python_log", message__icontains="provider").exists())
+
+    def test_disallowed_host_scanner_log_is_not_persisted(self):
+        handler = DatabaseLogHandler()
+        record = logging.LogRecord(
+            name="django.security.DisallowedHost",
+            level=logging.ERROR,
+            pathname=__file__,
+            lineno=1,
+            msg="Invalid HTTP_HOST header: 'example.com:443'.",
+            args=(),
+            exc_info=None,
+        )
+
+        handler.emit(record)
+
+        self.assertEqual(LogEvent.objects.count(), 0)
 
     def test_validation_log_contains_errors_but_not_request_values(self):
         self.client.force_authenticate(self.user)

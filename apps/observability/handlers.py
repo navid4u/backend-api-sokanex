@@ -6,7 +6,16 @@ class DatabaseLogHandler(logging.Handler):
     """Best-effort persistence for server warnings/errors; never raises."""
 
     def emit(self, record):
-        if record.name.startswith(("django.db.backends", "apps.observability")):
+        # Django must continue rejecting forged/unknown Host headers, but these
+        # internet scanner probes are not application failures and should not
+        # flood the product-facing observability inbox.
+        if record.name.startswith(
+            (
+                "django.db.backends",
+                "apps.observability",
+                "django.security.DisallowedHost",
+            )
+        ):
             return
         try:
             from .models import LogEvent
