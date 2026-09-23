@@ -33,12 +33,16 @@ class ObservabilityMiddleware:
                 slow_ms,
                 getattr(settings, "OBSERVABILITY_MARKET_SLOW_REQUEST_MS", 5000),
             )
-        successful_external_api = (
+        successful_provider_api = (
             status_code < 400
-            and request.path in {
-                "/api/assistant/chat/",
-                "/api/assistant/technical-analysis/",
-            }
+            and (
+                request.path.startswith("/api/market/")
+                or request.path
+                in {
+                    "/api/assistant/chat/",
+                    "/api/assistant/technical-analysis/",
+                }
+            )
         )
         # Authentication expiry, permission denials, missing routes, conflicts
         # and rate limits are normal API outcomes, not application failures.
@@ -56,7 +60,7 @@ class ObservabilityMiddleware:
                 and not public_probe
                 and not getattr(request, "_observability_logged", False)
             )
-            or (duration_ms >= slow_ms and not expected_status and not successful_external_api)
+            or (duration_ms >= slow_ms and not expected_status and not successful_provider_api)
         )
         if (
             should_log

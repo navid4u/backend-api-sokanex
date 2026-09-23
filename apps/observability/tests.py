@@ -292,6 +292,19 @@ class ObservabilityTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(LogEvent.objects.count(), 0)
 
+    @override_settings(
+        OBSERVABILITY_SLOW_REQUEST_MS=2000,
+        OBSERVABILITY_MARKET_SLOW_REQUEST_MS=5000,
+    )
+    def test_successful_slow_market_provider_response_is_not_an_error_log(self):
+        factory = RequestFactory()
+        request = factory.get("/api/market/quotes/")
+        middleware = ObservabilityMiddleware(lambda incoming: JsonResponse({"available": True}))
+        with patch("apps.observability.middleware.time.monotonic", side_effect=(10.0, 15.6)):
+            response = middleware(request)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(LogEvent.objects.count(), 0)
+
     @override_settings(OBSERVABILITY_SLOW_REQUEST_MS=2000)
     def test_successful_assistant_provider_latency_is_not_an_error_log(self):
         factory = RequestFactory()
