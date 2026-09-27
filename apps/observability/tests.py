@@ -154,6 +154,32 @@ class ObservabilityTests(TestCase):
 
         self.assertEqual(LogEvent.objects.count(), 0)
 
+    def test_csrf_scanner_log_is_not_persisted(self):
+        handler = DatabaseLogHandler()
+        record = logging.LogRecord(
+            name="django.security.csrf",
+            level=logging.WARNING,
+            pathname=__file__,
+            lineno=1,
+            msg="Forbidden (CSRF cookie not set.): /admin/ajax.php",
+            args=(),
+            exc_info=None,
+        )
+
+        handler.emit(record)
+
+        self.assertEqual(LogEvent.objects.count(), 0)
+
+    def test_unknown_api_probe_400_is_not_persisted(self):
+        factory = RequestFactory()
+        request = factory.post("/api/graphql")
+        middleware = ObservabilityMiddleware(
+            lambda incoming: JsonResponse({"detail": "bad request"}, status=400)
+        )
+
+        self.assertEqual(middleware(request).status_code, 400)
+        self.assertEqual(LogEvent.objects.count(), 0)
+
     def test_validation_log_contains_errors_but_not_request_values(self):
         self.client.force_authenticate(self.user)
         response = self.client.patch(

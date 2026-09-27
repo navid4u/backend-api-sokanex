@@ -14,6 +14,7 @@ class DatabaseLogHandler(logging.Handler):
                 "django.db.backends",
                 "apps.observability",
                 "django.security.DisallowedHost",
+                "django.security.csrf",
             )
         ):
             return
