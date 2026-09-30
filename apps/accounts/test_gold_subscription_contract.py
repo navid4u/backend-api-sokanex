@@ -343,6 +343,7 @@ class GoldSubscriptionContractTests(APITestCase):
 
     def test_rejecting_vip_request_does_not_change_user_level(self):
         self.user.access_level = User.AccessLevel.LEVEL_2
+        self.user.save(update_fields=("access_level", "updated_at"))
         request = UpgradeRequest.objects.create(
             user=self.user,
             request_type=UpgradeRequest.Type.PREMIUM,

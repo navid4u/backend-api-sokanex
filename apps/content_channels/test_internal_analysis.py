@@ -182,7 +182,7 @@ class InternalAnalysisAPITests(APITestCase):
             ),
         }, format="multipart")
         self.assertEqual(invalid_mime.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn("more_info_video", invalid_mime.data)
+        self.assertIn("more_info_video", invalid_mime.data["errors"])
 
         oversized = self.client.post(self.manage_url, {
             "title": "Large", "body": "Body", "scope": "GOLD", "status": "PUBLISHED",
@@ -191,7 +191,7 @@ class InternalAnalysisAPITests(APITestCase):
             ),
         }, format="multipart")
         self.assertEqual(oversized.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn("usage_guide_video", oversized.data)
+        self.assertIn("usage_guide_video", oversized.data["errors"])
 
     def test_invalid_external_url_scheme_is_rejected(self):
         self.authenticate(self.manager)
@@ -200,7 +200,7 @@ class InternalAnalysisAPITests(APITestCase):
             "status": "PUBLISHED", "external_url": "ftp://example.com/file",
         }, format="json")
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn("external_url", response.data)
+        self.assertIn("external_url", response.data["errors"])
 
     def test_scheduled_validation_and_command(self):
         self.authenticate(self.manager)
