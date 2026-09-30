@@ -38,7 +38,7 @@ class WalletService:
     @staticmethod
     def balance_usd_for_user(user):
         balance = Wallet.objects.filter(user=user).values_list("balance_usd", flat=True).first()
-        return balance if balance is not None else Decimal("100.00")
+        return balance if balance is not None else Decimal("0.00")
 
     @staticmethod
     def premium_subscription(user):
@@ -50,13 +50,14 @@ class WalletService:
             status=UpgradeRequest.Status.APPROVED,
         ).select_related("plan").order_by("-reviewed_at", "-created_at", "-pk").first()
         active = user.has_gold_access
+        is_trial = bool(user.gold_trial_started_at and not user.gold_permanent_granted_at)
         expired_trial = bool(
-            user.gold_trial_started_at
+            is_trial
             and user.gold_trial_expires_at
             and user.gold_trial_expires_at <= timezone.now()
         )
         remaining = 0
-        if active and user.gold_trial_expires_at:
+        if active and is_trial and user.gold_trial_expires_at:
             remaining_seconds = max(
                 (user.gold_trial_expires_at - timezone.now()).total_seconds(), 0
             )
@@ -71,8 +72,8 @@ class WalletService:
                 or (purchase.reviewed_at or purchase.created_at if purchase else None)
             ),
             "access_level": user.access_level,
-            "trial": bool(user.gold_trial_started_at),
-            "trial_expires_at": user.gold_trial_expires_at,
+            "trial": is_trial,
+            "trial_expires_at": user.gold_trial_expires_at if is_trial else None,
             "days_remaining": remaining,
             "status": (
                 "ACTIVE" if active
@@ -85,7 +86,10 @@ class WalletService:
                 and user.gold_trial_started_at is None
                 and user.gold_permanent_granted_at is None
             ),
-            "can_request": user.access_level == 2,
+            "can_request": bool(
+                user.access_level == 2
+                and expired_trial
+            ),
         }
 
     @staticmethod

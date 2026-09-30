@@ -133,6 +133,8 @@ class DashboardSerializer(
 
     user = UserSerializer()
 
+    access_level = serializers.IntegerField()
+
     stats = DashboardStatsSerializer()
 
     premium_subscription = serializers.DictField()

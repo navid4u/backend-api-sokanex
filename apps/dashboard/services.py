@@ -64,6 +64,8 @@ class DashboardService:
         return {
             "user": user,
 
+            "access_level": user.access_level,
+
             "stats": {
                 "wallet_balance": str(WalletService.balance_irt(wallet)),
 

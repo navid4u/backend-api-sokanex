@@ -8,6 +8,12 @@ from .models import FinancialPersonalityAssessment, UpgradeRequest, User, UserPr
 from .personality_risk import ASSESSMENT_VERSION, calculate_result
 
 
+class TrialAlreadyUsed(APIException):
+    status_code = 409
+    default_detail = "اشتراک آزمایشی قبلاً استفاده شده است."
+    machine_code = "TRIAL_ALREADY_USED"
+
+
 class ProfileCompletionService:
     @staticmethod
     def status(user):
@@ -44,10 +50,7 @@ class PremiumAccessService:
 
     @staticmethod
     def _trial_conflict():
-        error = APIException("دوره آزمایشی قبلاً استفاده شده یا واجد شرایط آن نیستید.")
-        error.status_code = 409
-        error.machine_code = "TRIAL_ALREADY_USED"
-        return error
+        return TrialAlreadyUsed()
 
     @classmethod
     def refresh_user_state(cls, user):
@@ -122,7 +125,12 @@ class PremiumAccessService:
     @transaction.atomic
     def request_permanent_gold(cls, user, message=""):
         locked = User.objects.select_for_update().get(pk=user.pk)
-        if locked.access_level != User.AccessLevel.LEVEL_2:
+        trial_expired = bool(
+            locked.gold_trial_started_at
+            and locked.gold_trial_expires_at
+            and locked.gold_trial_expires_at <= timezone.now()
+        )
+        if locked.access_level != User.AccessLevel.LEVEL_2 or not trial_expired:
             raise ValidationError({"detail": "درخواست اشتراک دائمی فقط برای سطح ۲ مجاز است."})
         if not locked.market_type:
             raise ValidationError({"market_type": "ابتدا بازار فعال خود را انتخاب کنید."})

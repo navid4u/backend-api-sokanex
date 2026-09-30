@@ -1,5 +1,6 @@
 from django.contrib.auth import get_user_model
 from django.shortcuts import get_object_or_404
+from django.db import transaction
 from django.db.models.deletion import ProtectedError
 from django.db.models import Max
 from django.conf import settings
@@ -106,7 +107,7 @@ from .models import (
 )
 from django.utils import timezone
 from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken, OutstandingToken
-from .services import FinancialPersonalityService, ProfileCompletionService, PremiumAccessService, UserService
+from .services import FinancialPersonalityService, ProfileCompletionService, PremiumAccessService, TrialAlreadyUsed, UserService
 from apps.activity.models import UserActivity
 from apps.activity.services import ActivityService
 from .authentication import issue_login_tokens
@@ -1103,15 +1104,42 @@ class MarketTypeView(APIView):
 class PremiumTrialActivationView(APIView):
     permission_classes = [IsAuthenticated]
 
-    @extend_schema(request=None, responses=PremiumTrialActivationResponseSerializer)
+    @extend_schema(
+        request=None,
+        responses={
+            200: PremiumTrialActivationResponseSerializer,
+            409: inline_serializer(
+                name="PremiumTrialAlreadyUsedResponse",
+                fields={
+                    "code": serializers.CharField(),
+                    "detail": serializers.CharField(),
+                },
+            ),
+        },
+    )
+    @transaction.atomic
     def post(self, request):
-        user = PremiumAccessService.activate_trial(request.user)
+        try:
+            user = PremiumAccessService.activate_trial(request.user)
+        except TrialAlreadyUsed:
+            return Response(
+                {
+                    "code": "TRIAL_ALREADY_USED",
+                    "detail": "اشتراک آزمایشی قبلاً استفاده شده است.",
+                },
+                status=status.HTTP_409_CONFLICT,
+            )
         from apps.wallet.services import WalletService
 
+        wallet = WalletService.get_wallet(user)
         return Response(
             {
                 "user": UserSerializer(user, context={"request": request}).data,
                 "subscription": WalletService.premium_subscription(user),
+                "wallet": {
+                    "balance_usd": str(wallet.balance_usd),
+                    "display_currency": "USD",
+                },
             },
             status=status.HTTP_200_OK,
         )

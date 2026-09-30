@@ -13,6 +13,13 @@ class WalletPremiumSubscriptionSerializer(serializers.Serializer):
     tier = serializers.CharField(allow_null=True)
     plan_id = serializers.IntegerField(allow_null=True)
     purchased_at = serializers.DateTimeField(allow_null=True)
+    access_level = serializers.IntegerField()
+    trial = serializers.BooleanField()
+    trial_expires_at = serializers.DateTimeField(allow_null=True)
+    days_remaining = serializers.IntegerField()
+    status = serializers.CharField()
+    can_start_trial = serializers.BooleanField()
+    can_request = serializers.BooleanField()
 
 
 class WalletSerializer(serializers.ModelSerializer):

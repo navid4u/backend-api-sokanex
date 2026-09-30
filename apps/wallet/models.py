@@ -26,7 +26,7 @@ class Wallet(models.Model):
     balance_usd = models.DecimalField(
         max_digits=18,
         decimal_places=2,
-        default=Decimal("100.00"),
+        default=Decimal("0.00"),
         validators=[MinValueValidator(Decimal("0.00"))],
     )
 

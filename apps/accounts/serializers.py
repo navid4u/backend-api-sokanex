@@ -777,6 +777,7 @@ class UserCustomRoleUpdateSerializer(serializers.Serializer):
 
 
 class UserProfileDetailsSerializer(serializers.ModelSerializer):
+    access_level = serializers.IntegerField(source="user.access_level", read_only=True)
     market_type = serializers.ChoiceField(
         source="user.market_type", choices=User.MarketType.choices, required=False
     )
@@ -814,6 +815,7 @@ class UserProfileDetailsSerializer(serializers.ModelSerializer):
         model = UserProfile
         fields = (
             "id",
+            "access_level",
             "username",
             "email",
             "market_type",
@@ -1188,6 +1190,7 @@ class GoldRenewalRequestCreateSerializer(serializers.Serializer):
 class PremiumTrialActivationResponseSerializer(serializers.Serializer):
     user = UserSerializer()
     subscription = serializers.DictField()
+    wallet = serializers.DictField(child=serializers.CharField())
 
 
 class GoldRenewalRequestResponseSerializer(serializers.Serializer):

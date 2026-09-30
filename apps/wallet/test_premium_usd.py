@@ -14,6 +14,8 @@ class PremiumUsdAPITests(APITestCase):
     def setUp(self):
         self.user = User.objects.create_user(username="premium-user", password="pass")
         self.wallet = WalletService.get_wallet(self.user)
+        self.wallet.balance_usd = Decimal("100.00")
+        self.wallet.save(update_fields=["balance_usd"])
         self.plan = UpgradePlan.objects.get(level=5)
         self.plan.active = True
         self.plan.price_usd = Decimal("100.00")
@@ -21,21 +23,17 @@ class PremiumUsdAPITests(APITestCase):
         self.client.force_authenticate(self.user)
         self.url = "/api/accounts/upgrade-requests/premium/purchase/"
 
-    def test_welcome_credit_is_created_exactly_once(self):
-        self.assertEqual(self.wallet.balance_usd, Decimal("100.00"))
-        self.assertEqual(
+    def test_new_wallet_starts_at_zero_without_welcome_credit(self):
+        user = User.objects.create_user(username="zero-wallet-user", password="pass")
+        wallet = WalletService.get_wallet(user)
+        self.assertEqual(wallet.balance_usd, Decimal("0.00"))
+        self.assertFalse(
             UsdLedgerEntry.objects.filter(
-                wallet=self.wallet, idempotency_key="WELCOME_CREDIT"
-            ).count(),
-            1,
+                wallet=wallet, idempotency_key="WELCOME_CREDIT"
+            ).exists()
         )
-        WalletService.get_wallet(self.user)
-        self.assertEqual(
-            UsdLedgerEntry.objects.filter(
-                wallet=self.wallet, idempotency_key="WELCOME_CREDIT"
-            ).count(),
-            1,
-        )
+        self.assertEqual(WalletService.get_wallet(user).pk, wallet.pk)
+        self.assertEqual(WalletService.balance_usd_for_user(user), Decimal("0.00"))
 
     def test_plan_management_updates_same_premium_plan_price(self):
         manager = User.objects.create_superuser(username="premium-admin", password="pass")
@@ -176,6 +174,18 @@ class PremiumUsdAPITests(APITestCase):
         self.assertEqual(profile_response.data["wallet_balance_usd"], "100.00")
         self.assertIn("premium_subscription", profile_response.data)
 
+    def test_new_user_wallet_and_profile_defaults_are_zero(self):
+        user = User.objects.create_user(username="initial-zero-wallet", password="pass")
+        wallet = WalletService.get_wallet(user)
+        self.assertEqual(wallet.balance_usd, Decimal("0.00"))
+        self.assertFalse(
+            UsdLedgerEntry.objects.filter(wallet=wallet, kind="WELCOME_CREDIT").exists()
+        )
+        client = APIClient()
+        client.force_authenticate(user)
+        self.assertEqual(client.get("/api/wallet/").data["balance_usd"], "0.00")
+        self.assertEqual(client.get("/api/accounts/profile/").data["wallet_balance_usd"], "0.00")
+
 
 class PremiumPurchaseConcurrencyTests(TransactionTestCase):
     reset_sequences = True
@@ -186,7 +196,9 @@ class PremiumPurchaseConcurrencyTests(TransactionTestCase):
         from concurrent.futures import ThreadPoolExecutor
 
         user = User.objects.create_user(username="premium-concurrent", password="pass")
-        WalletService.get_wallet(user)
+        wallet = WalletService.get_wallet(user)
+        wallet.balance_usd = Decimal("100.00")
+        wallet.save(update_fields=["balance_usd"])
         plan = UpgradePlan.objects.get(level=5)
         plan.active = True
         plan.price_usd = Decimal("100.00")
