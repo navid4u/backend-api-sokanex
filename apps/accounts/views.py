@@ -1051,9 +1051,13 @@ class MyUpgradeRequestListCreateView(generics.ListCreateAPIView):
     def get_queryset(self):
         if getattr(self, "swagger_fake_view", False):
             return UpgradeRequest.objects.none()
-        return UpgradeRequest.objects.filter(
+        queryset = UpgradeRequest.objects.filter(
             user=self.request.user
         ).select_related("reviewed_by")
+        request_type = self.request.query_params.get("request_type")
+        if request_type:
+            queryset = queryset.filter(request_type=request_type.upper())
+        return queryset
 
 
 class PremiumPurchaseView(APIView):
@@ -1158,7 +1162,9 @@ class GoldRenewalRequestView(APIView):
         serializer = GoldRenewalRequestCreateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         upgrade_request, created = PremiumAccessService.request_permanent_gold(
-            request.user, serializer.validated_data.get("message", "")
+            request.user,
+            serializer.validated_data["market_type"],
+            serializer.validated_data.get("message", ""),
         )
         return Response(
             {
@@ -1175,7 +1181,7 @@ class UpgradeRequestManagementListView(generics.ListAPIView):
     permission_classes = [IsAuthenticated, CanManageUsers]
     serializer_class = AdminUpgradeRequestSerializer
     filter_backends = [DjangoFilterBackend, SearchFilter]
-    filterset_fields = ["status", "request_type", "requested_level"]
+    filterset_fields = ["status", "request_type", "requested_level", "market_type"]
     search_fields = [
         "user__username",
         "user__email",
@@ -1183,6 +1189,7 @@ class UpgradeRequestManagementListView(generics.ListAPIView):
         "user__first_name",
         "user__last_name",
         "user__market_type",
+        "market_type",
         "message",
     ]
 
@@ -1216,6 +1223,9 @@ class UpgradeRequestReviewView(APIView):
             {
                 "message": "Upgrade request reviewed.",
                 "request": AdminUpgradeRequestSerializer(reviewed).data,
+                "user": UserSerializer(
+                    reviewed_user, context={"request": request}
+                ).data,
                 "subscription": WalletService.premium_subscription(reviewed_user),
             }
         )

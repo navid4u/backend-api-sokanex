@@ -20,7 +20,13 @@ class InternalAnalysisAPITests(APITestCase):
     def setUp(self):
         cache.clear()
         self.channel = Channel.objects.get(slug="internal-analysis")
-        self.user = User.objects.create_user(username="analysis-user", password="StrongPass123!")
+        now = timezone.now()
+        self.user = User.objects.create_user(
+            username="analysis-user", password="StrongPass123!",
+            access_level=User.AccessLevel.LEVEL_5,
+            gold_trial_started_at=now,
+            gold_trial_expires_at=now + timedelta(days=7),
+        )
         self.manager_role = PlatformRole.objects.create(
             name="Analysis Manager", slug="analysis-manager",
             permissions=[User.Permission.INTERNAL_ANALYSIS_MANAGE],
@@ -69,6 +75,28 @@ class InternalAnalysisAPITests(APITestCase):
         response = self.client.get(self.list_url, {"scope": "STOCK", "page_size": 1})
         self.assertEqual(response.data["count"], 1)
         self.assertEqual(response.data["results"][0]["id"], stock.id)
+
+    def test_expired_trial_is_forbidden_but_active_trial_can_read_internal_analysis(self):
+        post = self.create_post()
+        User.objects.filter(pk=self.user.pk).update(
+            access_level=User.AccessLevel.LEVEL_2,
+            gold_trial_started_at=timezone.now() - timedelta(days=8),
+            gold_trial_expires_at=timezone.now() - timedelta(seconds=1),
+        )
+        self.user.refresh_from_db()
+        self.authenticate(self.user)
+        self.assertEqual(self.client.get(self.list_url).status_code, status.HTTP_403_FORBIDDEN)
+        now = timezone.now()
+        User.objects.filter(pk=self.user.pk).update(
+            access_level=User.AccessLevel.LEVEL_5,
+            gold_trial_started_at=now,
+            gold_trial_expires_at=now + timedelta(days=7),
+        )
+        self.user.refresh_from_db()
+        self.authenticate(self.user)
+        response = self.client.get(self.list_url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["results"][0]["id"], post.pk)
 
     def test_regular_user_cannot_manage_but_custom_permission_can(self):
         self.authenticate(self.user)
@@ -209,6 +237,13 @@ class InternalAnalysisAPITests(APITestCase):
 
     def test_view_count_is_atomic_and_deduplicated(self):
         post = self.create_post()
+        now = timezone.now()
+        User.objects.filter(pk=self.user.pk).update(
+            access_level=User.AccessLevel.LEVEL_5,
+            gold_trial_started_at=now,
+            gold_trial_expires_at=now + timedelta(days=7),
+        )
+        self.user.refresh_from_db()
         self.authenticate(self.user)
         url = reverse("internal-analysis-view", args=[post.pk])
         first = self.client.post(url)

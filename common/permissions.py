@@ -1,6 +1,14 @@
 from rest_framework.permissions import BasePermission
 
 from apps.accounts.models import User
+from common.content_access import user_can_access_gold_content
+
+
+class CanAccessGoldContent(BasePermission):
+    message = "اشتراک طلایی فعال برای دسترسی به این محتوا لازم است."
+
+    def has_permission(self, request, view):
+        return request.user.is_authenticated and user_can_access_gold_content(request.user)
 
 
 class IsTrader(BasePermission):

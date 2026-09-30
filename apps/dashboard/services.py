@@ -7,6 +7,7 @@ from apps.notifications.services import NotificationService
 from apps.chat.services import ChatService
 from apps.livestream.services import LiveEventService
 from apps.accounts.models import BrokerConnection
+from common.content_access import user_can_access_gold_content
 
 
 class DashboardService:
@@ -30,6 +31,8 @@ class DashboardService:
         )
 
         visible_signals = VIPSignalPost.objects.filter(is_active=True)
+        if not user_can_access_gold_content(user):
+            visible_signals = visible_signals.none()
         recent_signals = visible_signals[:5]
 
         wallet = WalletService.get_wallet(user)

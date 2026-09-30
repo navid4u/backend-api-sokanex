@@ -96,3 +96,14 @@ def user_can_access_levels(user, allowed_levels):
         effective_level == User.AccessLevel.LEVEL_5
         and bool(levels.intersection(LEVELS))
     )
+
+
+def user_can_access_gold_content(user):
+    if not user or not user.is_authenticated:
+        return False
+    return bool(
+        user.is_staff
+        or user.is_superuser
+        or user.has_platform_permission(User.Permission.CONTENT_VIEW_ALL)
+        or user.effective_access_level == User.AccessLevel.LEVEL_5
+    )

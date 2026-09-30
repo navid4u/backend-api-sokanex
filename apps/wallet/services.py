@@ -78,12 +78,14 @@ class WalletService:
             "status": (
                 "ACTIVE" if active
                 else "EXPIRED" if expired_trial
-                else "AVAILABLE" if user.access_level == 1 and not user.gold_trial_started_at
+                else "AVAILABLE" if (
+                    user.gold_trial_started_at is None
+                    and user.gold_permanent_granted_at is None
+                )
                 else "INACTIVE"
             ),
             "can_start_trial": (
-                user.access_level == 1
-                and user.gold_trial_started_at is None
+                user.gold_trial_started_at is None
                 and user.gold_permanent_granted_at is None
             ),
             "can_request": bool(

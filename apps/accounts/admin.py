@@ -164,12 +164,13 @@ class UpgradeRequestAdmin(admin.ModelAdmin):
         "user",
         "request_type",
         "requested_level",
+        "market_type",
         "status",
         "reviewed_by",
         "created_at",
     )
-    list_filter = ("status", "request_type", "requested_level")
-    search_fields = ("user__username", "user__email", "message")
+    list_filter = ("status", "request_type", "requested_level", "market_type")
+    search_fields = ("user__username", "user__email", "user__phone", "market_type", "message")
     readonly_fields = ("created_at", "updated_at", "reviewed_at")
 
 

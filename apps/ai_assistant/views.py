@@ -14,7 +14,7 @@ from rest_framework.views import APIView
 from rest_framework.pagination import PageNumberPagination
 from drf_spectacular.utils import OpenApiExample, OpenApiParameter, extend_schema, inline_serializer
 
-from common.permissions import CanManageAIAssistant
+from common.permissions import CanAccessGoldContent, CanManageAIAssistant
 from .exceptions import AssistantError
 from .models import AISettings, AISettingsAuditLog, AssistantQuestion
 from .serializers import (
@@ -102,7 +102,7 @@ class AISettingsView(APIView):
 
 
 class AssistantChatView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, CanAccessGoldContent]
     throttle_classes = [ScopedRateThrottle]
     throttle_scope = "assistant_chat"
 
@@ -171,7 +171,7 @@ class AssistantQuestionListView(generics.ListAPIView):
 
 
 class TechnicalAnalysisView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, CanAccessGoldContent]
     parser_classes = [MultiPartParser, FormParser]
     throttle_classes = [ScopedRateThrottle]
     throttle_scope = "assistant_image"

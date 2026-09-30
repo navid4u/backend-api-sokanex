@@ -58,8 +58,6 @@ class PremiumAccessService:
         if (
             user.access_level != User.AccessLevel.LEVEL_5
             or user.gold_permanent_granted_at
-            or user.role != User.Role.USER
-            or user.is_superuser
             or (
                 user.gold_trial_started_at
                 and user.gold_trial_expires_at
@@ -72,8 +70,6 @@ class PremiumAccessService:
             if (
                 locked.access_level == User.AccessLevel.LEVEL_5
                 and not locked.gold_permanent_granted_at
-                and locked.role == User.Role.USER
-                and not locked.is_superuser
             ):
                 now = timezone.now()
                 if locked.gold_trial_started_at is None:
@@ -122,7 +118,7 @@ class PremiumAccessService:
 
     @classmethod
     @transaction.atomic
-    def request_permanent_gold(cls, user, message=""):
+    def request_permanent_gold(cls, user, market_type, message=""):
         locked = User.objects.select_for_update().get(pk=user.pk)
         trial_expired = bool(
             locked.gold_trial_started_at
@@ -131,8 +127,8 @@ class PremiumAccessService:
         )
         if locked.access_level != User.AccessLevel.LEVEL_2 or not trial_expired:
             raise ValidationError({"detail": "درخواست اشتراک دائمی فقط برای سطح ۲ مجاز است."})
-        if not locked.market_type:
-            raise ValidationError({"market_type": "ابتدا بازار فعال خود را انتخاب کنید."})
+        if market_type not in User.MarketType.values:
+            raise ValidationError({"market_type": "بازار انتخاب‌شده معتبر نیست."})
         existing = UpgradeRequest.objects.filter(
             user=locked,
             request_type=UpgradeRequest.Type.PREMIUM,
@@ -147,7 +143,8 @@ class PremiumAccessService:
         request = UpgradeRequest.objects.create(
             user=locked,
             request_type=UpgradeRequest.Type.PREMIUM,
-            requested_level=User.AccessLevel.LEVEL_3,
+            requested_level=User.AccessLevel.LEVEL_5,
+            market_type=market_type,
             grant_source=UpgradeRequest.GrantSource.GOLD_RENEWAL_REQUEST,
             message=message.strip(),
         )
@@ -157,8 +154,6 @@ class PremiumAccessService:
     def expire_trials():
         now = timezone.now()
         return User.objects.filter(
-            role=User.Role.USER,
-            is_superuser=False,
             access_level=User.AccessLevel.LEVEL_5,
             gold_permanent_granted_at__isnull=True,
             gold_trial_started_at__isnull=False,
@@ -368,6 +363,12 @@ class UserService:
             pk=upgrade_request.pk
         )
         if locked_request.status != UpgradeRequest.Status.PENDING:
+            if (
+                locked_request.request_type == UpgradeRequest.Type.PREMIUM
+                and locked_request.status == UpgradeRequest.Status.APPROVED
+                and status == UpgradeRequest.Status.APPROVED
+            ):
+                return locked_request
             raise ValidationError(
                 {"status": "Only pending requests can be reviewed."}
             )
@@ -401,8 +402,11 @@ class UserService:
                 and locked_request.grant_source == UpgradeRequest.GrantSource.GOLD_RENEWAL_REQUEST
             ):
                 permanent_user = User.objects.select_for_update().get(pk=locked_request.user_id)
-                permanent_user.access_level = User.AccessLevel.LEVEL_3
-                permanent_user.gold_permanent_granted_at = timezone.now()
+                locked_request.requested_level = User.AccessLevel.LEVEL_5
+                locked_request.save(update_fields=("requested_level", "updated_at"))
+                permanent_user.access_level = User.AccessLevel.LEVEL_5
+                if permanent_user.gold_permanent_granted_at is None:
+                    permanent_user.gold_permanent_granted_at = timezone.now()
                 permanent_user.save(update_fields=(
                     "access_level", "gold_permanent_granted_at", "updated_at"
                 ))

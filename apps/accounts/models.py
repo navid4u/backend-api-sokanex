@@ -113,7 +113,10 @@ class User(AbstractUser):
 
     @property
     def has_gold_access(self):
-        if self.gold_permanent_granted_at and self.access_level == self.AccessLevel.LEVEL_3:
+        if self.gold_permanent_granted_at and self.access_level in (
+            self.AccessLevel.LEVEL_3,
+            self.AccessLevel.LEVEL_5,
+        ):
             return True
         return bool(
             self.access_level == self.AccessLevel.LEVEL_5
@@ -221,6 +224,12 @@ class UpgradeRequest(models.Model):
         max_length=20,
         choices=Type.choices,
         default=Type.UPGRADE,
+    )
+    market_type = models.CharField(
+        max_length=12,
+        choices=User.MarketType.choices,
+        null=True,
+        blank=True,
     )
     requested_level = models.PositiveSmallIntegerField(
         choices=[(level, f"Level {level}") for level in range(2, 6)],

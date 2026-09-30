@@ -1053,6 +1053,10 @@ paths:
           * `3` - Level 3
           * `4` - Level 4
           * `5` - Level 5
+      - in: query
+        name: market_type
+        schema:
+          $ref: '#/components/schemas/UpgradeRequestMarketTypeEnum'
       - name: search
         required: false
         in: query
@@ -1111,7 +1115,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/AdminUpgradeRequest'
+                $ref: '#/components/schemas/UpgradeRequestReviewResponse'
           description: ''
   /api/accounts/auth/otp/request/:
     post:
@@ -2015,6 +2019,13 @@ paths:
     get:
       operationId: accounts_upgrade_requests_list
       parameters:
+      - in: query
+        name: request_type
+        schema:
+          type: string
+          enum:
+          - PREMIUM
+          - UPGRADE
       - name: ordering
         required: false
         in: query
@@ -2109,6 +2120,64 @@ paths:
           description: ''
         '402':
           description: No response body
+  /api/accounts/upgrade-requests/premium/request/:
+    post:
+      operationId: accounts_upgrade_requests_premium_request_create
+      tags:
+      - accounts
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GoldRenewalRequestCreateRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GoldRenewalRequestResponse'
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GoldRenewalRequestResponse'
+        '400':
+          description: Invalid request or market_type.
+  /api/accounts/upgrade-requests/premium/trial/activate/:
+    post:
+      operationId: accounts_upgrade_requests_premium_trial_activate_create
+      tags:
+      - accounts
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PremiumTrialActivationResponse'
+        '409':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: string
+                    example: TRIAL_ALREADY_USED
+                  detail:
+                    type: string
+
   /api/accounts/user-badges/{id}/:
     delete:
       operationId: accounts_user_badges_destroy
@@ -8098,6 +8167,10 @@ components:
           - $ref: '#/components/schemas/RequestedLevelEnum'
           minimum: 0
           maximum: 9223372036854775807
+        market_type:
+          allOf:
+          - $ref: '#/components/schemas/UpgradeRequestMarketTypeEnum'
+          nullable: true
         plan:
           type: integer
           readOnly: true
@@ -13553,6 +13626,9 @@ components:
           type: string
           nullable: true
           maxLength: 20
+        market_type:
+          allOf:
+          - $ref: '#/components/schemas/UpgradeRequestMarketTypeEnum'
         avatar:
           type: string
           format: binary
@@ -16408,6 +16484,10 @@ components:
           - $ref: '#/components/schemas/RequestedLevelEnum'
           minimum: 0
           maximum: 9223372036854775807
+        market_type:
+          allOf:
+          - $ref: '#/components/schemas/UpgradeRequestMarketTypeEnum'
+          nullable: true
         plan:
           type: integer
           readOnly: true
@@ -16477,6 +16557,77 @@ components:
           type: string
       required:
       - requested_level
+    UpgradeRequestMarketTypeEnum:
+      enum:
+      - internal
+      - forex
+      - crypto
+      type: string
+    GoldRenewalRequestCreateRequest:
+      type: object
+      properties:
+        message:
+          type: string
+          maxLength: 1000
+        market_type:
+          $ref: '#/components/schemas/UpgradeRequestMarketTypeEnum'
+      required:
+      - market_type
+    GoldRenewalRequestResponse:
+      type: object
+      properties:
+        request:
+          $ref: '#/components/schemas/UpgradeRequest'
+        upgrade_request:
+          $ref: '#/components/schemas/UpgradeRequest'
+        subscription:
+          type: object
+          additionalProperties: {}
+        message:
+          type: string
+      required:
+      - message
+      - request
+      - subscription
+      - upgrade_request
+    PremiumTrialActivationResponse:
+      type: object
+      properties:
+        user:
+          $ref: '#/components/schemas/User'
+        subscription:
+          type: object
+          additionalProperties: {}
+        wallet:
+          type: object
+          properties:
+            balance_usd:
+              type: string
+            display_currency:
+              type: string
+          required:
+          - balance_usd
+          - display_currency
+      required:
+      - subscription
+      - user
+      - wallet
+    UpgradeRequestReviewResponse:
+      type: object
+      properties:
+        message:
+          type: string
+        request:
+          $ref: '#/components/schemas/AdminUpgradeRequest'
+        user:
+          $ref: '#/components/schemas/User'
+        subscription:
+          type: object
+          additionalProperties: {}
+      required:
+      - message
+      - request
+      - user
     UpgradeRequestReviewStatusEnum:
       enum:
       - APPROVED
@@ -16779,6 +16930,9 @@ components:
           type: string
           nullable: true
           maxLength: 20
+        market_type:
+          allOf:
+          - $ref: '#/components/schemas/UpgradeRequestMarketTypeEnum'
         role:
           $ref: '#/components/schemas/UserRoleEnum'
         access_level:

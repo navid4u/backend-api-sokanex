@@ -176,7 +176,7 @@ class DashboardAPITests(APITestCase):
         )
         self.assertEqual(
             data["stats"]["signals"],
-            1,
+            0,
         )
         self.assertEqual(
             data["stats"]["articles"],
@@ -308,6 +308,13 @@ class DashboardAPITests(APITestCase):
         )
 
     def test_dashboard_contains_recent_collections(self):
+        now = timezone.now()
+        User.objects.filter(pk=self.customer.pk).update(
+            access_level=User.AccessLevel.LEVEL_5,
+            gold_trial_started_at=now,
+            gold_trial_expires_at=now + timedelta(days=7),
+        )
+        self.customer.refresh_from_db()
         self.authenticate(self.customer)
 
         response = self.client.get(
@@ -344,3 +351,18 @@ class DashboardAPITests(APITestCase):
             data["upcoming_live_events"][0]["id"],
             self.upcoming_event.pk,
         )
+
+    def test_dashboard_does_not_leak_vip_signal_posts_after_trial_expiry(self):
+        now = timezone.now()
+        User.objects.filter(pk=self.customer.pk).update(
+            access_level=User.AccessLevel.LEVEL_2,
+            gold_trial_started_at=now - timedelta(days=8),
+            gold_trial_expires_at=now - timedelta(seconds=1),
+        )
+        self.customer.refresh_from_db()
+        self.authenticate(self.customer)
+        response = self.client.get(self.dashboard_url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        data = response.data["data"]
+        self.assertEqual(data["stats"]["signals"], 0)
+        self.assertEqual(data["recent_signals"], [])

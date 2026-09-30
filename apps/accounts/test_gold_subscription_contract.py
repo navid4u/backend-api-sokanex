@@ -1,7 +1,9 @@
 from datetime import timedelta
 from concurrent.futures import ThreadPoolExecutor
+from io import StringIO
 
 from django.db import close_old_connections, connection
+from django.core.management import call_command
 from django.test import TransactionTestCase
 from django.utils import timezone
 from rest_framework.test import APITestCase
@@ -89,6 +91,22 @@ class GoldSubscriptionContractTests(APITestCase):
                     self.user.gold_trial_expires_at - self.user.gold_trial_started_at,
                     timedelta(days=7),
                 )
+
+    def test_trial_availability_is_reported_for_every_level_without_prior_trial(self):
+        from apps.wallet.services import WalletService
+
+        for level in User.AccessLevel.values:
+            with self.subTest(access_level=level):
+                User.objects.filter(pk=self.user.pk).update(
+                    access_level=level,
+                    gold_trial_started_at=None,
+                    gold_trial_expires_at=None,
+                    gold_permanent_granted_at=None,
+                )
+                self.user.refresh_from_db()
+                state = WalletService.premium_subscription(self.user)
+                self.assertTrue(state["can_start_trial"])
+                self.assertEqual(state["status"], "AVAILABLE")
 
     def test_trial_does_not_require_market_type(self):
         User.objects.filter(pk=self.user.pk).update(market_type="")
@@ -181,11 +199,12 @@ class GoldSubscriptionContractTests(APITestCase):
         self.user.access_level = User.AccessLevel.LEVEL_2
         self.user.save(update_fields=("access_level", "updated_at"))
         response = self.client.post(
-            "/api/accounts/upgrade-requests/premium/request/", {"message": ""}, format="json"
+            "/api/accounts/upgrade-requests/premium/request/",
+            {"message": "", "market_type": "crypto"}, format="json"
         )
         self.assertEqual(response.status_code, 400)
 
-    def test_permanent_request_is_idempotent_and_targets_level_three(self):
+    def test_permanent_request_is_idempotent_and_snapshots_market_type(self):
         self.user.access_level = User.AccessLevel.LEVEL_2
         self.user.gold_trial_started_at = timezone.now() - timedelta(days=8)
         self.user.gold_trial_expires_at = timezone.now() - timedelta(days=1)
@@ -194,11 +213,16 @@ class GoldSubscriptionContractTests(APITestCase):
         ))
         self.client.force_authenticate(self.user)
         url = "/api/accounts/upgrade-requests/premium/request/"
-        first = self.client.post(url, {"message": "Please review."}, format="json")
-        second = self.client.post(url, {"message": "Repeat click."}, format="json")
+        first = self.client.post(
+            url, {"message": "Please review.", "market_type": "crypto"}, format="json"
+        )
+        second = self.client.post(
+            url, {"message": "Repeat click.", "market_type": "forex"}, format="json"
+        )
         self.assertEqual(first.status_code, 201)
         self.assertEqual(second.status_code, 200)
-        self.assertEqual(first.data["upgrade_request"]["requested_level"], 3)
+        self.assertEqual(first.data["upgrade_request"]["requested_level"], 5)
+        self.assertEqual(first.data["upgrade_request"]["market_type"], "crypto")
         self.assertEqual(
             first.data["upgrade_request"]["id"],
             second.data["upgrade_request"]["id"],
@@ -212,7 +236,7 @@ class GoldSubscriptionContractTests(APITestCase):
             1,
         )
 
-    def test_admin_approval_grants_permanent_gold_at_level_three(self):
+    def test_admin_approval_grants_permanent_gold_at_level_five_idempotently(self):
         self.user.access_level = User.AccessLevel.LEVEL_2
         self.user.market_type = User.MarketType.FOREX
         self.user.gold_trial_started_at = timezone.now() - timedelta(days=8)
@@ -224,7 +248,8 @@ class GoldSubscriptionContractTests(APITestCase):
         request = UpgradeRequest.objects.create(
             user=self.user,
             request_type=UpgradeRequest.Type.PREMIUM,
-            requested_level=User.AccessLevel.LEVEL_3,
+            requested_level=User.AccessLevel.LEVEL_5,
+            market_type=User.MarketType.FOREX,
             grant_source=UpgradeRequest.GrantSource.GOLD_RENEWAL_REQUEST,
         )
         admin = User.objects.create_user(
@@ -240,12 +265,124 @@ class GoldSubscriptionContractTests(APITestCase):
         )
         self.assertEqual(response.status_code, 200)
         self.user.refresh_from_db()
-        self.assertEqual(self.user.access_level, User.AccessLevel.LEVEL_3)
+        self.assertEqual(self.user.access_level, User.AccessLevel.LEVEL_5)
         self.assertIsNotNone(self.user.gold_permanent_granted_at)
         self.assertTrue(response.data["subscription"]["active"])
         self.assertFalse(response.data["subscription"]["trial"])
         self.assertIsNone(response.data["subscription"]["trial_expires_at"])
         self.assertEqual(response.data["subscription"]["status"], "ACTIVE")
+        self.assertEqual(response.data["subscription"]["access_level"], 5)
+        self.assertEqual(response.data["user"]["access_level"], 5)
+        self.assertEqual(response.data["request"]["market_type"], "forex")
+        granted_at = self.user.gold_permanent_granted_at
+        repeated = self.client.patch(
+            f"/api/accounts/admin/upgrade-requests/{request.pk}/review/",
+            {"status": "APPROVED", "admin_note": "Different note"},
+            format="json",
+        )
+        self.assertEqual(repeated.status_code, 200)
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.gold_permanent_granted_at, granted_at)
+        self.assertEqual(self.user.access_level, 5)
+
+    def test_permanent_gold_grant_survives_auth_refresh_and_allows_level_five(self):
+        self.user.access_level = User.AccessLevel.LEVEL_5
+        self.user.gold_permanent_granted_at = timezone.now()
+        self.user.gold_trial_started_at = timezone.now() - timedelta(days=30)
+        self.user.gold_trial_expires_at = timezone.now() - timedelta(days=23)
+        self.user.save(update_fields=(
+            "access_level", "gold_permanent_granted_at", "gold_trial_started_at",
+            "gold_trial_expires_at", "updated_at"
+        ))
+        refreshed = PremiumAccessService.refresh_user_state(self.user)
+        from apps.wallet.services import WalletService
+
+        self.assertEqual(refreshed.access_level, User.AccessLevel.LEVEL_5)
+        subscription = WalletService.premium_subscription(refreshed)
+        self.assertTrue(subscription["active"])
+        self.assertFalse(subscription["trial"])
+        self.assertEqual(subscription["status"], "ACTIVE")
+        self.assertIsNone(subscription["trial_expires_at"])
+
+    def test_premium_request_requires_market_type_and_lists_only_requested_type(self):
+        self.user.access_level = User.AccessLevel.LEVEL_2
+        self.user.gold_trial_started_at = timezone.now() - timedelta(days=8)
+        self.user.gold_trial_expires_at = timezone.now() - timedelta(days=1)
+        self.user.save(update_fields=(
+            "access_level", "gold_trial_started_at", "gold_trial_expires_at", "updated_at"
+        ))
+        missing_market = self.client.post(
+            "/api/accounts/upgrade-requests/premium/request/", {"message": ""}, format="json"
+        )
+        self.assertEqual(missing_market.status_code, 400)
+        created = self.client.post(
+            "/api/accounts/upgrade-requests/premium/request/",
+            {"market_type": "internal", "message": ""},
+            format="json",
+        )
+        self.assertEqual(created.status_code, 201)
+        request_id = created.data["upgrade_request"]["id"]
+        listed = self.client.get("/api/accounts/upgrade-requests/?request_type=PREMIUM")
+        self.assertEqual(listed.status_code, 200)
+        self.assertEqual(listed.data["results"][0]["id"], request_id)
+        self.assertEqual(listed.data["results"][0]["market_type"], "internal")
+        admin = User.objects.create_user(
+            username="gold-contract-list-admin", password=self.password,
+            role=User.Role.SUPER_ADMIN,
+        )
+        self.client.force_authenticate(admin)
+        managed = self.client.get(
+            "/api/accounts/admin/upgrade-requests/?request_type=PREMIUM&status=PENDING&market_type=internal"
+        )
+        self.assertEqual(managed.status_code, 200)
+        self.assertEqual(managed.data["count"], 1)
+        managed_item = managed.data["results"][0]
+        self.assertEqual(managed_item["market_type"], "internal")
+        self.assertEqual(managed_item["requested_level"], 5)
+        self.assertEqual(managed_item["user"]["phone"], self.user.phone)
+
+    def test_rejecting_vip_request_does_not_change_user_level(self):
+        self.user.access_level = User.AccessLevel.LEVEL_2
+        request = UpgradeRequest.objects.create(
+            user=self.user,
+            request_type=UpgradeRequest.Type.PREMIUM,
+            requested_level=User.AccessLevel.LEVEL_5,
+            market_type=User.MarketType.CRYPTO,
+            grant_source=UpgradeRequest.GrantSource.GOLD_RENEWAL_REQUEST,
+        )
+        admin = User.objects.create_user(
+            username="gold-contract-reject-admin", password=self.password,
+            role=User.Role.SUPER_ADMIN,
+        )
+        self.client.force_authenticate(admin)
+        response = self.client.patch(
+            f"/api/accounts/admin/upgrade-requests/{request.pk}/review/",
+            {"status": "REJECTED"}, format="json",
+        )
+        self.assertEqual(response.status_code, 200)
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.access_level, User.AccessLevel.LEVEL_2)
+
+    def test_legacy_request_purge_requires_confirmation_and_only_deletes_requests(self):
+        from apps.wallet.models import Wallet
+
+        wallet = Wallet.objects.create(user=self.user, balance_usd="0.00")
+        request = UpgradeRequest.objects.create(
+            user=self.user, request_type=UpgradeRequest.Type.UPGRADE,
+            requested_level=User.AccessLevel.LEVEL_2,
+        )
+        output = StringIO()
+        call_command("purge_legacy_upgrade_requests", stdout=output)
+        self.assertTrue(UpgradeRequest.objects.filter(pk=request.pk).exists())
+        self.assertIn("No changes made", output.getvalue())
+
+        output = StringIO()
+        call_command("purge_legacy_upgrade_requests", confirm=True, stdout=output)
+        self.assertFalse(UpgradeRequest.objects.filter(pk=request.pk).exists())
+        self.assertTrue(User.objects.filter(pk=self.user.pk).exists())
+        wallet.refresh_from_db()
+        self.assertEqual(wallet.balance_usd, 0)
+        self.assertIn("UpgradeRequest rows deleted: 1", output.getvalue())
 
     @patch.object(RegisterView, "throttle_classes", [])
     def test_username_registration_returns_hashed_password_and_tokens(self):

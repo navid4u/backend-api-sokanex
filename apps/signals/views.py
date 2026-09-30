@@ -26,6 +26,7 @@ from common.permissions import (
     IsSignalOwnerOrEmployee,
     IsSuperAdmin,
     IsTrader,
+    CanAccessGoldContent,
 )
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -62,7 +63,7 @@ logger = logging.getLogger(__name__)
 
 
 class VIPSignalPostListView(generics.ListAPIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, CanAccessGoldContent]
     serializer_class = VIPSignalPostSerializer
     pagination_class = DefaultPagination
 
@@ -74,7 +75,7 @@ class VIPSignalPostListView(generics.ListAPIView):
 
 
 class VIPSignalPostDetailView(generics.RetrieveAPIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, CanAccessGoldContent]
     serializer_class = VIPSignalPostSerializer
     queryset = VIPSignalPost.objects.filter(is_active=True)
 

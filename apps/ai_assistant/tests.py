@@ -3,9 +3,11 @@ import os
 import tempfile
 from unittest.mock import patch
 from urllib.error import HTTPError
+from datetime import timedelta
 
 from cryptography.fernet import Fernet
 from django.test import override_settings
+from django.utils import timezone
 from PIL import Image
 from rest_framework.test import APITestCase
 
@@ -23,11 +25,33 @@ KEY = Fernet.generate_key().decode()
 )
 class AssistantAPITests(APITestCase):
     def setUp(self):
-        self.user = User.objects.create_user(username="user", password="password")
+        now = timezone.now()
+        self.user = User.objects.create_user(
+            username="user", password="password", access_level=User.AccessLevel.LEVEL_5,
+            gold_trial_started_at=now, gold_trial_expires_at=now + timedelta(days=7),
+        )
         role = PlatformRole.objects.create(name="AI managers", slug="ai-managers", permissions=[User.Permission.AI_ASSISTANT_MANAGE])
         self.manager = User.objects.create_user(username="manager", password="password", custom_role=role)
         self.superuser = User.objects.create_superuser(username="root-admin", password="password")
         self.config = AISettings.load()
+
+    def test_expired_trial_cannot_use_assistant_or_technical_analysis(self):
+        User.objects.filter(pk=self.user.pk).update(
+            access_level=User.AccessLevel.LEVEL_2,
+            gold_trial_expires_at=timezone.now() - timedelta(seconds=1),
+        )
+        self.user.refresh_from_db()
+        self.client.force_authenticate(self.user)
+        chat = self.client.post(
+            "/api/assistant/chat/",
+            {"messages": [{"role": "user", "content": "سؤال"}]},
+            format="json",
+        )
+        technical = self.client.post(
+            "/api/assistant/technical-analysis/", {}, format="multipart"
+        )
+        self.assertEqual(chat.status_code, 403)
+        self.assertEqual(technical.status_code, 403)
 
     def configure(self):
         self.client.force_authenticate(self.manager)

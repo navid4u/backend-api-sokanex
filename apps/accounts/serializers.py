@@ -1057,6 +1057,11 @@ class CrmContactSyncSerializer(serializers.ModelSerializer):
 
 
 class UpgradeRequestSerializer(serializers.ModelSerializer):
+    market_type = serializers.ChoiceField(
+        choices=User.MarketType.choices,
+        required=False,
+        allow_null=True,
+    )
     reviewed_by = serializers.CharField(
         source="reviewed_by.username",
         read_only=True,
@@ -1069,6 +1074,7 @@ class UpgradeRequestSerializer(serializers.ModelSerializer):
             "id",
             "request_type",
             "requested_level",
+            "market_type",
             "grant_source",
             "plan",
             "price_snapshot_irt",
@@ -1185,6 +1191,7 @@ class MarketTypeUpdateSerializer(serializers.ModelSerializer):
 
 class GoldRenewalRequestCreateSerializer(serializers.Serializer):
     message = serializers.CharField(required=False, allow_blank=True, max_length=1000)
+    market_type = serializers.ChoiceField(choices=User.MarketType.choices, required=True)
 
 
 class PremiumTrialActivationResponseSerializer(serializers.Serializer):
@@ -1194,6 +1201,7 @@ class PremiumTrialActivationResponseSerializer(serializers.Serializer):
 
 
 class GoldRenewalRequestResponseSerializer(serializers.Serializer):
+    request = UpgradeRequestSerializer()
     upgrade_request = UpgradeRequestSerializer()
     subscription = serializers.DictField()
     message = serializers.CharField()
@@ -1202,6 +1210,7 @@ class GoldRenewalRequestResponseSerializer(serializers.Serializer):
 class UpgradeRequestReviewResponseSerializer(serializers.Serializer):
     message = serializers.CharField()
     request = AdminUpgradeRequestSerializer()
+    user = UserSerializer()
     subscription = serializers.DictField(allow_null=True, required=False)
 
 

@@ -4,6 +4,7 @@ import tempfile
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import override_settings
 from django.utils import timezone
+from datetime import timedelta
 from rest_framework.test import APITestCase
 
 from apps.accounts.models import User
@@ -31,7 +32,11 @@ class VIPSignalChannelTests(APITestCase):
             username="sokanex-feed-bot",
             defaults={"is_active": False},
         )
-        self.user = User.objects.create_user(username="viewer", password="pass")
+        now = timezone.now()
+        self.user = User.objects.create_user(
+            username="viewer", password="pass", access_level=User.AccessLevel.LEVEL_5,
+            gold_trial_started_at=now, gold_trial_expires_at=now + timedelta(days=7),
+        )
         self.admin = User.objects.create_user(
             username="admin", password="pass", role=User.Role.ADMIN
         )
@@ -182,6 +187,18 @@ class VIPSignalChannelTests(APITestCase):
 
     def test_customer_feed_requires_authentication(self):
         self.assertEqual(self.client.get("/api/signals/").status_code, 401)
+
+    def test_expired_trial_cannot_read_vip_feed_or_detail(self):
+        post = VIPSignalPost.objects.create(channel="CRYPTO", text="gold-only")
+        User.objects.filter(pk=self.user.pk).update(
+            access_level=User.AccessLevel.LEVEL_2,
+            gold_trial_started_at=timezone.now() - timedelta(days=8),
+            gold_trial_expires_at=timezone.now() - timedelta(days=1),
+        )
+        self.user.refresh_from_db()
+        self.client.force_authenticate(self.user)
+        self.assertEqual(self.client.get("/api/signals/").status_code, 403)
+        self.assertEqual(self.client.get(f"/api/signals/{post.pk}/").status_code, 403)
 
     def test_external_id_is_idempotent_per_channel(self):
         payload = {"external_id": "telegram-42", "text": "first"}

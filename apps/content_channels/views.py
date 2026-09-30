@@ -15,7 +15,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.accounts.models import User
-from common.permissions import CanManageInternalAnalysis, IsEmployee
+from common.permissions import CanAccessGoldContent, CanManageInternalAnalysis, IsEmployee
 from .models import Channel, ChannelPost
 from .serializers import ChannelPostSerializer, InternalAnalysisIngestionSerializer, InternalAnalysisPostSerializer
 from common.ingestion import FixedIngestionKeyAuthentication
@@ -52,7 +52,15 @@ def accessible_channel(user, slug):
     queryset = Channel.objects.filter(slug=slug, is_active=True)
     if user.is_staff or user.role in (User.Role.EMPLOYEE, User.Role.ADMIN, User.Role.SUPER_ADMIN):
         return get_object_or_404(queryset)
-    return get_object_or_404(queryset, min_access_level__lte=user.effective_access_level)
+    required_level = 5 if slug in {"vip-signals", "internal-analysis"} else None
+    channel = get_object_or_404(queryset)
+    if required_level and user.effective_access_level < required_level:
+        from rest_framework.exceptions import PermissionDenied
+
+        raise PermissionDenied("اشتراک طلایی فعال برای دسترسی به این محتوا لازم است.")
+    return channel if user.effective_access_level >= channel.min_access_level else get_object_or_404(
+        queryset, min_access_level__lte=user.effective_access_level
+    )
 
 
 class ChannelPostListCreateView(generics.ListCreateAPIView):
@@ -129,7 +137,7 @@ class VIPSignalChannelView(ChannelPostListCreateView):
     OpenApiParameter("page_size", int, required=False),
 ]))
 class InternalAnalysisChannelView(generics.ListAPIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, CanAccessGoldContent]
     serializer_class = InternalAnalysisPostSerializer
 
     def get_queryset(self):
@@ -210,7 +218,7 @@ class InternalAnalysisManageDetailView(generics.RetrieveUpdateDestroyAPIView):
 
 
 class InternalAnalysisViewCountView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, CanAccessGoldContent]
     serializer_class = EmptySerializer
 
     def post(self, request, pk):
