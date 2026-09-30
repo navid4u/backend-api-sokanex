@@ -100,11 +100,11 @@ class PremiumUsdAPITests(APITestCase):
         self.assertEqual(second.status_code, 200)
         self.assertEqual(third.status_code, 200)
         self.user.refresh_from_db()
-        self.assertEqual(self.user.access_level, 3)
-        self.assertIsNotNone(self.user.gold_permanent_granted_at)
-        self.assertFalse(first.data["subscription"]["trial"])
-        self.assertEqual(first.data["upgrade_request"]["requested_level"], 3)
-        self.assertEqual(first.data["user"]["access_level"], 3)
+        self.assertEqual(self.user.access_level, 5)
+        self.assertIsNone(self.user.gold_permanent_granted_at)
+        self.assertTrue(first.data["subscription"]["trial"])
+        self.assertEqual(first.data["upgrade_request"]["requested_level"], 5)
+        self.assertEqual(first.data["user"]["access_level"], 5)
         self.assertEqual(UpgradeRequest.objects.filter(user=self.user, request_type="PREMIUM").count(), 1)
         self.assertEqual(UsdLedgerEntry.objects.filter(wallet=self.wallet, kind="PREMIUM_PURCHASE").count(), 1)
 
@@ -125,7 +125,7 @@ class PremiumUsdAPITests(APITestCase):
         self.assertEqual(response.status_code, 409)
         self.assertEqual(response.data["error_code"], "GOLD_TRIAL_EXPIRED")
         self.assertEqual(self.user.access_level, 2)
-        self.assertEqual(response.data["upgrade_request"]["id"], purchase.pk)
+        self.assertNotIn("upgrade_request", response.data)
         self.assertFalse(UsdLedgerEntry.objects.filter(wallet=self.wallet, kind="PREMIUM_PURCHASE").exists())
 
     def test_existing_pending_premium_request_is_finalized_not_duplicated(self):

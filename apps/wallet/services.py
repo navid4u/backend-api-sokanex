@@ -1,3 +1,4 @@
+from datetime import timedelta
 from decimal import Decimal
 
 from django.db import IntegrityError, transaction
@@ -197,7 +198,7 @@ class WalletService:
                         metadata={"upgrade_request_id": pending.pk, "reason": "premium_usd_purchase"},
                     )
                 purchase.request_type = UpgradeRequest.Type.PREMIUM
-                purchase.requested_level = 3
+                purchase.requested_level = 5
                 purchase.grant_source = UpgradeRequest.GrantSource.WALLET_PURCHASE
                 purchase.plan = plan
                 purchase.price_snapshot_usd = amount
@@ -209,13 +210,12 @@ class WalletService:
                 purchase.reviewed_at = purchased_at
                 purchase.admin_note = "Purchased instantly with USD wallet balance."
                 purchase.save()
-                locked_user.access_level = 3
-                locked_user.gold_trial_started_at = None
-                locked_user.gold_trial_expires_at = None
-                locked_user.gold_permanent_granted_at = purchased_at
+                locked_user.access_level = 5
+                locked_user.gold_trial_started_at = purchased_at
+                locked_user.gold_trial_expires_at = purchased_at + timedelta(days=7)
                 locked_user.save(update_fields=[
                     "access_level", "gold_trial_started_at", "gold_trial_expires_at",
-                    "gold_permanent_granted_at", "updated_at"
+                    "updated_at"
                 ])
                 return purchase, wallet, True
         except IntegrityError:

@@ -2,9 +2,11 @@ from datetime import timedelta
 
 from django.utils import timezone
 from rest_framework.test import APITestCase
+from unittest.mock import patch
 
 from apps.accounts.models import UpgradeRequest, User
 from apps.accounts.services import PremiumAccessService
+from apps.accounts.views import RegisterView
 from apps.wallet.models import UsdLedgerEntry, Wallet
 
 
@@ -135,6 +137,7 @@ class GoldSubscriptionContractTests(APITestCase):
         self.assertFalse(response.data["subscription"]["trial"])
         self.assertEqual(response.data["subscription"]["status"], "ACTIVE")
 
+    @patch.object(RegisterView, "throttle_classes", [])
     def test_username_registration_returns_hashed_password_and_tokens(self):
         self.client.force_authenticate(user=None)
         response = self.client.post(
@@ -158,6 +161,7 @@ class GoldSubscriptionContractTests(APITestCase):
         self.assertIn("premium_subscription", response.data["user"])
         self.assertTrue(response.data["user"]["premium_subscription"]["can_start_trial"])
 
+    @patch.object(RegisterView, "throttle_classes", [])
     def test_duplicate_username_password_mismatch_and_invalid_phone_are_400(self):
         self.client.force_authenticate(user=None)
         base = {
