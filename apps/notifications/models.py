@@ -171,3 +171,54 @@ class NotificationSMSDelivery(models.Model):
             fields=["notification", "user"], name="unique_notification_sms_per_user"
         )]
         indexes = [models.Index(fields=["status", "attempts", "created_at"])]
+
+
+class WebPushSubscription(models.Model):
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
+        related_name="web_push_subscriptions",
+    )
+    endpoint = models.URLField(max_length=2048, unique=True)
+    p256dh = models.CharField(max_length=256)
+    auth = models.CharField(max_length=128)
+    user_agent = models.CharField(max_length=500, blank=True)
+    is_active = models.BooleanField(default=True, db_index=True)
+    last_seen_at = models.DateTimeField(auto_now=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("-last_seen_at",)
+
+    def __str__(self):
+        return f"Web Push subscription for user {self.user_id}"
+
+
+class NotificationPushDelivery(models.Model):
+    class Status(models.TextChoices):
+        PENDING = "PENDING", "Pending"
+        SENT = "SENT", "Sent"
+        FAILED = "FAILED", "Failed"
+
+    notification = models.ForeignKey(
+        Notification, on_delete=models.CASCADE, related_name="push_deliveries"
+    )
+    subscription = models.ForeignKey(
+        WebPushSubscription, on_delete=models.CASCADE, related_name="deliveries"
+    )
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
+        related_name="notification_push_deliveries",
+    )
+    status = models.CharField(max_length=10, choices=Status.choices, default=Status.PENDING, db_index=True)
+    attempts = models.PositiveSmallIntegerField(default=0)
+    provider_status_code = models.PositiveSmallIntegerField(null=True, blank=True)
+    error_code = models.CharField(max_length=80, blank=True)
+    sent_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(
+            fields=("notification", "subscription"), name="unique_notification_push_per_subscription"
+        )]
+        indexes = [models.Index(fields=("status", "attempts", "created_at"), name="notif_push_status_4d971b_idx")]

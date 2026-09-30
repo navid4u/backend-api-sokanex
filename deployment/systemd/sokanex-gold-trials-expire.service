@@ -1,0 +1,14 @@
+[Unit]
+Description=Expire Sokanex seven-day Gold trials
+After=network.target
+
+[Service]
+Type=oneshot
+User=tradingapp
+Group=tradingapp
+WorkingDirectory=/srv/trading-platform/backend
+EnvironmentFile=-/srv/trading-platform/backend/.env
+ExecStart=/srv/trading-platform/venv/bin/python manage.py expire_gold_trials
+NoNewPrivileges=true
+PrivateTmp=true
+UMask=0027

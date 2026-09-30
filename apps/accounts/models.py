@@ -8,6 +8,10 @@ from common.phone import normalize_iran_phone, validate_iran_phone
 
 
 class User(AbstractUser):
+    class MarketType(models.TextChoices):
+        INTERNAL = "internal", "Internal market"
+        FOREX = "forex", "Forex"
+        CRYPTO = "crypto", "Crypto"
 
     class Role(models.TextChoices):
         SUPER_ADMIN = "SUPER_ADMIN", "Super Admin"
@@ -47,6 +51,12 @@ class User(AbstractUser):
         validators=[validate_iran_phone],
     )
 
+    market_type = models.CharField(max_length=12, choices=MarketType.choices, blank=True, default="")
+    telegram_id = models.CharField(max_length=64, blank=True, default="", db_index=True)
+    gold_trial_started_at = models.DateTimeField(null=True, blank=True)
+    gold_trial_expires_at = models.DateTimeField(null=True, blank=True)
+    gold_permanent_granted_at = models.DateTimeField(null=True, blank=True)
+
     avatar = models.ImageField(
         upload_to="avatars/",
         null=True,
@@ -85,6 +95,31 @@ class User(AbstractUser):
         if self.phone:
             self.phone = normalize_iran_phone(self.phone)
         super().save(*args, **kwargs)
+
+    @property
+    def effective_access_level(self):
+        if self.access_level == self.AccessLevel.LEVEL_2:
+            return self.AccessLevel.LEVEL_1
+        if self.has_gold_access:
+            return self.AccessLevel.LEVEL_5
+        if (
+            self.access_level == self.AccessLevel.LEVEL_5
+            and self.gold_trial_started_at
+            and self.gold_trial_expires_at
+            and self.gold_trial_expires_at <= timezone.now()
+        ):
+            return self.AccessLevel.LEVEL_1
+        return self.access_level
+
+    @property
+    def has_gold_access(self):
+        if self.gold_permanent_granted_at and self.access_level == self.AccessLevel.LEVEL_3:
+            return True
+        return bool(
+            self.access_level == self.AccessLevel.LEVEL_5
+            and self.gold_trial_expires_at
+            and self.gold_trial_expires_at > timezone.now()
+        )
 
     def has_platform_permission(self, permission):
         if self.is_superuser or self.role == self.Role.SUPER_ADMIN:
@@ -172,6 +207,11 @@ class UpgradeRequest(models.Model):
         APPROVED = "APPROVED", "Approved"
         REJECTED = "REJECTED", "Rejected"
 
+    class GrantSource(models.TextChoices):
+        LEGACY = "LEGACY", "Legacy request"
+        WALLET_PURCHASE = "WALLET_PURCHASE", "Wallet purchase"
+        GOLD_RENEWAL_REQUEST = "GOLD_RENEWAL_REQUEST", "Gold renewal request"
+
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
@@ -184,6 +224,9 @@ class UpgradeRequest(models.Model):
     )
     requested_level = models.PositiveSmallIntegerField(
         choices=[(level, f"Level {level}") for level in range(2, 6)],
+    )
+    grant_source = models.CharField(
+        max_length=32, choices=GrantSource.choices, default=GrantSource.LEGACY
     )
     plan = models.ForeignKey("wallet.UpgradePlan", null=True, blank=True, on_delete=models.PROTECT)
     price_snapshot_irt = models.PositiveBigIntegerField(default=0)

@@ -20,8 +20,12 @@ from rest_framework.views import APIView
 
 from common.permissions import IsEmployee
 
-from .models import Notification
-from .serializers import NotificationSerializer
+from .models import Notification, WebPushSubscription
+from .serializers import (
+    NotificationSerializer,
+    WebPushSubscriptionCreateSerializer,
+    WebPushSubscriptionSerializer,
+)
 from .services import NotificationService
 
 
@@ -83,6 +87,7 @@ class NotificationListCreateView(
             created_by=self.request.user
         )
         NotificationService.queue_sms(notification)
+        NotificationService.queue_push(notification)
 
 
 class NotificationUnreadCountView(APIView):
@@ -110,6 +115,71 @@ class NotificationUnreadCountView(APIView):
             },
             status=status.HTTP_200_OK,
         )
+
+
+class WebPushVapidPublicKeyView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(responses=inline_serializer(
+        name="WebPushVapidPublicKeyResponse",
+        fields={"configured": serializers.BooleanField(), "public_key": serializers.CharField(allow_null=True)},
+    ))
+    def get(self, request):
+        from django.conf import settings
+        from pathlib import Path
+
+        configured = bool(
+            settings.WEBPUSH_VAPID_PUBLIC_KEY
+            and settings.WEBPUSH_VAPID_PRIVATE_KEY_PATH
+            and settings.WEBPUSH_VAPID_SUBJECT
+            and Path(settings.WEBPUSH_VAPID_PRIVATE_KEY_PATH).is_file()
+        )
+        return Response({
+            "configured": configured,
+            "public_key": settings.WEBPUSH_VAPID_PUBLIC_KEY if configured else None,
+        })
+
+
+class WebPushSubscriptionListCreateView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(responses=WebPushSubscriptionSerializer(many=True))
+    def get(self, request):
+        subscriptions = WebPushSubscription.objects.filter(user=request.user)
+        return Response(WebPushSubscriptionSerializer(subscriptions, many=True).data)
+
+    @extend_schema(request=WebPushSubscriptionCreateSerializer, responses={200: WebPushSubscriptionSerializer, 201: WebPushSubscriptionSerializer})
+    def post(self, request):
+        serializer = WebPushSubscriptionCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+        subscription = WebPushSubscription.objects.filter(endpoint=data["endpoint"]).first()
+        if subscription and subscription.user_id != request.user.pk:
+            return Response(
+                {"detail": "This push endpoint is already linked to another account."},
+                status=status.HTTP_409_CONFLICT,
+            )
+        created = subscription is None
+        subscription = subscription or WebPushSubscription(user=request.user, endpoint=data["endpoint"])
+        subscription.user = request.user
+        subscription.p256dh = data["keys"]["p256dh"]
+        subscription.auth = data["keys"]["auth"]
+        subscription.user_agent = request.META.get("HTTP_USER_AGENT", "")[:500]
+        subscription.is_active = True
+        subscription.save()
+        return Response(
+            WebPushSubscriptionSerializer(subscription).data,
+            status=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
+        )
+
+
+class WebPushSubscriptionDeleteView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def delete(self, request, pk):
+        subscription = get_object_or_404(WebPushSubscription, pk=pk, user=request.user)
+        subscription.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 class NotificationDetailView(

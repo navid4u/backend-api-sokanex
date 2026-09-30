@@ -295,6 +295,12 @@ MEDIA_ROOT = BASE_DIR / "media"
 FILE_UPLOAD_PERMISSIONS = 0o644
 FILE_UPLOAD_DIRECTORY_PERMISSIONS = 0o755
 
+WEBPUSH_VAPID_PUBLIC_KEY = config("WEBPUSH_VAPID_PUBLIC_KEY", default="")
+WEBPUSH_VAPID_PRIVATE_KEY_PATH = config("WEBPUSH_VAPID_PRIVATE_KEY_PATH", default="")
+WEBPUSH_VAPID_SUBJECT = config("WEBPUSH_VAPID_SUBJECT", default="")
+WEBPUSH_APP_BASE_URL = config("WEBPUSH_APP_BASE_URL", default="https://app.sokanex.com")
+WEBPUSH_ICON_URL = config("WEBPUSH_ICON_URL", default="https://app.sokanex.com/icons/icon-192.png")
+
 
 # --------------------------------------------------
 # Django REST Framework
@@ -302,11 +308,7 @@ FILE_UPLOAD_DIRECTORY_PERMISSIONS = 0o755
 
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": (
-        (
-            "rest_framework_simplejwt."
-            "authentication."
-            "JWTAuthentication"
-        ),
+        "apps.accounts.authentication.PremiumStateJWTAuthentication",
     ),
 
     "DEFAULT_PERMISSION_CLASSES": (

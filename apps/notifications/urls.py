@@ -6,10 +6,16 @@ from .views import (
     NotificationDetailView,
     NotificationListCreateView,
     NotificationUnreadCountView,
+    WebPushVapidPublicKeyView,
+    WebPushSubscriptionListCreateView,
+    WebPushSubscriptionDeleteView,
 )
 
 
 urlpatterns = [
+    path("push/vapid-public-key/", WebPushVapidPublicKeyView.as_view(), name="push-vapid-public-key"),
+    path("push/subscriptions/", WebPushSubscriptionListCreateView.as_view(), name="push-subscriptions"),
+    path("push/subscriptions/<int:pk>/", WebPushSubscriptionDeleteView.as_view(), name="push-subscription-delete"),
     path(
         "",
         NotificationListCreateView.as_view(),

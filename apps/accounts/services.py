@@ -1,4 +1,6 @@
 from rest_framework.exceptions import ValidationError
+from datetime import timedelta
+
 from django.db import transaction
 from django.utils import timezone
 
@@ -35,6 +37,105 @@ class ProfileCompletionService:
             "profile_completion": completion,
             "missing_profile_fields": missing,
         }
+
+
+class PremiumAccessService:
+    TRIAL_DAYS = 7
+
+    @classmethod
+    def refresh_user_state(cls, user):
+        """Start legacy level-5 trials once, and downgrade expired trials on auth."""
+        if (
+            user.access_level != User.AccessLevel.LEVEL_5
+            or user.gold_permanent_granted_at
+            or user.role != User.Role.USER
+            or user.is_superuser
+            or (
+                user.gold_trial_started_at
+                and user.gold_trial_expires_at
+                and user.gold_trial_expires_at > timezone.now()
+            )
+        ):
+            return user
+        with transaction.atomic():
+            locked = User.objects.select_for_update().get(pk=user.pk)
+            if (
+                locked.access_level == User.AccessLevel.LEVEL_5
+                and not locked.gold_permanent_granted_at
+                and locked.role == User.Role.USER
+                and not locked.is_superuser
+            ):
+                now = timezone.now()
+                if locked.gold_trial_started_at is None:
+                    locked.gold_trial_started_at = now
+                    locked.gold_trial_expires_at = now + timedelta(days=cls.TRIAL_DAYS)
+                    locked.save(update_fields=(
+                        "gold_trial_started_at", "gold_trial_expires_at", "updated_at"
+                    ))
+                elif locked.gold_trial_expires_at and locked.gold_trial_expires_at <= now:
+                    locked.access_level = User.AccessLevel.LEVEL_2
+                    locked.save(update_fields=("access_level", "updated_at"))
+        for field in (
+            "access_level", "gold_trial_started_at", "gold_trial_expires_at",
+            "gold_permanent_granted_at", "market_type", "telegram_id",
+        ):
+            setattr(user, field, getattr(locked, field))
+        return user
+
+    @classmethod
+    @transaction.atomic
+    def activate_trial(cls, user):
+        locked = User.objects.select_for_update().get(pk=user.pk)
+        if locked.access_level != User.AccessLevel.LEVEL_1:
+            raise ValidationError({"detail": "آزمایش رایگان فقط برای کاربران سطح ۱ فعال است."})
+        if locked.gold_trial_started_at is not None:
+            raise ValidationError({"detail": "دوره آزمایشی قبلاً استفاده شده است."})
+        if not locked.market_type:
+            raise ValidationError({"market_type": "ابتدا بازار فعال خود را انتخاب کنید."})
+        now = timezone.now()
+        locked.gold_trial_started_at = now
+        locked.gold_trial_expires_at = now + timedelta(days=cls.TRIAL_DAYS)
+        locked.access_level = User.AccessLevel.LEVEL_5
+        locked.save(update_fields=(
+            "gold_trial_started_at", "gold_trial_expires_at", "access_level", "updated_at"
+        ))
+        return cls.refresh_user_state(locked)
+
+    @classmethod
+    @transaction.atomic
+    def request_permanent_gold(cls, user, message=""):
+        locked = User.objects.select_for_update().get(pk=user.pk)
+        if locked.access_level != User.AccessLevel.LEVEL_2:
+            raise ValidationError({"detail": "درخواست اشتراک دائمی فقط برای سطح ۲ مجاز است."})
+        if not locked.market_type:
+            raise ValidationError({"market_type": "ابتدا بازار فعال خود را انتخاب کنید."})
+        existing = UpgradeRequest.objects.filter(
+            user=locked, status=UpgradeRequest.Status.PENDING
+        ).first()
+        if existing:
+            return existing, False
+        request = UpgradeRequest.objects.create(
+            user=locked,
+            request_type=UpgradeRequest.Type.PREMIUM,
+            # Keep the legacy PREMIUM request contract (level 5).
+            # Permanent renewal is granted as level 3 during review.
+            requested_level=User.AccessLevel.LEVEL_5,
+            grant_source=UpgradeRequest.GrantSource.GOLD_RENEWAL_REQUEST,
+            message=message.strip(),
+        )
+        return request, True
+
+    @staticmethod
+    def expire_trials():
+        now = timezone.now()
+        return User.objects.filter(
+            role=User.Role.USER,
+            is_superuser=False,
+            access_level=User.AccessLevel.LEVEL_5,
+            gold_permanent_granted_at__isnull=True,
+            gold_trial_started_at__isnull=False,
+            gold_trial_expires_at__lte=now,
+        ).update(access_level=User.AccessLevel.LEVEL_2, updated_at=now)
 
 
 class FinancialPersonalityService:
@@ -267,10 +368,21 @@ class UserService:
                     LedgerEntry(transaction=capture, account_code="UPGRADE_HOLD", direction=LedgerEntry.Direction.DEBIT, amount_irt=locked_request.price_snapshot_irt),
                     LedgerEntry(transaction=capture, account_code="UPGRADE_REVENUE", direction=LedgerEntry.Direction.CREDIT, amount_irt=locked_request.price_snapshot_irt),
                 ])
-            UserService.update_access_level(
-                locked_request.user,
-                locked_request.requested_level,
-            )
+            if (
+                locked_request.request_type == UpgradeRequest.Type.PREMIUM
+                and locked_request.grant_source == UpgradeRequest.GrantSource.GOLD_RENEWAL_REQUEST
+            ):
+                permanent_user = User.objects.select_for_update().get(pk=locked_request.user_id)
+                permanent_user.access_level = User.AccessLevel.LEVEL_3
+                permanent_user.gold_permanent_granted_at = timezone.now()
+                permanent_user.save(update_fields=(
+                    "access_level", "gold_permanent_granted_at", "updated_at"
+                ))
+            else:
+                UserService.update_access_level(
+                    locked_request.user,
+                    locked_request.requested_level,
+                )
         elif locked_request.price_snapshot_irt and locked_request.hold_ledger_transaction_id:
             from apps.wallet.services import WalletService
             WalletService.post(

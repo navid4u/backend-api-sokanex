@@ -1,0 +1,11 @@
+[Unit]
+Description=Expire Sokanex Gold trials hourly
+
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=1h
+AccuracySec=1min
+Unit=sokanex-gold-trials-expire.service
+
+[Install]
+WantedBy=timers.target

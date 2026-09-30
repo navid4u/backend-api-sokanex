@@ -1,4 +1,5 @@
 import html
+import json
 import re
 from urllib.parse import urljoin
 
@@ -18,6 +19,8 @@ from .models import (
     Notification,
     NotificationRead,
     NotificationSMSDelivery,
+    NotificationPushDelivery,
+    WebPushSubscription,
 )
 from apps.accounts.models import User
 from common.sms import PayamitoSMSService, SMSProviderError, render_sms_template
@@ -109,8 +112,8 @@ class NotificationService:
                     | Q(allowed_level_4=True)
                     | Q(allowed_level_5=True)
                 )
-                if user.access_level == User.AccessLevel.LEVEL_5
-                else Q(**{f"allowed_level_{user.access_level}": True})
+                if user.effective_access_level == User.AccessLevel.LEVEL_5
+                else Q(**{f"allowed_level_{user.effective_access_level}": True})
             ).filter(Q(expires_at__isnull=True) | Q(expires_at__gt=timezone.now()))
             .select_related("created_by")
             .annotate(
@@ -183,17 +186,138 @@ class NotificationService:
 
     @staticmethod
     def target_users(notification):
-        queryset = User.objects.filter(is_active=True).exclude(phone__isnull=True).exclude(phone="")
+        return NotificationService.audience_users(notification).exclude(
+            phone__isnull=True
+        ).exclude(phone="")
+
+    @staticmethod
+    def audience_users(notification):
+        queryset = User.objects.filter(is_active=True)
         if notification.recipient_id:
             return queryset.filter(pk=notification.recipient_id)
         if notification.target_role:
             return queryset.filter(role=notification.target_role)
         if notification.allowed_levels:
-            levels = list(notification.allowed_levels)
-            if any(level in levels for level in (1, 2, 3, 4)) and 5 not in levels:
-                levels.append(5)
-            return queryset.filter(access_level__in=levels)
+            requested_levels = set(notification.allowed_levels)
+            actual_levels = set(requested_levels)
+            # Level 2 keeps the same lower-tier notification access as Level 1.
+            if 1 in requested_levels:
+                actual_levels.add(2)
+            matches = Q(access_level__in=actual_levels - {5})
+            # Gold users inherit every tier's notifications; expired trials do not.
+            if requested_levels:
+                matches |= Q(
+                    access_level=User.AccessLevel.LEVEL_5,
+                    gold_trial_expires_at__gt=timezone.now(),
+                )
+                matches |= Q(
+                    access_level=User.AccessLevel.LEVEL_3,
+                    gold_permanent_granted_at__isnull=False,
+                )
+            return queryset.filter(matches)
         return queryset
+
+    @classmethod
+    def queue_push(cls, notification):
+        subscriptions = WebPushSubscription.objects.filter(
+            is_active=True,
+            user__in=cls.audience_users(notification),
+            user__is_active=True,
+        ).only("pk", "user_id")
+        queued = 0
+        batch = []
+        for subscription in subscriptions.iterator(chunk_size=1000):
+            batch.append(NotificationPushDelivery(
+                notification_id=notification.pk,
+                subscription_id=subscription.pk,
+                user_id=subscription.user_id,
+            ))
+            if len(batch) == 1000:
+                NotificationPushDelivery.objects.bulk_create(batch, ignore_conflicts=True)
+                queued += len(batch)
+                batch = []
+        if batch:
+            NotificationPushDelivery.objects.bulk_create(batch, ignore_conflicts=True)
+            queued += len(batch)
+        return queued
+
+    @staticmethod
+    def send_pending_push(limit=100):
+        if not settings.WEBPUSH_VAPID_PRIVATE_KEY_PATH or not settings.WEBPUSH_VAPID_SUBJECT:
+            return 0
+        from pywebpush import WebPushException, webpush
+        queryset = NotificationPushDelivery.objects.filter(
+            status=NotificationPushDelivery.Status.PENDING,
+            attempts__lt=5,
+            subscription__is_active=True,
+            notification__is_active=True,
+        ).filter(
+            Q(notification__expires_at__isnull=True)
+            | Q(notification__expires_at__gt=timezone.now())
+        ).select_related("notification", "subscription")
+        sent_count = 0
+        for delivery in queryset.order_by("created_at")[:limit]:
+            delivery.attempts += 1
+            notification = delivery.notification
+            target_url = notification.target_url.strip()
+            if target_url.startswith("/"):
+                target_url = urljoin(
+                    settings.WEBPUSH_APP_BASE_URL.rstrip("/") + "/",
+                    target_url.lstrip("/"),
+                )
+            payload = {
+                "title": notification.title,
+                "body": NotificationService._clean_message(notification.message)[:240],
+                "url": target_url or settings.WEBPUSH_APP_BASE_URL,
+                "icon": settings.WEBPUSH_ICON_URL,
+                "tag": f"notification-{notification.pk}",
+            }
+            try:
+                webpush(
+                    subscription_info={
+                        "endpoint": delivery.subscription.endpoint,
+                        "keys": {
+                            "p256dh": delivery.subscription.p256dh,
+                            "auth": delivery.subscription.auth,
+                        },
+                    },
+                    data=json.dumps(payload, ensure_ascii=False),
+                    vapid_private_key=settings.WEBPUSH_VAPID_PRIVATE_KEY_PATH,
+                    vapid_claims={"sub": settings.WEBPUSH_VAPID_SUBJECT},
+                    ttl=3600,
+                    timeout=8,
+                )
+                delivery.status = NotificationPushDelivery.Status.SENT
+                delivery.sent_at = timezone.now()
+                delivery.error_code = ""
+                sent_count += 1
+            except WebPushException as exc:
+                code = getattr(exc, "response", None)
+                delivery.provider_status_code = (
+                    getattr(code, "status_code", None) or getattr(exc, "status_code", None)
+                )
+                delivery.error_code = f"HTTP_{delivery.provider_status_code}" if delivery.provider_status_code else "PROVIDER_ERROR"
+                if delivery.provider_status_code in (404, 410):
+                    delivery.subscription.is_active = False
+                    delivery.subscription.save(update_fields=("is_active", "last_seen_at"))
+                    delivery.status = NotificationPushDelivery.Status.FAILED
+                elif delivery.attempts >= 5:
+                    delivery.status = NotificationPushDelivery.Status.FAILED
+            except Exception as exc:
+                delivery.error_code = "DELIVERY_ERROR"
+                if delivery.attempts >= 5:
+                    delivery.status = NotificationPushDelivery.Status.FAILED
+                import logging
+
+                logging.getLogger("apps.notifications.push").warning(
+                    "Web push delivery failed delivery_id=%s error_type=%s",
+                    delivery.pk, type(exc).__name__,
+                )
+            delivery.save(update_fields=(
+                "attempts", "status", "provider_status_code", "error_code",
+                "sent_at", "updated_at",
+            ))
+        return sent_count
 
     @classmethod
     def queue_sms(cls, notification):

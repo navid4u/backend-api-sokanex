@@ -85,6 +85,10 @@ from .serializers import (
     CrmContactSyncSerializer,
     PremiumPurchaseSerializer,
     PremiumPurchaseResponseSerializer,
+    MarketTypeUpdateSerializer,
+    GoldRenewalRequestCreateSerializer,
+    GoldRenewalRequestResponseSerializer,
+    PremiumTrialActivationResponseSerializer,
 )
 from .models import (
     Badge,
@@ -101,7 +105,7 @@ from .models import (
 )
 from django.utils import timezone
 from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken, OutstandingToken
-from .services import FinancialPersonalityService, ProfileCompletionService, UserService
+from .services import FinancialPersonalityService, ProfileCompletionService, PremiumAccessService, UserService
 from apps.activity.models import UserActivity
 from apps.activity.services import ActivityService
 from .authentication import issue_login_tokens
@@ -1081,6 +1085,59 @@ class PremiumPurchaseView(APIView):
         )
 
 
+class MarketTypeView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(request=MarketTypeUpdateSerializer, responses=MarketTypeUpdateSerializer)
+    def patch(self, request):
+        serializer = MarketTypeUpdateSerializer(
+            request.user, data=request.data, partial=True
+        )
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response({"market_type": request.user.market_type})
+
+
+class PremiumTrialActivationView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(request=None, responses=PremiumTrialActivationResponseSerializer)
+    def post(self, request):
+        user = PremiumAccessService.activate_trial(request.user)
+        from apps.wallet.services import WalletService
+
+        return Response(
+            {
+                "user": UserSerializer(user, context={"request": request}).data,
+                "subscription": WalletService.premium_subscription(user),
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
+class GoldRenewalRequestView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        request=GoldRenewalRequestCreateSerializer,
+        responses={200: GoldRenewalRequestResponseSerializer, 201: GoldRenewalRequestResponseSerializer},
+    )
+    def post(self, request):
+        serializer = GoldRenewalRequestCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        upgrade_request, created = PremiumAccessService.request_permanent_gold(
+            request.user, serializer.validated_data.get("message", "")
+        )
+        return Response(
+            {
+                "request": UpgradeRequestSerializer(upgrade_request).data,
+                "market_type": request.user.market_type,
+                "message": "درخواست اشتراک طلایی ثبت شد و پس از بررسی نتیجه اعلام می‌شود.",
+            },
+            status=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
+        )
+
+
 class UpgradeRequestManagementListView(generics.ListAPIView):
     permission_classes = [IsAuthenticated, CanManageUsers]
     serializer_class = AdminUpgradeRequestSerializer
@@ -1089,6 +1146,10 @@ class UpgradeRequestManagementListView(generics.ListAPIView):
     search_fields = [
         "user__username",
         "user__email",
+        "user__phone",
+        "user__first_name",
+        "user__last_name",
+        "user__market_type",
         "message",
     ]
 

@@ -204,6 +204,7 @@ class UserSerializer(serializers.ModelSerializer):
             "first_name",
             "last_name",
             "phone",
+            "market_type",
             "avatar",
             "role",
             "access_level",
@@ -323,6 +324,13 @@ class CustomTokenObtainPairSerializer(
                 matches[0].get_username() if matches else normalized_phone
             )
         data = super().validate(attrs)
+        from .services import PremiumAccessService
+
+        PremiumAccessService.refresh_user_state(self.user)
+        refreshed = RefreshToken(data["refresh"])
+        refreshed["access_level"] = self.user.access_level
+        refreshed["market_type"] = self.user.market_type
+        data["refresh"] = str(refreshed)
         session = issue_login_tokens(self.user, self.context["request"], data["refresh"])
         data.update(session)
 
@@ -463,6 +471,7 @@ class UserListSerializer(
             "last_name",
             "email",
             "phone",
+            "market_type",
             "role",
             "access_level",
             "custom_role",
@@ -748,6 +757,9 @@ class UserCustomRoleUpdateSerializer(serializers.Serializer):
 
 
 class UserProfileDetailsSerializer(serializers.ModelSerializer):
+    market_type = serializers.ChoiceField(
+        source="user.market_type", choices=User.MarketType.choices, required=False
+    )
     birth_date = LocalizedNullableDateField(required=False, allow_null=True)
     country = serializers.CharField(required=False, allow_blank=True, max_length=100)
     income_currency = serializers.CharField(required=False, allow_blank=True, max_length=10)
@@ -784,6 +796,7 @@ class UserProfileDetailsSerializer(serializers.ModelSerializer):
             "id",
             "username",
             "email",
+            "market_type",
             "bio",
             "birth_date",
             "gender",
@@ -839,6 +852,13 @@ class UserProfileDetailsSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         )
+
+    def update(self, instance, validated_data):
+        user_data = validated_data.pop("user", {})
+        if "market_type" in user_data:
+            instance.user.market_type = user_data["market_type"]
+            instance.user.save(update_fields=("market_type", "updated_at"))
+        return super().update(instance, validated_data)
 
     def _validate_string_list(self, value, field_name, max_items=30):
         if not isinstance(value, list):
@@ -1027,6 +1047,7 @@ class UpgradeRequestSerializer(serializers.ModelSerializer):
             "id",
             "request_type",
             "requested_level",
+            "grant_source",
             "plan",
             "price_snapshot_irt",
             "price_snapshot_usd",
@@ -1041,6 +1062,7 @@ class UpgradeRequestSerializer(serializers.ModelSerializer):
         )
         read_only_fields = (
             "id",
+            "grant_source",
             "plan",
             "price_snapshot_irt",
             "price_snapshot_usd",
@@ -1131,6 +1153,27 @@ class UpgradeRequestReviewSerializer(serializers.Serializer):
         required=False,
         allow_blank=True,
     )
+
+
+class MarketTypeUpdateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = ("market_type",)
+
+
+class GoldRenewalRequestCreateSerializer(serializers.Serializer):
+    message = serializers.CharField(required=False, allow_blank=True, max_length=1000)
+
+
+class PremiumTrialActivationResponseSerializer(serializers.Serializer):
+    user = UserSerializer()
+    subscription = serializers.DictField()
+
+
+class GoldRenewalRequestResponseSerializer(serializers.Serializer):
+    request = UpgradeRequestSerializer()
+    market_type = serializers.ChoiceField(choices=User.MarketType.choices)
+    message = serializers.CharField()
 
 
 class ProfileUpdateSerializer(
@@ -1371,7 +1414,7 @@ class RegistrationOTPUserSerializer(serializers.ModelSerializer):
         model = User
         fields = (
             "id", "username", "phone", "first_name", "last_name", "email",
-            "role", "access_level", "is_active", "is_verified",
+            "role", "access_level", "market_type", "is_active", "is_verified",
         )
         read_only_fields = fields
 

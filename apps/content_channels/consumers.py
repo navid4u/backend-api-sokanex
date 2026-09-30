@@ -39,4 +39,4 @@ class ContentChannelConsumer(AsyncJsonWebsocketConsumer):
             channel = Channel.objects.get(slug=slug, is_active=True)
         except (User.DoesNotExist, Channel.DoesNotExist):
             return False
-        return user.is_staff or user.access_level >= channel.min_access_level
+        return user.is_staff or user.effective_access_level >= channel.min_access_level

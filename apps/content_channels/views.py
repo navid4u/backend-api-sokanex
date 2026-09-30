@@ -52,7 +52,7 @@ def accessible_channel(user, slug):
     queryset = Channel.objects.filter(slug=slug, is_active=True)
     if user.is_staff or user.role in (User.Role.EMPLOYEE, User.Role.ADMIN, User.Role.SUPER_ADMIN):
         return get_object_or_404(queryset)
-    return get_object_or_404(queryset, min_access_level__lte=user.access_level)
+    return get_object_or_404(queryset, min_access_level__lte=user.effective_access_level)
 
 
 class ChannelPostListCreateView(generics.ListCreateAPIView):

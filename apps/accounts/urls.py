@@ -40,6 +40,9 @@ from .views import (
     CrmContactSyncRetryView,
     CrmContactSyncRetryAllView,
     PremiumPurchaseView,
+    MarketTypeView,
+    PremiumTrialActivationView,
+    GoldRenewalRequestView,
 )
 
 
@@ -123,6 +126,11 @@ urlpatterns = [
         name="profile-details",
     ),
     path(
+        "profile/market-type/",
+        MarketTypeView.as_view(),
+        name="profile-market-type",
+    ),
+    path(
         "users/<int:pk>/access-level/",
         UpdateUserAccessLevelView.as_view(),
         name="user-access-level-update",
@@ -136,6 +144,16 @@ urlpatterns = [
         "upgrade-requests/premium/purchase/",
         PremiumPurchaseView.as_view(),
         name="premium-purchase",
+    ),
+    path(
+        "upgrade-requests/premium/trial/activate/",
+        PremiumTrialActivationView.as_view(),
+        name="premium-trial-activate",
+    ),
+    path(
+        "upgrade-requests/premium/request/",
+        GoldRenewalRequestView.as_view(),
+        name="premium-renewal-request",
     ),
     path(
         "admin/upgrade-requests/",

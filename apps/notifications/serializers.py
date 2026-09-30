@@ -5,6 +5,7 @@ from apps.accounts.models import User
 from common.content_access import AllowedLevelsSerializerMixin
 
 from .models import Notification
+from .models import WebPushSubscription
 
 
 class NotificationSerializer(AllowedLevelsSerializerMixin,
@@ -125,3 +126,37 @@ class NotificationSerializer(AllowedLevelsSerializerMixin,
             )
 
         return attrs
+
+
+class WebPushKeysSerializer(serializers.Serializer):
+    p256dh = serializers.RegexField(r"^[A-Za-z0-9_-]{20,256}$")
+    auth = serializers.RegexField(r"^[A-Za-z0-9_-]{8,128}$")
+
+
+class WebPushSubscriptionCreateSerializer(serializers.Serializer):
+    endpoint = serializers.URLField(max_length=2048)
+    keys = WebPushKeysSerializer()
+
+    def validate_endpoint(self, value):
+        from urllib.parse import urlsplit
+
+        host = (urlsplit(value).hostname or "").lower().rstrip(".")
+        supported = (
+            "fcm.googleapis.com",
+            "push.services.mozilla.com",
+            "push.apple.com",
+            "notify.windows.com",
+            "wns.windows.com",
+        )
+        if not value.startswith("https://") or not any(
+            host == domain or host.endswith("." + domain) for domain in supported
+        ):
+            raise serializers.ValidationError("Push endpoint provider is not supported.")
+        return value
+
+
+class WebPushSubscriptionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = WebPushSubscription
+        fields = ("id", "created_at", "last_seen_at", "is_active")
+        read_only_fields = fields

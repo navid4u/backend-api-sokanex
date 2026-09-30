@@ -3,6 +3,7 @@ import uuid
 from datetime import UTC, datetime, timedelta
 
 from django.utils import timezone
+from rest_framework_simplejwt.authentication import JWTAuthentication
 from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken, OutstandingToken
 from rest_framework_simplejwt.tokens import RefreshToken
 
@@ -12,8 +13,26 @@ from apps.activity.services import ActivityService
 from .models import SecuritySettings, UserDevice
 
 
+class PremiumStateJWTAuthentication(JWTAuthentication):
+    """Keep expiring Gold trial access synchronized on every bearer request."""
+
+    def authenticate(self, request):
+        result = super().authenticate(request)
+        if result is not None:
+            from .services import PremiumAccessService
+
+            PremiumAccessService.refresh_user_state(result[0])
+        return result
+
+
 def issue_login_tokens(user, request, refresh_value=None, record_login=True):
+    from .services import PremiumAccessService
+
+    PremiumAccessService.refresh_user_state(user)
     refresh = RefreshToken(refresh_value) if refresh_value else RefreshToken.for_user(user)
+    refresh["access_level"] = user.access_level
+    refresh["market_type"] = user.market_type
+    refresh["role"] = user.role
     security = SecuritySettings.load()
     refresh.set_exp(lifetime=timedelta(days=security.session_lifetime_days))
     refresh_value = str(refresh)

@@ -70,7 +70,7 @@ def restrict_queryset_for_user(queryset, user):
     ):
         return queryset
 
-    level = user.access_level
+    level = user.effective_access_level
     if level not in LEVELS:
         return queryset.none()
 
@@ -91,7 +91,8 @@ def user_can_access_levels(user, allowed_levels):
     if user.is_staff or user.is_superuser:
         return True
     levels = set(allowed_levels or [])
-    return user.access_level in levels or (
-        user.access_level == User.AccessLevel.LEVEL_5
+    effective_level = user.effective_access_level
+    return effective_level in levels or (
+        effective_level == User.AccessLevel.LEVEL_5
         and bool(levels.intersection(LEVELS))
     )

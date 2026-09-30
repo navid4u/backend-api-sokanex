@@ -1,0 +1,11 @@
+[Unit]
+Description=Run Sokanex Web Push delivery worker every minute
+
+[Timer]
+OnBootSec=45s
+OnUnitActiveSec=1min
+AccuracySec=10s
+Unit=sokanex-notification-push.service
+
+[Install]
+WantedBy=timers.target

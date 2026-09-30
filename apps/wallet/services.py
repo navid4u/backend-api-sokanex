@@ -1,3 +1,4 @@
+from datetime import timedelta
 from decimal import Decimal
 
 from django.db import IntegrityError, transaction
@@ -48,17 +49,41 @@ class WalletService:
             request_type=UpgradeRequest.Type.PREMIUM,
             status=UpgradeRequest.Status.APPROVED,
         ).select_related("plan").order_by("-reviewed_at", "-created_at", "-pk").first()
-        if not purchase:
-            return {
-                "active": False, "tier": None, "plan_id": None,
-                "purchased_at": None, "access_level": user.access_level,
-            }
+        active = user.has_gold_access
+        expired_trial = bool(
+            user.gold_trial_started_at
+            and user.gold_trial_expires_at
+            and user.gold_trial_expires_at <= timezone.now()
+        )
+        remaining = None
+        if active and user.gold_trial_expires_at:
+            remaining = max(
+                (user.gold_trial_expires_at - timezone.now()).total_seconds(), 0
+            )
         return {
-            "active": user.access_level == 5,
-            "tier": "GOLD" if user.access_level == 5 else None,
-            "plan_id": purchase.plan_id,
-            "purchased_at": purchase.reviewed_at or purchase.created_at,
+            "active": active,
+            "tier": "GOLD" if active or expired_trial else None,
+            "plan_id": purchase.plan_id if purchase else None,
+            "purchased_at": (
+                user.gold_permanent_granted_at
+                or user.gold_trial_started_at
+                or (purchase.reviewed_at or purchase.created_at if purchase else None)
+            ),
             "access_level": user.access_level,
+            "trial": bool(active and user.gold_trial_expires_at),
+            "trial_expires_at": user.gold_trial_expires_at,
+            "days_remaining": (
+                int((remaining + 86399) // 86400) if remaining is not None else None
+            ),
+            "status": (
+                "PERMANENT" if user.has_gold_access and user.gold_permanent_granted_at
+                else "TRIAL" if active
+                else "EXPIRED" if expired_trial
+                else "AVAILABLE" if user.access_level == 1 and not user.gold_trial_started_at
+                else "INACTIVE"
+            ),
+            "can_start_trial": user.access_level == 1 and user.gold_trial_started_at is None,
+            "can_request": user.access_level == 2,
         }
 
     @staticmethod
@@ -111,13 +136,6 @@ class WalletService:
                             "IDEMPOTENCY_CONFLICT",
                             409,
                         )
-                    if (
-                        replay.request_type == UpgradeRequest.Type.PREMIUM
-                        and replay.status == UpgradeRequest.Status.APPROVED
-                        and locked_user.access_level != 5
-                    ):
-                        locked_user.access_level = 5
-                        locked_user.save(update_fields=["access_level", "updated_at"])
                     return replay, wallet, False
 
                 active_purchase = UpgradeRequest.objects.select_related("plan").filter(
@@ -126,10 +144,13 @@ class WalletService:
                     status=UpgradeRequest.Status.APPROVED,
                 ).order_by("-reviewed_at", "-pk").first()
                 if active_purchase:
-                    if locked_user.access_level != 5:
-                        locked_user.access_level = 5
-                        locked_user.save(update_fields=["access_level", "updated_at"])
-                    return active_purchase, wallet, False
+                    if locked_user.has_gold_access:
+                        return active_purchase, wallet, False
+                    raise PremiumPurchaseError(
+                        "آزمایش اشتراک طلایی پایان یافته است؛ برای دریافت اشتراک دائمی درخواست ثبت کنید.",
+                        "GOLD_TRIAL_EXPIRED",
+                        409,
+                    )
 
                 plans = UpgradePlan.objects.select_for_update().filter(
                     plan_type=UpgradePlan.Type.PREMIUM,
@@ -176,6 +197,7 @@ class WalletService:
                     )
                 purchase.request_type = UpgradeRequest.Type.PREMIUM
                 purchase.requested_level = 5
+                purchase.grant_source = UpgradeRequest.GrantSource.WALLET_PURCHASE
                 purchase.plan = plan
                 purchase.price_snapshot_usd = amount
                 purchase.price_snapshot_irt = 0
@@ -188,7 +210,11 @@ class WalletService:
                 purchase.save()
                 if locked_user.access_level != 5:
                     locked_user.access_level = 5
-                    locked_user.save(update_fields=["access_level", "updated_at"])
+                locked_user.gold_trial_started_at = purchased_at
+                locked_user.gold_trial_expires_at = purchased_at + timedelta(days=7)
+                locked_user.save(update_fields=[
+                    "access_level", "gold_trial_started_at", "gold_trial_expires_at", "updated_at"
+                ])
                 return purchase, wallet, True
         except IntegrityError:
             replay = UpgradeRequest.objects.select_related("plan").filter(
