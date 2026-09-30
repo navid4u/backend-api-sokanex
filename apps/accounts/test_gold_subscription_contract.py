@@ -67,6 +67,38 @@ class GoldSubscriptionContractTests(APITestCase):
             UsdLedgerEntry.objects.filter(wallet=wallet, direction=UsdLedgerEntry.Direction.DEBIT).exists()
         )
 
+    def test_trial_is_available_once_for_every_access_level(self):
+        for level in User.AccessLevel.values:
+            with self.subTest(access_level=level):
+                User.objects.filter(pk=self.user.pk).update(
+                    access_level=level,
+                    gold_trial_started_at=None,
+                    gold_trial_expires_at=None,
+                    gold_permanent_granted_at=None,
+                )
+                self.user.refresh_from_db()
+                response = self.client.post(
+                    "/api/accounts/upgrade-requests/premium/trial/activate/",
+                    {},
+                    format="json",
+                )
+                self.assertEqual(response.status_code, 200)
+                self.user.refresh_from_db()
+                self.assertEqual(self.user.access_level, User.AccessLevel.LEVEL_5)
+                self.assertEqual(
+                    self.user.gold_trial_expires_at - self.user.gold_trial_started_at,
+                    timedelta(days=7),
+                )
+
+    def test_trial_does_not_require_market_type(self):
+        User.objects.filter(pk=self.user.pk).update(market_type="")
+        response = self.client.post(
+            "/api/accounts/upgrade-requests/premium/trial/activate/", {}, format="json"
+        )
+        self.assertEqual(response.status_code, 200)
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.access_level, User.AccessLevel.LEVEL_5)
+
     def test_used_trial_returns_exact_conflict_and_does_not_extend(self):
         started = timezone.now() - timedelta(days=8)
         expires = started + timedelta(days=7)

@@ -105,14 +105,13 @@ class PremiumAccessService:
             and locked.gold_trial_expires_at > now
         ):
             return locked
+        # Eligibility is based on the one-time trial record, not the user's
+        # current level. This lets existing level 2/3/4/5 accounts activate it.
         if (
-            locked.access_level != User.AccessLevel.LEVEL_1
-            or locked.gold_trial_started_at is not None
+            locked.gold_trial_started_at is not None
             or locked.gold_permanent_granted_at is not None
         ):
             raise cls._trial_conflict()
-        if not locked.market_type:
-            raise ValidationError({"market_type": "ابتدا بازار فعال خود را انتخاب کنید."})
         locked.gold_trial_started_at = now
         locked.gold_trial_expires_at = now + timedelta(days=cls.TRIAL_DAYS)
         locked.access_level = User.AccessLevel.LEVEL_5
