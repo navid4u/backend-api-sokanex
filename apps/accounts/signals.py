@@ -11,7 +11,7 @@ def premium_upgrade_enforces_level_five(sender, instance, **kwargs):
     if (
         instance.request_type == UpgradeRequest.Type.PREMIUM
         and instance.status == UpgradeRequest.Status.APPROVED
-        and instance.grant_source != UpgradeRequest.GrantSource.GOLD_RENEWAL_REQUEST
+        and instance.grant_source == UpgradeRequest.GrantSource.LEGACY
     ):
         User.objects.filter(pk=instance.user_id).exclude(
             access_level=User.AccessLevel.LEVEL_5

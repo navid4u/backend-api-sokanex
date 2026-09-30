@@ -1,8 +1,8 @@
-from rest_framework.exceptions import ValidationError
 from datetime import timedelta
 
 from django.db import transaction
 from django.utils import timezone
+from rest_framework.exceptions import APIException, ValidationError
 
 from .models import FinancialPersonalityAssessment, UpgradeRequest, User, UserProfile
 from .personality_risk import ASSESSMENT_VERSION, calculate_result
@@ -41,6 +41,13 @@ class ProfileCompletionService:
 
 class PremiumAccessService:
     TRIAL_DAYS = 7
+
+    @staticmethod
+    def _trial_conflict():
+        error = APIException("دوره آزمایشی قبلاً استفاده شده یا واجد شرایط آن نیستید.")
+        error.status_code = 409
+        error.machine_code = "TRIAL_ALREADY_USED"
+        return error
 
     @classmethod
     def refresh_user_state(cls, user):
@@ -86,13 +93,23 @@ class PremiumAccessService:
     @transaction.atomic
     def activate_trial(cls, user):
         locked = User.objects.select_for_update().get(pk=user.pk)
-        if locked.access_level != User.AccessLevel.LEVEL_1:
-            raise ValidationError({"detail": "آزمایش رایگان فقط برای کاربران سطح ۱ فعال است."})
-        if locked.gold_trial_started_at is not None:
-            raise ValidationError({"detail": "دوره آزمایشی قبلاً استفاده شده است."})
+        now = timezone.now()
+        # An active trial is idempotent: repeated clicks return it unchanged.
+        if (
+            locked.access_level == User.AccessLevel.LEVEL_5
+            and locked.gold_trial_started_at
+            and locked.gold_trial_expires_at
+            and locked.gold_trial_expires_at > now
+        ):
+            return locked
+        if (
+            locked.access_level != User.AccessLevel.LEVEL_1
+            or locked.gold_trial_started_at is not None
+            or locked.gold_permanent_granted_at is not None
+        ):
+            raise cls._trial_conflict()
         if not locked.market_type:
             raise ValidationError({"market_type": "ابتدا بازار فعال خود را انتخاب کنید."})
-        now = timezone.now()
         locked.gold_trial_started_at = now
         locked.gold_trial_expires_at = now + timedelta(days=cls.TRIAL_DAYS)
         locked.access_level = User.AccessLevel.LEVEL_5
@@ -110,16 +127,20 @@ class PremiumAccessService:
         if not locked.market_type:
             raise ValidationError({"market_type": "ابتدا بازار فعال خود را انتخاب کنید."})
         existing = UpgradeRequest.objects.filter(
-            user=locked, status=UpgradeRequest.Status.PENDING
+            user=locked,
+            request_type=UpgradeRequest.Type.PREMIUM,
+            status=UpgradeRequest.Status.PENDING,
         ).first()
         if existing:
             return existing, False
+        if UpgradeRequest.objects.filter(
+            user=locked, status=UpgradeRequest.Status.PENDING
+        ).exists():
+            raise ValidationError({"detail": "درخواست دیگری از شما در حال بررسی است."})
         request = UpgradeRequest.objects.create(
             user=locked,
             request_type=UpgradeRequest.Type.PREMIUM,
-            # Keep the legacy PREMIUM request contract (level 5).
-            # Permanent renewal is granted as level 3 during review.
-            requested_level=User.AccessLevel.LEVEL_5,
+            requested_level=User.AccessLevel.LEVEL_3,
             grant_source=UpgradeRequest.GrantSource.GOLD_RENEWAL_REQUEST,
             message=message.strip(),
         )

@@ -99,10 +99,16 @@ class PremiumUsdAPITests(APITestCase):
         self.assertEqual(first.status_code, 201)
         self.assertEqual(second.status_code, 200)
         self.assertEqual(third.status_code, 200)
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.access_level, 3)
+        self.assertIsNotNone(self.user.gold_permanent_granted_at)
+        self.assertFalse(first.data["subscription"]["trial"])
+        self.assertEqual(first.data["upgrade_request"]["requested_level"], 3)
+        self.assertEqual(first.data["user"]["access_level"], 3)
         self.assertEqual(UpgradeRequest.objects.filter(user=self.user, request_type="PREMIUM").count(), 1)
         self.assertEqual(UsdLedgerEntry.objects.filter(wallet=self.wallet, kind="PREMIUM_PURCHASE").count(), 1)
 
-    def test_existing_approved_premium_repairs_level_without_second_debit(self):
+    def test_expired_legacy_premium_does_not_restore_gold_or_debit_again(self):
         purchase = UpgradeRequest.objects.create(
             user=self.user,
             request_type=UpgradeRequest.Type.PREMIUM,
@@ -116,8 +122,9 @@ class PremiumUsdAPITests(APITestCase):
             self.url, {"idempotency_key": "new-click"}, format="json"
         )
         self.user.refresh_from_db()
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(self.user.access_level, 5)
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(response.data["error_code"], "GOLD_TRIAL_EXPIRED")
+        self.assertEqual(self.user.access_level, 2)
         self.assertEqual(response.data["upgrade_request"]["id"], purchase.pk)
         self.assertFalse(UsdLedgerEntry.objects.filter(wallet=self.wallet, kind="PREMIUM_PURCHASE").exists())
 

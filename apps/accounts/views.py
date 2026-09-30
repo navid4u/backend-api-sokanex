@@ -89,6 +89,7 @@ from .serializers import (
     GoldRenewalRequestCreateSerializer,
     GoldRenewalRequestResponseSerializer,
     PremiumTrialActivationResponseSerializer,
+    UpgradeRequestReviewResponseSerializer,
 )
 from .models import (
     Badge,
@@ -1071,7 +1072,7 @@ class PremiumPurchaseView(APIView):
             serializer.validated_data["idempotency_key"],
             serializer.validated_data.get("plan_id"),
         )
-        request.user.refresh_from_db(fields=["access_level"])
+        request.user.refresh_from_db()
         return Response(
             {
                 "wallet": {
@@ -1080,6 +1081,7 @@ class PremiumPurchaseView(APIView):
                 },
                 "upgrade_request": UpgradeRequestSerializer(purchase).data,
                 "subscription": WalletService.premium_subscription(request.user),
+                "user": UserSerializer(request.user, context={"request": request}).data,
             },
             status=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
         )
@@ -1123,6 +1125,8 @@ class GoldRenewalRequestView(APIView):
         responses={200: GoldRenewalRequestResponseSerializer, 201: GoldRenewalRequestResponseSerializer},
     )
     def post(self, request):
+        from apps.wallet.services import WalletService
+
         serializer = GoldRenewalRequestCreateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         upgrade_request, created = PremiumAccessService.request_permanent_gold(
@@ -1131,7 +1135,8 @@ class GoldRenewalRequestView(APIView):
         return Response(
             {
                 "request": UpgradeRequestSerializer(upgrade_request).data,
-                "market_type": request.user.market_type,
+                "upgrade_request": UpgradeRequestSerializer(upgrade_request).data,
+                "subscription": WalletService.premium_subscription(request.user),
                 "message": "درخواست اشتراک طلایی ثبت شد و پس از بررسی نتیجه اعلام می‌شود.",
             },
             status=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
@@ -1165,7 +1170,7 @@ class UpgradeRequestReviewView(APIView):
 
     @extend_schema(
         request=UpgradeRequestReviewSerializer,
-        responses=AdminUpgradeRequestSerializer,
+        responses=UpgradeRequestReviewResponseSerializer,
     )
     def patch(self, request, pk):
         upgrade_request = get_object_or_404(UpgradeRequest, pk=pk)
@@ -1176,10 +1181,14 @@ class UpgradeRequestReviewView(APIView):
             reviewed_by=request.user,
             **serializer.validated_data,
         )
+        reviewed_user = User.objects.get(pk=reviewed.user_id)
+        from apps.wallet.services import WalletService
+
         return Response(
             {
                 "message": "Upgrade request reviewed.",
                 "request": AdminUpgradeRequestSerializer(reviewed).data,
+                "subscription": WalletService.premium_subscription(reviewed_user),
             }
         )
 

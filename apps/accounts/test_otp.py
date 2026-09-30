@@ -80,15 +80,20 @@ class OTPAuthenticationTests(TestCase):
         self.assertEqual(retried.status_code, 200)
         self.assertIsNotNone(OTPChallenge.objects.get().sent_at)
 
-    def test_mobile_registration_is_canonical_and_password_confirmed(self):
+    def test_username_password_registration_preserves_username_and_returns_tokens(self):
         response = self.client.post("/api/accounts/register/", {
             "first_name": "Ali", "last_name": "Ahmadi", "phone": "+989351234567",
-            "username": "ignored", "password": "StrongPass123!", "password_confirm": "StrongPass123!",
+            "username": "sokanex.user", "password": "StrongPass123!", "password_confirm": "StrongPass123!",
         })
         self.assertEqual(response.status_code, 201)
         created = User.objects.get(phone="09351234567")
-        self.assertEqual(created.username, "09351234567")
+        self.assertEqual(created.username, "sokanex.user")
         self.assertTrue(created.check_password("StrongPass123!"))
+        self.assertIn("access", response.data)
+        self.assertIn("refresh", response.data)
+        self.assertEqual(response.data["user"]["username"], "sokanex.user")
+        self.assertIn("premium_subscription", response.data["user"])
+        self.assertNotIn("password", response.data)
 
     def test_password_login_accepts_international_phone(self):
         response = self.client.post(

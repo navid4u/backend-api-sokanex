@@ -1,4 +1,3 @@
-from datetime import timedelta
 from decimal import Decimal
 
 from django.db import IntegrityError, transaction
@@ -55,11 +54,12 @@ class WalletService:
             and user.gold_trial_expires_at
             and user.gold_trial_expires_at <= timezone.now()
         )
-        remaining = None
+        remaining = 0
         if active and user.gold_trial_expires_at:
-            remaining = max(
+            remaining_seconds = max(
                 (user.gold_trial_expires_at - timezone.now()).total_seconds(), 0
             )
+            remaining = int((remaining_seconds + 86399) // 86400)
         return {
             "active": active,
             "tier": "GOLD" if active or expired_trial else None,
@@ -70,19 +70,20 @@ class WalletService:
                 or (purchase.reviewed_at or purchase.created_at if purchase else None)
             ),
             "access_level": user.access_level,
-            "trial": bool(active and user.gold_trial_expires_at),
+            "trial": bool(user.gold_trial_started_at),
             "trial_expires_at": user.gold_trial_expires_at,
-            "days_remaining": (
-                int((remaining + 86399) // 86400) if remaining is not None else None
-            ),
+            "days_remaining": remaining,
             "status": (
-                "PERMANENT" if user.has_gold_access and user.gold_permanent_granted_at
-                else "TRIAL" if active
+                "ACTIVE" if active
                 else "EXPIRED" if expired_trial
                 else "AVAILABLE" if user.access_level == 1 and not user.gold_trial_started_at
                 else "INACTIVE"
             ),
-            "can_start_trial": user.access_level == 1 and user.gold_trial_started_at is None,
+            "can_start_trial": (
+                user.access_level == 1
+                and user.gold_trial_started_at is None
+                and user.gold_permanent_granted_at is None
+            ),
             "can_request": user.access_level == 2,
         }
 
@@ -196,7 +197,7 @@ class WalletService:
                         metadata={"upgrade_request_id": pending.pk, "reason": "premium_usd_purchase"},
                     )
                 purchase.request_type = UpgradeRequest.Type.PREMIUM
-                purchase.requested_level = 5
+                purchase.requested_level = 3
                 purchase.grant_source = UpgradeRequest.GrantSource.WALLET_PURCHASE
                 purchase.plan = plan
                 purchase.price_snapshot_usd = amount
@@ -208,12 +209,13 @@ class WalletService:
                 purchase.reviewed_at = purchased_at
                 purchase.admin_note = "Purchased instantly with USD wallet balance."
                 purchase.save()
-                if locked_user.access_level != 5:
-                    locked_user.access_level = 5
-                locked_user.gold_trial_started_at = purchased_at
-                locked_user.gold_trial_expires_at = purchased_at + timedelta(days=7)
+                locked_user.access_level = 3
+                locked_user.gold_trial_started_at = None
+                locked_user.gold_trial_expires_at = None
+                locked_user.gold_permanent_granted_at = purchased_at
                 locked_user.save(update_fields=[
-                    "access_level", "gold_trial_started_at", "gold_trial_expires_at", "updated_at"
+                    "access_level", "gold_trial_started_at", "gold_trial_expires_at",
+                    "gold_permanent_granted_at", "updated_at"
                 ])
                 return purchase, wallet, True
         except IntegrityError:

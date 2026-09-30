@@ -1,4 +1,5 @@
 from datetime import date
+import re
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import (
@@ -342,12 +343,12 @@ class CustomTokenObtainPairSerializer(
 
 
 class RegisterSerializer(serializers.ModelSerializer):
-    username = serializers.CharField(required=False, allow_blank=True)
+    username = serializers.CharField(required=False, allow_blank=True, max_length=30)
     email = serializers.EmailField(required=False, allow_blank=True)
-    phone = serializers.CharField(required=False)
-    first_name = serializers.CharField(required=False, allow_blank=True)
-    last_name = serializers.CharField(required=False, allow_blank=True)
-    password_confirm = serializers.CharField(write_only=True, required=False)
+    phone = serializers.CharField(required=True)
+    first_name = serializers.CharField(required=True, allow_blank=False)
+    last_name = serializers.CharField(required=True, allow_blank=False)
+    password_confirm = serializers.CharField(write_only=True, required=True)
     password = serializers.CharField(
         write_only=True,
         trim_whitespace=False,
@@ -379,7 +380,7 @@ class RegisterSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         validated_data.pop("password_confirm", None)
         phone = validated_data.get("phone")
-        username = phone or validated_data["username"]
+        username = validated_data.get("username") or phone
         with transaction.atomic():
             user = User.objects.create_user(
                 username=username,
@@ -403,7 +404,22 @@ class RegisterSerializer(serializers.ModelSerializer):
                 UserActivity.Type.REGISTER,
                 "Account registered",
             )
+            from .authentication import issue_login_tokens
+
+            self._issued_tokens = issue_login_tokens(
+                user, self.context["request"], record_login=True
+            )
             return user
+
+    def to_representation(self, instance):
+        user_data = UserSerializer(instance, context=self.context).data
+        # Retain the prior flat user response while adding the token contract
+        # and an explicit nested user object for newer clients.
+        return {
+            **user_data,
+            **getattr(self, "_issued_tokens", {}),
+            "user": user_data,
+        }
 
     def validate_phone(self, value):
         try:
@@ -416,18 +432,22 @@ class RegisterSerializer(serializers.ModelSerializer):
 
     def validate(self, attrs):
         confirmation = attrs.get("password_confirm")
-        if confirmation is not None and confirmation != attrs.get("password"):
+        if confirmation != attrs.get("password"):
             raise serializers.ValidationError({"password_confirm": "تکرار رمز عبور مطابقت ندارد."})
-        if attrs.get("phone"):
-            missing = {
-                field: "این فیلد الزامی است."
-                for field in ("first_name", "last_name")
-                if not str(attrs.get(field, "")).strip()
-            }
-            if missing:
-                raise serializers.ValidationError(missing)
-            attrs["username"] = attrs["phone"]
-        elif not str(attrs.get("username", "")).strip():
+        username = str(attrs.get("username") or "").strip()
+        if username:
+            if not 3 <= len(username) <= 30 or not re.fullmatch(r"[A-Za-z0-9._-]+", username):
+                raise serializers.ValidationError({
+                    "username": "نام کاربری باید ۳ تا ۳۰ نویسه و فقط شامل حروف لاتین، عدد، نقطه، خط تیره یا زیرخط باشد."
+                })
+            if User.objects.filter(username__iexact=username).exists():
+                raise serializers.ValidationError({"username": "این نام کاربری قبلاً استفاده شده است."})
+            attrs["username"] = username
+        if not str(attrs.get("first_name", "")).strip():
+            raise serializers.ValidationError({"first_name": "این فیلد الزامی است."})
+        if not str(attrs.get("last_name", "")).strip():
+            raise serializers.ValidationError({"last_name": "این فیلد الزامی است."})
+        if not attrs.get("phone"):
             raise serializers.ValidationError({"phone": "شماره همراه الزامی است."})
         return attrs
 
@@ -1171,9 +1191,15 @@ class PremiumTrialActivationResponseSerializer(serializers.Serializer):
 
 
 class GoldRenewalRequestResponseSerializer(serializers.Serializer):
-    request = UpgradeRequestSerializer()
-    market_type = serializers.ChoiceField(choices=User.MarketType.choices)
+    upgrade_request = UpgradeRequestSerializer()
+    subscription = serializers.DictField()
     message = serializers.CharField()
+
+
+class UpgradeRequestReviewResponseSerializer(serializers.Serializer):
+    message = serializers.CharField()
+    request = AdminUpgradeRequestSerializer()
+    subscription = serializers.DictField(allow_null=True, required=False)
 
 
 class ProfileUpdateSerializer(
@@ -1275,6 +1301,13 @@ class PremiumSubscriptionSerializer(serializers.Serializer):
     tier = serializers.CharField(allow_null=True)
     plan_id = serializers.IntegerField(allow_null=True)
     purchased_at = serializers.DateTimeField(allow_null=True)
+    access_level = serializers.IntegerField()
+    trial = serializers.BooleanField()
+    trial_expires_at = serializers.DateTimeField(allow_null=True)
+    days_remaining = serializers.IntegerField()
+    status = serializers.CharField()
+    can_start_trial = serializers.BooleanField()
+    can_request = serializers.BooleanField()
 
 
 class PremiumPurchaseWalletSerializer(serializers.Serializer):
@@ -1286,6 +1319,7 @@ class PremiumPurchaseResponseSerializer(serializers.Serializer):
     wallet = PremiumPurchaseWalletSerializer()
     upgrade_request = UpgradeRequestSerializer()
     subscription = PremiumSubscriptionSerializer()
+    user = UserSerializer()
 
 
 class LogoutSerializer(serializers.Serializer):
