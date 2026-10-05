@@ -64,11 +64,11 @@ class VIPSignalPostSerializer(serializers.ModelSerializer):
                 "image" if parent.image else "video" if parent.video
                 else "audio" if parent.audio else None
             )
-            text = strip_tags(parent.text).replace("\x00", "").strip()[:500]
+            text = strip_tags(parent.text).replace("\x00", "").strip()
         else:
             snapshot = obj.reply_snapshot or {}
             text = snapshot.get("text") or None
-            media_type = snapshot.get("media_type")
+            media_type = None
         return {
             "id": parent.pk if visible else None,
             "text": text,

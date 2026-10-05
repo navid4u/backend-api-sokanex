@@ -40,7 +40,7 @@ curl -X POST 'https://api.sokanex.com/api/signals/channels/forex/ingest/' \
 
 ## رفتار حل مرجع
 
-اگر parent قبلاً در همان بازار ذخیره شده باشد، `reply_preview.available=true` و `reply_preview.id` شناسه داخلی parent است. اگر parent هنوز نرسیده باشد، Reply با `201` ذخیره می‌شود، `available=false` و snapshot برمی‌گردد. با رسیدن parent، رابطه خودکار وصل می‌شود. اگر parent از قبل حذف شده یا بعداً حذف/غیرفعال شود، لینک داخلی null می‌شود ولی snapshot ذخیره‌شده باقی می‌ماند.
+اگر parent قبلاً در همان بازار ذخیره شده باشد، `reply_preview.available=true`، `reply_preview.id` شناسه داخلی parent و `reply_preview.text` متن کامل مرجع است. اگر parent هنوز نرسیده باشد، Reply فوراً با `is_active=true` و پاسخ `201` ذخیره می‌شود و در GET هم دیده می‌شود؛ `available=false`، `id=null`، `media_type=null` و متن snapshot (در صورت ارسال) برمی‌گردد. با رسیدن parent، رابطه خودکار وصل می‌شود. اگر parent از قبل حذف شده یا بعداً حذف/غیرفعال شود، لینک داخلی null می‌شود ولی متن snapshot ذخیره‌شده باقی می‌ماند. بک‌اند هیچ وضعیت `WAITING_REPLY_CONTRACT` ندارد؛ این وضعیت باید از صف Worker ربات حذف شود.
 
 ارسال مجدد همان `external_id` رابطه موجود را حفظ می‌کند. اگر پست پیش از فعال‌سازی قرارداد به‌صورت مستقل ذخیره شده باشد، retry با `reply_to_external_id` می‌تواند یک بار رابطه را به همان رکورد اضافه کند. retry با parent متفاوت `409` می‌دهد. self-reply، چرخه و ارجاع به پیام شناخته‌شده در بازار دیگر `400` می‌دهد. `reply_snapshot` بدون `reply_to_external_id` هم `400` است.
 

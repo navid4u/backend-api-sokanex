@@ -269,7 +269,21 @@ class VIPSignalChannelTests(APITestCase):
         self.assertEqual(reply.status_code, 201, reply.data)
         self.assertIsNone(reply.data["reply_preview"]["id"])
         self.assertEqual(reply.data["reply_preview"]["text"], "نقل قول")
+        self.assertIsNone(reply.data["reply_preview"]["media_type"])
         self.assertFalse(reply.data["reply_preview"]["available"])
+        self.assertNotIn("WAITING_REPLY_CONTRACT", str(reply.data))
+        self.assertTrue(VIPSignalPost.objects.get(pk=reply.data["id"]).is_active)
+        self.client.force_authenticate(self.user)
+        immediate_feed = self.client.get("/api/signals/?channel=CRYPTO")
+        immediate_detail = self.client.get(f"/api/signals/{reply.data['id']}/")
+        self.assertEqual(immediate_feed.status_code, 200)
+        self.assertEqual(immediate_feed.data["results"][0]["id"], reply.data["id"])
+        self.assertEqual(
+            immediate_feed.data["results"][0]["reply_to_external_id"],
+            payload["reply_to_external_id"],
+        )
+        self.assertFalse(immediate_detail.data["reply_preview"]["available"])
+        self.client.force_authenticate(user=None)
         parent = self.client.post(
             ingest,
             {"external_id": "telegram:crypto:20", "text": "متن کامل مرجع"},
@@ -280,6 +294,27 @@ class VIPSignalChannelTests(APITestCase):
         detail = self.client.get(f"/api/signals/{reply.data['id']}/")
         self.assertEqual(detail.data["reply_preview"]["id"], parent.data["id"])
         self.assertTrue(detail.data["reply_preview"]["available"])
+
+    def test_available_parent_preview_contains_full_text(self):
+        ingest = "/api/signals/channels/crypto/ingest/"
+        parent_text = "مرجع " * 120
+        parent = self.client.post(
+            ingest,
+            {"external_id": "telegram:crypto:90", "text": parent_text},
+            format="json", **self.ingestion_headers,
+        )
+        self.assertEqual(parent.status_code, 201, parent.data)
+        reply = self.client.post(
+            ingest,
+            {
+                "external_id": "telegram:crypto:91",
+                "reply_to_external_id": "telegram:crypto:90",
+                "text": "پاسخ",
+            },
+            format="json", **self.ingestion_headers,
+        )
+        self.assertEqual(reply.status_code, 201, reply.data)
+        self.assertEqual(reply.data["reply_preview"]["text"], parent_text.strip())
 
     def test_retry_preserves_reply_and_rejects_changed_reference(self):
         ingest = "/api/signals/channels/forex/ingest/"
@@ -357,12 +392,14 @@ class VIPSignalChannelTests(APITestCase):
         hidden = self.client.get(f"/api/signals/{reply.data['id']}/")
         self.assertIsNone(hidden.data["reply_preview"]["id"])
         self.assertEqual(hidden.data["reply_preview"]["text"], "مرجع ذخیره شده")
+        self.assertIsNone(hidden.data["reply_preview"]["media_type"])
         self.client.force_authenticate(self.admin)
         self.assertEqual(self.client.delete(f"/api/signals/manage/{parent.data['id']}/").status_code, 204)
         self.client.force_authenticate(self.user)
         deleted = self.client.get(f"/api/signals/{reply.data['id']}/")
         self.assertIsNone(deleted.data["reply_preview"]["id"])
         self.assertEqual(deleted.data["reply_preview"]["text"], "مرجع ذخیره شده")
+        self.assertIsNone(deleted.data["reply_preview"]["media_type"])
 
     def test_cross_market_self_reply_and_cycle_are_rejected(self):
         crypto = "/api/signals/channels/crypto/ingest/"
