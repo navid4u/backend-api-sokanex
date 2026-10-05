@@ -1,4 +1,5 @@
 import base64
+import json
 import tempfile
 
 from django.core.files.uploadedfile import SimpleUploadedFile
@@ -58,6 +59,22 @@ class VIPSignalChannelTests(APITestCase):
         self.assertEqual(feed.status_code, 200)
         self.assertEqual(feed.data["count"], 1)
         self.assertEqual(feed.data["results"][0]["channel"], "CRYPTO")
+
+    def test_forex_market_type_is_default_but_explicit_channel_wins(self):
+        VIPSignalPost.objects.create(channel="CRYPTO", text="کریپتو")
+        VIPSignalPost.objects.create(channel="FOREX", text="فارکس")
+        self.user.market_type = User.MarketType.FOREX
+        self.user.save(update_fields=("market_type",))
+        self.client.force_authenticate(self.user)
+
+        default_feed = self.client.get("/api/signals/")
+        self.assertEqual(default_feed.status_code, 200)
+        self.assertEqual(default_feed.data["count"], 1)
+        self.assertEqual(default_feed.data["results"][0]["channel"], "FOREX")
+
+        crypto_feed = self.client.get("/api/signals/?channel=crypto")
+        self.assertEqual(crypto_feed.status_code, 200)
+        self.assertEqual(crypto_feed.data["results"][0]["channel"], "CRYPTO")
 
     def test_ingestion_sanitizes_text_and_uploads_image(self):
         image = SimpleUploadedFile(
@@ -211,6 +228,178 @@ class VIPSignalChannelTests(APITestCase):
         self.assertEqual(first.status_code, 201)
         self.assertEqual(second.status_code, 200)
         self.assertEqual(VIPSignalPost.objects.count(), 1)
+
+    def test_reply_links_and_previews_parent_in_both_markets(self):
+        for channel in ("crypto", "forex"):
+            with self.subTest(channel=channel):
+                ingest = f"/api/signals/channels/{channel}/ingest/"
+                parent_id = f"telegram:{channel}:10"
+                parent = self.client.post(
+                    ingest, {"external_id": parent_id, "text": "پیام مرجع"},
+                    format="json", **self.ingestion_headers,
+                )
+                reply = self.client.post(
+                    ingest,
+                    {
+                        "external_id": f"telegram:{channel}:11",
+                        "reply_to_external_id": parent_id,
+                        "text": "پاسخ به مرجع",
+                    },
+                    format="json", **self.ingestion_headers,
+                )
+                self.assertEqual(reply.status_code, 201, reply.data)
+                self.assertEqual(reply.data["reply_preview"]["id"], parent.data["id"])
+                self.assertEqual(reply.data["reply_preview"]["text"], "پیام مرجع")
+                self.client.force_authenticate(self.user)
+                detail = self.client.get(f"/api/signals/{reply.data['id']}/")
+                feed = self.client.get(f"/api/signals/?channel={channel}")
+                self.assertEqual(detail.data["reply_preview"]["id"], parent.data["id"])
+                self.assertEqual(feed.data["results"][0]["reply_preview"]["id"], parent.data["id"])
+                self.client.force_authenticate(user=None)
+
+    def test_out_of_order_reply_resolves_and_preserves_safe_snapshot(self):
+        ingest = "/api/signals/channels/crypto/ingest/"
+        payload = {
+            "external_id": "telegram:crypto:21",
+            "reply_to_external_id": "telegram:crypto:20",
+            "reply_snapshot": {"text": "<b>نقل قول</b>", "media_type": "image"},
+            "text": "جواب",
+        }
+        reply = self.client.post(ingest, payload, format="json", **self.ingestion_headers)
+        self.assertEqual(reply.status_code, 201, reply.data)
+        self.assertIsNone(reply.data["reply_preview"]["id"])
+        self.assertEqual(reply.data["reply_preview"]["text"], "نقل قول")
+        self.assertFalse(reply.data["reply_preview"]["available"])
+        parent = self.client.post(
+            ingest,
+            {"external_id": "telegram:crypto:20", "text": "متن کامل مرجع"},
+            format="json", **self.ingestion_headers,
+        )
+        self.assertEqual(parent.status_code, 201, parent.data)
+        self.client.force_authenticate(self.user)
+        detail = self.client.get(f"/api/signals/{reply.data['id']}/")
+        self.assertEqual(detail.data["reply_preview"]["id"], parent.data["id"])
+        self.assertTrue(detail.data["reply_preview"]["available"])
+
+    def test_retry_preserves_reply_and_rejects_changed_reference(self):
+        ingest = "/api/signals/channels/forex/ingest/"
+        payload = {
+            "external_id": "telegram:forex:31",
+            "reply_to_external_id": "telegram:forex:30",
+            "reply_snapshot": {"text": "مرجع قدیمی"},
+            "text": "پاسخ",
+        }
+        first = self.client.post(ingest, payload, format="json", **self.ingestion_headers)
+        self.assertEqual(first.status_code, 201, first.data)
+        retry = self.client.post(
+            ingest, {"external_id": payload["external_id"], "text": "retry"},
+            format="json", **self.ingestion_headers,
+        )
+        self.assertEqual(retry.status_code, 200)
+        self.assertEqual(retry.data["reply_to_external_id"], payload["reply_to_external_id"])
+        self.assertEqual(retry.data["reply_preview"]["text"], "مرجع قدیمی")
+        conflict = self.client.post(
+            ingest, {**payload, "reply_to_external_id": "telegram:forex:29"},
+            format="json", **self.ingestion_headers,
+        )
+        self.assertEqual(conflict.status_code, 409)
+        self.assertEqual(VIPSignalPost.objects.filter(external_id=payload["external_id"]).count(), 1)
+
+    def test_retry_can_attach_reply_to_preexisting_post(self):
+        ingest = "/api/signals/channels/forex/ingest/"
+        self.assertEqual(self.client.post(
+            ingest, {"external_id": "telegram:forex:70", "text": "مرجع قدیمی"},
+            format="json", **self.ingestion_headers,
+        ).status_code, 201)
+        old_reply = self.client.post(
+            ingest, {"external_id": "telegram:forex:71", "text": "پاسخ قدیمی"},
+            format="json", **self.ingestion_headers,
+        )
+        attached = self.client.post(
+            ingest, {
+                "external_id": "telegram:forex:71",
+                "reply_to_external_id": "telegram:forex:70",
+                "text": "پاسخ قدیمی",
+            }, format="json", **self.ingestion_headers,
+        )
+        self.assertEqual(attached.status_code, 200, attached.data)
+        self.assertEqual(attached.data["id"], old_reply.data["id"])
+        self.assertIsNotNone(attached.data["reply_preview"]["id"])
+
+    def test_multipart_reply_snapshot_is_sanitized(self):
+        response = self.client.post(
+            "/api/signals/channels/crypto/ingest/",
+            {
+                "external_id": "telegram:crypto:81",
+                "reply_to_external_id": "telegram:crypto:80",
+                "reply_snapshot": json.dumps({"text": "<script>bad()</script><b>مرجع</b>"}),
+                "text": "پاسخ",
+            }, format="multipart", **self.ingestion_headers,
+        )
+        self.assertEqual(response.status_code, 201, response.data)
+        self.assertNotIn("<", response.data["reply_preview"]["text"])
+
+    def test_deleted_or_inactive_parent_uses_snapshot_without_link(self):
+        ingest = "/api/signals/channels/crypto/ingest/"
+        parent = self.client.post(
+            ingest, {"external_id": "telegram:crypto:40", "text": "مرجع ذخیره شده"},
+            format="json", **self.ingestion_headers,
+        )
+        reply = self.client.post(
+            ingest, {
+                "external_id": "telegram:crypto:41",
+                "reply_to_external_id": "telegram:crypto:40",
+                "text": "پاسخ",
+            }, format="json", **self.ingestion_headers,
+        )
+        VIPSignalPost.objects.filter(pk=parent.data["id"]).update(is_active=False)
+        self.client.force_authenticate(self.user)
+        hidden = self.client.get(f"/api/signals/{reply.data['id']}/")
+        self.assertIsNone(hidden.data["reply_preview"]["id"])
+        self.assertEqual(hidden.data["reply_preview"]["text"], "مرجع ذخیره شده")
+        self.client.force_authenticate(self.admin)
+        self.assertEqual(self.client.delete(f"/api/signals/manage/{parent.data['id']}/").status_code, 204)
+        self.client.force_authenticate(self.user)
+        deleted = self.client.get(f"/api/signals/{reply.data['id']}/")
+        self.assertIsNone(deleted.data["reply_preview"]["id"])
+        self.assertEqual(deleted.data["reply_preview"]["text"], "مرجع ذخیره شده")
+
+    def test_cross_market_self_reply_and_cycle_are_rejected(self):
+        crypto = "/api/signals/channels/crypto/ingest/"
+        forex = "/api/signals/channels/forex/ingest/"
+        self.assertEqual(self.client.post(
+            crypto, {"external_id": "telegram:crypto:50", "text": "کریپتو"},
+            format="json", **self.ingestion_headers,
+        ).status_code, 201)
+        cross = self.client.post(
+            forex, {
+                "external_id": "telegram:forex:51",
+                "reply_to_external_id": "telegram:crypto:50", "text": "فارکس",
+            }, format="json", **self.ingestion_headers,
+        )
+        self.assertEqual(cross.status_code, 400)
+        self.assertIn("reply_to_external_id", cross.data["errors"])
+        self_reply = self.client.post(
+            crypto, {
+                "external_id": "telegram:crypto:52",
+                "reply_to_external_id": "telegram:crypto:52", "text": "خودش",
+            }, format="json", **self.ingestion_headers,
+        )
+        self.assertEqual(self_reply.status_code, 400)
+        self.assertEqual(self.client.post(
+            crypto, {
+                "external_id": "telegram:crypto:60",
+                "reply_to_external_id": "telegram:crypto:61", "text": "A",
+            }, format="json", **self.ingestion_headers,
+        ).status_code, 201)
+        cycle = self.client.post(
+            crypto, {
+                "external_id": "telegram:crypto:61",
+                "reply_to_external_id": "telegram:crypto:60", "text": "B",
+            }, format="json", **self.ingestion_headers,
+        )
+        self.assertEqual(cycle.status_code, 400)
+        self.assertIn("reply_to_external_id", cycle.data["errors"])
 
     def test_inactive_posts_are_hidden_from_customer_feed(self):
         VIPSignalPost.objects.create(channel="CRYPTO", text="hidden", is_active=False)

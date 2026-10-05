@@ -40,4 +40,7 @@ class VIPSignalPostAdmin(admin.ModelAdmin):
     list_display = ("id", "channel", "is_active", "published_at", "external_id")
     list_filter = ("channel", "is_active", "source")
     search_fields = ("text", "external_id")
-    readonly_fields = ("source", "created_at", "updated_at")
+    readonly_fields = (
+        "source", "parent", "reply_to_external_id", "reply_snapshot",
+        "created_at", "updated_at",
+    )

@@ -225,6 +225,12 @@ class VIPSignalPost(models.Model):
     video = models.FileField(upload_to=vip_signal_video_upload, null=True, blank=True)
     audio = models.FileField(upload_to=vip_signal_audio_upload, null=True, blank=True)
     external_id = models.CharField(max_length=180, null=True, blank=True)
+    parent = models.ForeignKey(
+        "self", null=True, blank=True, on_delete=models.SET_NULL,
+        related_name="replies",
+    )
+    reply_to_external_id = models.CharField(max_length=180, null=True, blank=True)
+    reply_snapshot = models.JSONField(default=dict, blank=True)
     source = models.CharField(
         max_length=20,
         choices=Source.choices,
@@ -249,7 +255,11 @@ class VIPSignalPost(models.Model):
             models.Index(
                 fields=["channel", "is_active", "-published_at"],
                 name="vip_signal_channel_feed_idx",
-            )
+            ),
+            models.Index(
+                fields=["channel", "reply_to_external_id"],
+                name="vip_signal_reply_lookup_idx",
+            ),
         ]
 
     def __str__(self):

@@ -55,6 +55,7 @@ from .serializers import (
     VIPSignalPostSerializer,
 )
 from .services import SignalService
+from .replies import ingest_vip_post
 from common.ingestion import FixedIngestionKeyAuthentication, FixedSignalChannelKeyAuthentication
 from common.pagination import DefaultPagination
 
@@ -68,16 +69,21 @@ class VIPSignalPostListView(generics.ListAPIView):
     pagination_class = DefaultPagination
 
     def get_queryset(self):
-        channel = self.request.query_params.get("channel", VIPSignalPost.Channel.CRYPTO).upper()
+        default_channel = (
+            VIPSignalPost.Channel.FOREX
+            if self.request.user.market_type == "forex"
+            else VIPSignalPost.Channel.CRYPTO
+        )
+        channel = self.request.query_params.get("channel", default_channel).upper()
         if channel not in VIPSignalPost.Channel.values:
             raise serializers.ValidationError({"channel": "channel must be CRYPTO or FOREX."})
-        return VIPSignalPost.objects.filter(channel=channel, is_active=True)
+        return VIPSignalPost.objects.filter(channel=channel, is_active=True).select_related("parent")
 
 
 class VIPSignalPostDetailView(generics.RetrieveAPIView):
     permission_classes = [IsAuthenticated, CanAccessGoldContent]
     serializer_class = VIPSignalPostSerializer
-    queryset = VIPSignalPost.objects.filter(is_active=True)
+    queryset = VIPSignalPost.objects.filter(is_active=True).select_related("parent")
 
 
 class VIPSignalPostIngestionView(APIView):
@@ -97,24 +103,7 @@ class VIPSignalPostIngestionView(APIView):
             raise serializers.ValidationError({"channel": "Unknown signal channel."})
         serializer = VIPSignalPostIngestionSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        values = dict(serializer.validated_data)
-        external_id = values.pop("external_id", None)
-        defaults = {
-            **values,
-            "channel": normalized_channel,
-            "external_id": external_id,
-            "source": VIPSignalPost.Source.TELEGRAM_API,
-            "is_active": True,
-        }
-        with transaction.atomic():
-            if external_id:
-                post, created = VIPSignalPost.objects.get_or_create(
-                    channel=normalized_channel,
-                    external_id=external_id,
-                    defaults=defaults,
-                )
-            else:
-                post, created = VIPSignalPost.objects.create(**defaults), True
+        post, created = ingest_vip_post(normalized_channel, serializer.validated_data)
         response_serializer = VIPSignalPostSerializer(post, context={"request": request})
         return Response(
             response_serializer.data,
@@ -132,7 +121,7 @@ class VIPSignalPostManagementListView(generics.ListAPIView):
     ordering = ["-published_at", "-id"]
 
     def get_queryset(self):
-        queryset = VIPSignalPost.objects.all()
+        queryset = VIPSignalPost.objects.all().select_related("parent")
         channel = self.request.query_params.get("channel")
         if channel:
             channel = channel.upper()
@@ -150,7 +139,7 @@ class VIPSignalPostManagementListView(generics.ListAPIView):
 class VIPSignalPostManagementDetailView(generics.RetrieveUpdateDestroyAPIView):
     permission_classes = [IsAuthenticated, CanReviewSignals]
     serializer_class = VIPSignalPostManagementSerializer
-    queryset = VIPSignalPost.objects.all()
+    queryset = VIPSignalPost.objects.all().select_related("parent")
     http_method_names = ["get", "patch", "delete", "head", "options"]
 
     def perform_destroy(self, instance):

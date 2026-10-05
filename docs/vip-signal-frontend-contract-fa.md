@@ -27,8 +27,13 @@ GET /api/signals/{id}/
 - صدا با `controls`, `preload="metadata"` و بدون autoplay نمایش داده شود.
 - failure یک رسانه نباید کارت یا صفحه را crash کند؛ فقط همان media block مدیریت شود.
 - متن و excerpt مانند قبل نمایش داده شوند و HTML آن‌ها اجرا نشود.
-- تب پیش‌فرض `crypto` و تب دوم `forex` باقی بماند.
+- پس از دریافت پروفایل، اگر `user.market_type === "forex"` بود تب اولیه `forex` باشد؛ در بقیه حالت‌ها `crypto`. هر بار `channel` را صریح در query بفرستید و انتخاب دستی کاربر را با refresh خودکار پروفایل عوض نکنید.
+- اگر `channel` ارسال نشود، بک‌اند نیز بر اساس `request.user.market_type` فارکس یا کریپتو را پیش‌فرض می‌کند؛ این fallback جای انتخاب و نمایش درست تب در فرانت را نمی‌گیرد.
 - pagination استاندارد `count/next/previous/results` حفظ شود.
+- `reply_to_external_id` شناسه پایدار Telegram است و URL پست داخل اپ نیست.
+- `reply_preview` اگر null باشد، پست Reply نیست. اگر `available=true` و `id` عددی باشد، نقل‌قول به `/signals/{id}` لینک شود. در `available=false` فقط نقل‌قول ذخیره‌شده یا «پیام مرجع در دسترس نیست» نمایش داده شود؛ لینک نسازید.
+- متن `reply_preview.text` را فقط به‌صورت متن ساده render کنید. فایل/رسانه داخل نقل‌قول از `media_type` فقط با نشانگر نوع رسانه نمایش داده شود.
+- Reply هم در همان لیست بازار خودش می‌آید؛ هیچ درخواست جداگانه‌ای برای ساخت Reply از مرورگر نزنید.
 
 TypeScript:
 
@@ -44,6 +49,13 @@ export interface VipSignalPost {
   video: string | null;
   audio: string | null;
   source: "TELEGRAM_API";
+  reply_to_external_id: string | null;
+  reply_preview: null | {
+    id: number | null;
+    text: string | null;
+    media_type: "image" | "video" | "audio" | null;
+    available: boolean;
+  };
   published_at: string;
   created_at: string;
 }

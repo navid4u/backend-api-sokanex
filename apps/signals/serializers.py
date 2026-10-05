@@ -1,4 +1,7 @@
+import json
+
 from rest_framework import serializers
+from drf_spectacular.utils import extend_schema_field
 from django.conf import settings
 from django.utils.html import strip_tags
 
@@ -19,16 +22,27 @@ from .models import (
 )
 
 
+class VIPSignalReplyPreviewSerializer(serializers.Serializer):
+    id = serializers.IntegerField(allow_null=True)
+    text = serializers.CharField(allow_null=True)
+    media_type = serializers.ChoiceField(
+        choices=("image", "video", "audio"), allow_null=True
+    )
+    available = serializers.BooleanField()
+
+
 class VIPSignalPostSerializer(serializers.ModelSerializer):
     kind = serializers.SerializerMethodField()
     channel_label = serializers.CharField(source="get_channel_display", read_only=True)
     excerpt = serializers.SerializerMethodField()
+    reply_preview = serializers.SerializerMethodField()
 
     class Meta:
         model = VIPSignalPost
         fields = (
             "id", "kind", "channel", "channel_label", "text", "excerpt",
             "image", "video", "audio", "source", "published_at", "created_at",
+            "reply_to_external_id", "reply_preview",
         )
         read_only_fields = fields
 
@@ -39,9 +53,34 @@ class VIPSignalPostSerializer(serializers.ModelSerializer):
     def get_kind(self, obj):
         return "VIP_CHANNEL_POST"
 
+    @extend_schema_field(VIPSignalReplyPreviewSerializer(allow_null=True))
+    def get_reply_preview(self, obj):
+        if not obj.reply_to_external_id:
+            return None
+        parent = obj.parent
+        visible = bool(parent and parent.is_active and parent.channel == obj.channel)
+        if visible:
+            media_type = (
+                "image" if parent.image else "video" if parent.video
+                else "audio" if parent.audio else None
+            )
+            text = strip_tags(parent.text).replace("\x00", "").strip()[:500]
+        else:
+            snapshot = obj.reply_snapshot or {}
+            text = snapshot.get("text") or None
+            media_type = snapshot.get("media_type")
+        return {
+            "id": parent.pk if visible else None,
+            "text": text,
+            "media_type": media_type,
+            "available": visible,
+        }
+
 
 class VIPSignalPostIngestionSerializer(serializers.Serializer):
     external_id = serializers.CharField(max_length=180, required=False, allow_blank=False)
+    reply_to_external_id = serializers.CharField(max_length=180, required=False, allow_blank=False)
+    reply_snapshot = serializers.JSONField(required=False)
     text = serializers.CharField(max_length=20000, allow_blank=False, trim_whitespace=True)
     image = serializers.ImageField(required=False, allow_null=True)
     video = serializers.FileField(required=False, allow_null=True)
@@ -75,7 +114,35 @@ class VIPSignalPostIngestionSerializer(serializers.Serializer):
     def validate_voice(self, value):
         return self.validate_audio(value)
 
+    def validate_reply_snapshot(self, value):
+        if isinstance(value, str):
+            try:
+                value = json.loads(value)
+            except (TypeError, ValueError):
+                raise serializers.ValidationError("reply_snapshot باید JSON معتبر باشد.")
+        if not isinstance(value, dict):
+            raise serializers.ValidationError("reply_snapshot باید یک object باشد.")
+        if set(value) - {"text", "media_type"}:
+            raise serializers.ValidationError("فقط text و media_type مجاز هستند.")
+        text = value.get("text", "")
+        if not isinstance(text, str):
+            raise serializers.ValidationError("متن مرجع باید رشته باشد.")
+        text = strip_tags(text).replace("\x00", "").strip()
+        if len(text) > 500:
+            raise serializers.ValidationError("متن پیش‌نمایش مرجع حداکثر ۵۰۰ کاراکتر است.")
+        media_type = value.get("media_type")
+        if media_type not in (None, "image", "video", "audio"):
+            raise serializers.ValidationError("نوع رسانه مرجع معتبر نیست.")
+        return {"text": text, "media_type": media_type}
+
     def validate(self, attrs):
+        if attrs.get("reply_to_external_id"):
+            if not attrs.get("external_id"):
+                raise serializers.ValidationError({"external_id": "برای Reply شناسه پایدار پست الزامی است."})
+            if attrs["reply_to_external_id"] == attrs["external_id"]:
+                raise serializers.ValidationError({"reply_to_external_id": "پست نمی‌تواند به خودش پاسخ دهد."})
+        elif "reply_snapshot" in attrs:
+            raise serializers.ValidationError({"reply_snapshot": "شناسه پیام مرجع الزامی است."})
         voice = attrs.pop("voice", serializers.empty)
         if voice is not serializers.empty:
             if "audio" in attrs:
@@ -93,7 +160,8 @@ class VIPSignalPostManagementSerializer(VIPSignalPostSerializer):
         )
         read_only_fields = (
             "id", "kind", "channel", "channel_label", "excerpt", "image", "video", "audio",
-            "source", "external_id", "published_at", "created_at", "updated_at",
+            "source", "external_id", "reply_to_external_id", "reply_preview",
+            "published_at", "created_at", "updated_at",
         )
 
     def validate_text(self, value):
