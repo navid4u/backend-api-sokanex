@@ -144,6 +144,126 @@ class VIPSignalChannelTests(APITestCase):
         self.assertTrue(feed.data["results"][0]["audio"].startswith("https://"))
         self.assertIsNone(feed.data["results"][0]["video"])
 
+    def test_captionless_image_reply_with_existing_parent_is_visible(self):
+        ingest = "/api/signals/channels/crypto/ingest/"
+        parent = self.client.post(
+            ingest,
+            {"external_id": "telegram:-1004351394976:1420", "text": "مرجع"},
+            format="json", **self.ingestion_headers,
+        )
+        image = SimpleUploadedFile(
+            "telegram.png",
+            base64.b64decode(
+                "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
+            ),
+            content_type="image/png",
+        )
+        reply = self.client.post(
+            ingest,
+            {
+                "external_id": "telegram:-1004351394976:1423",
+                "reply_to_external_id": "telegram:-1004351394976:1420",
+                "text": "",
+                "image": image,
+            },
+            format="multipart", **self.ingestion_headers,
+        )
+        self.assertEqual(reply.status_code, 201, reply.data)
+        self.assertEqual(reply.data["text"], "")
+        self.assertEqual(reply.data["reply_preview"]["id"], parent.data["id"])
+        post = VIPSignalPost.objects.get(pk=reply.data["id"])
+        self.assertTrue(post.is_active)
+        self.assertTrue(post.image)
+        self.client.force_authenticate(self.user)
+        feed = self.client.get("/api/signals/?channel=CRYPTO")
+        detail = self.client.get(f"/api/signals/{post.pk}/")
+        self.assertEqual(feed.data["results"][0]["id"], post.pk)
+        self.assertEqual(feed.data["results"][0]["text"], "")
+        self.assertEqual(detail.data["reply_to_external_id"], post.reply_to_external_id)
+
+    def test_captionless_image_reply_without_parent_and_retry(self):
+        ingest = "/api/signals/channels/crypto/ingest/"
+
+        def image_file():
+            return SimpleUploadedFile(
+                "telegram.png",
+                base64.b64decode(
+                    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
+                ),
+                content_type="image/png",
+            )
+
+        payload = {
+            "external_id": "telegram:-1004351394976:1425",
+            "reply_to_external_id": "telegram:-1004351394976:1397",
+            "reply_snapshot": json.dumps({"text": "مرجع قدیمی"}),
+        }
+        first = self.client.post(
+            ingest, {**payload, "image": image_file()},
+            format="multipart", **self.ingestion_headers,
+        )
+        self.assertEqual(first.status_code, 201, first.data)
+        self.assertEqual(first.data["text"], "")
+        self.assertFalse(first.data["reply_preview"]["available"])
+        retry = self.client.post(
+            ingest, {**payload, "image": image_file()},
+            format="multipart", **self.ingestion_headers,
+        )
+        self.assertEqual(retry.status_code, 200, retry.data)
+        self.assertEqual(retry.data["id"], first.data["id"])
+        self.assertEqual(VIPSignalPost.objects.filter(external_id=payload["external_id"]).count(), 1)
+        self.client.force_authenticate(self.user)
+        feed = self.client.get("/api/signals/?channel=CRYPTO")
+        self.assertEqual(feed.data["results"][0]["id"], first.data["id"])
+
+    def test_captionless_voice_and_video_are_accepted(self):
+        ingest = "/api/signals/channels/forex/ingest/"
+        voice = self.client.post(
+            ingest,
+            {
+                "external_id": "telegram:forex:voice",
+                "voice": SimpleUploadedFile(
+                    "voice.oga", b"voice-content", content_type="audio/ogg"
+                ),
+            },
+            format="multipart", **self.ingestion_headers,
+        )
+        self.assertEqual(voice.status_code, 201, voice.data)
+        self.assertEqual(voice.data["text"], "")
+        self.assertIsNotNone(voice.data["audio"])
+        video = self.client.post(
+            ingest,
+            {
+                "external_id": "telegram:forex:video",
+                "video": SimpleUploadedFile(
+                    "video.mp4", b"video-content", content_type="video/mp4"
+                ),
+            },
+            format="multipart", **self.ingestion_headers,
+        )
+        self.assertEqual(video.status_code, 201, video.data)
+        self.assertEqual(video.data["text"], "")
+        self.assertIsNotNone(video.data["video"])
+
+    def test_empty_post_and_snapshot_only_are_rejected(self):
+        ingest = "/api/signals/channels/crypto/ingest/"
+        empty = self.client.post(ingest, {}, format="json", **self.ingestion_headers)
+        self.assertEqual(empty.status_code, 400)
+        self.assertIn("text", empty.data["errors"])
+        snapshot_only = self.client.post(
+            ingest,
+            {
+                "external_id": "telegram:crypto:empty",
+                "reply_to_external_id": "telegram:crypto:parent",
+                "reply_snapshot": {"text": "متن مرجع"},
+                "text": "<b></b>",
+            },
+            format="json", **self.ingestion_headers,
+        )
+        self.assertEqual(snapshot_only.status_code, 400)
+        self.assertIn("text", snapshot_only.data["errors"])
+        self.assertEqual(VIPSignalPost.objects.count(), 0)
+
     @override_settings(SIGNAL_CHANNEL_VIDEO_MAX_MB=1, SIGNAL_CHANNEL_AUDIO_MAX_MB=1)
     def test_ingestion_rejects_invalid_or_oversized_media_per_field(self):
         invalid_video = self.client.post(

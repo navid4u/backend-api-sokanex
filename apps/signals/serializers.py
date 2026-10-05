@@ -81,7 +81,10 @@ class VIPSignalPostIngestionSerializer(serializers.Serializer):
     external_id = serializers.CharField(max_length=180, required=False, allow_blank=False)
     reply_to_external_id = serializers.CharField(max_length=180, required=False, allow_blank=False)
     reply_snapshot = serializers.JSONField(required=False)
-    text = serializers.CharField(max_length=20000, allow_blank=False, trim_whitespace=True)
+    text = serializers.CharField(
+        max_length=20000, required=False, allow_blank=True, default="",
+        trim_whitespace=True,
+    )
     image = serializers.ImageField(required=False, allow_null=True)
     video = serializers.FileField(required=False, allow_null=True)
     audio = serializers.FileField(required=False, allow_null=True)
@@ -89,10 +92,7 @@ class VIPSignalPostIngestionSerializer(serializers.Serializer):
     published_at = serializers.DateTimeField(required=False)
 
     def validate_text(self, value):
-        value = strip_tags(value).replace("\x00", "").strip()
-        if not value:
-            raise serializers.ValidationError("متن پست الزامی است.")
-        return value
+        return strip_tags(value).replace("\x00", "").strip()
 
     def validate_image(self, value):
         return validate_image_upload(value, max_size_mb=8, file_label="VIP signal image")
@@ -150,6 +150,12 @@ class VIPSignalPostIngestionSerializer(serializers.Serializer):
                     "voice": "فقط یکی از فیلدهای audio یا voice را ارسال کنید."
                 })
             attrs["audio"] = voice
+        if not attrs.get("text") and not any(
+            attrs.get(field) for field in ("image", "video", "audio")
+        ):
+            raise serializers.ValidationError({
+                "text": "متن یا حداقل یک فایل تصویر، ویدئو یا صدا الزامی است."
+            })
         return attrs
 
 

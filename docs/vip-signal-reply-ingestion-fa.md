@@ -13,7 +13,7 @@ Base URL: `https://api.sokanex.com`
 - `external_id`: شناسه پایدار خود پیام، مانند `telegram:-1001234567890:456`؛ برای Reply الزامی است.
 - `reply_to_external_id`: همان قالب برای پیام مرجع. بازار مرجع باید با endpoint یکی باشد.
 - `reply_snapshot`: اختیاری؛ object با فقط `text` (متن ساده، حداکثر ۵۰۰ کاراکتر) و `media_type` (`image`، `video`، `audio` یا null). برای parent قدیمی یا ناموجود، ربات باید متن/نوع رسانه را از `reply_json` موجود در D1 استخراج کند و این snapshot را ارسال کند. خود `reply_json` یا `telegram_message_json` به API ارسال نمی‌شود.
-- `text`: متن خود Reply، مانند قبل الزامی است؛ `image`، `video`، `audio` یا `voice` همچنان اختیاری‌اند.
+- `text`: متن خود Reply، حداکثر ۲۰٬۰۰۰ کاراکتر؛ اگر فایل `image`، `video`، `audio` یا `voice` وجود دارد می‌تواند خالی یا غایب باشد. دست‌کم متن غیرخالی یا یکی از این فایل‌ها لازم است. `reply_snapshot` جای محتوای خود Reply را نمی‌گیرد.
 
 نمونه JSON بدون رسانه:
 

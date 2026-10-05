@@ -29,7 +29,7 @@ POST https://api.sokanex.com/api/signals/channels/forex/ingest/
 
 | فیلد | نوع | الزام | توضیح |
 |---|---|---:|---|
-| `text` | string | بله | متن/caption تا ۲۰٬۰۰۰ کاراکتر؛ HTML پاک‌سازی می‌شود. |
+| `text` | string | خیر، اگر رسانه هست | متن/caption تا ۲۰٬۰۰۰ کاراکتر؛ HTML پاک‌سازی می‌شود. برای عکس/ویدئو/صدا بدون کپشن می‌تواند خالی یا غایب باشد. |
 | `external_id` | string | توصیه اکید | شناسه پایدار تا ۱۸۰ کاراکتر؛ پیشنهاد: `chat_id:message_id`. |
 | `image` | file | خیر | JPG/JPEG/PNG/WebP، حداکثر ۸MB. |
 | `video` | file | خیر | MP4/MOV/WebM/MKV، سقف پیش‌فرض ۱۰۰MB. |
@@ -37,7 +37,7 @@ POST https://api.sokanex.com/api/signals/channels/forex/ingest/
 | `voice` | file | خیر | alias ورودی برای `audio`، مناسب Telegram Voice؛ همزمان با `audio` ارسال نشود. |
 | `published_at` | ISO-8601 | خیر | مانند `2026-09-17T12:30:00+03:30`؛ پیش‌فرض زمان سرور. |
 
-عکس، ویدئو و صدا اختیاری هستند، اما `text` مطابق قرارداد فعلی الزامی است.
+حداقل یکی از متن غیرخالی یا فایل `image`/`video`/`audio`/`voice` الزامی است. متن snapshot پیام مرجع جای محتوای خود پست را نمی‌گیرد.
 
 ## cURL کریپتو با ویدئو و Voice
 
