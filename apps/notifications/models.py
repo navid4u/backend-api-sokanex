@@ -1,3 +1,5 @@
+from datetime import time
+
 from django.conf import settings
 from django.db import models
 from common.content_access import LevelRestrictedContent
@@ -222,3 +224,99 @@ class NotificationPushDelivery(models.Model):
             fields=("notification", "subscription"), name="unique_notification_push_per_subscription"
         )]
         indexes = [models.Index(fields=("status", "attempts", "created_at"), name="notif_push_status_4d971b_idx")]
+
+
+class SMSAutomationRule(models.Model):
+    """Editable copy and timing for one event/market variant; disabled by default."""
+
+    class Event(models.TextChoices):
+        WELCOME = "WELCOME", "Registration welcome"
+        ACCESS_CHANGE = "ACCESS_CHANGE", "Access changed"
+        TRIAL = "TRIAL", "Trial day"
+
+    class Market(models.TextChoices):
+        ALL = "ALL", "All markets / fallback"
+        INTERNAL = "internal", "Internal"
+        FOREX = "forex", "Forex"
+        CRYPTO = "crypto", "Crypto"
+
+    event = models.CharField(max_length=20, choices=Event.choices)
+    market = models.CharField(max_length=12, choices=Market.choices, default=Market.ALL)
+    slot = models.CharField(max_length=24)  # WELCOME, ACCESS_CHANGE, TRIAL_1..TRIAL_7
+    trial_day = models.PositiveSmallIntegerField(null=True, blank=True)
+    text = models.CharField(max_length=500)
+    enabled = models.BooleanField(default=False)
+    send_time_utc = models.TimeField(default=time(9, 0))
+    delay_minutes = models.PositiveIntegerField(default=0)
+    enabled_at = models.DateTimeField(null=True, blank=True)
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+        related_name="sms_automation_rules_edited",
+    )
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("event", "slot", "market")
+        constraints = [models.UniqueConstraint(
+            fields=("slot", "market"), name="unique_sms_automation_slot_market"
+        )]
+
+    def clean(self):
+        from django.core.exceptions import ValidationError
+        from .sms_automation import validate_template
+
+        validate_template(self.text)
+        if self.event == self.Event.TRIAL and self.trial_day not in range(1, 8):
+            raise ValidationError({"trial_day": "Trial day must be between 1 and 7."})
+        if self.event != self.Event.TRIAL and self.trial_day is not None:
+            raise ValidationError({"trial_day": "Only trial messages have a day."})
+        if self.delay_minutes > 10080 or (self.event == self.Event.TRIAL and self.delay_minutes):
+            raise ValidationError({"delay_minutes": "Invalid event delay."})
+
+
+class SMSBroadcast(models.Model):
+    """Immutable administrator-approved audience snapshot."""
+
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True)
+    idempotency_key = models.CharField(max_length=64, unique=True)
+    membership_tiers = models.JSONField(default=list)
+    market = models.CharField(max_length=12, default="ALL")
+    text = models.CharField(max_length=500)
+    recipient_count = models.PositiveIntegerField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+
+class SMSAutomationDelivery(models.Model):
+    class Status(models.TextChoices):
+        PENDING = "PENDING", "Pending"
+        SENDING = "SENDING", "Sending / reconciliation required if interrupted"
+        SENT = "SENT", "Sent"
+        FAILED = "FAILED", "Failed"
+        SKIPPED = "SKIPPED", "Skipped after eligibility changed"
+
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    rule = models.ForeignKey(SMSAutomationRule, on_delete=models.SET_NULL, null=True, blank=True)
+    broadcast = models.ForeignKey(SMSBroadcast, on_delete=models.SET_NULL, null=True, blank=True)
+    event_key = models.CharField(max_length=100)
+    event = models.CharField(max_length=20)
+    phone = models.CharField(max_length=20)
+    text = models.CharField(max_length=500)
+    status = models.CharField(max_length=10, choices=Status.choices, default=Status.PENDING)
+    scheduled_at = models.DateTimeField()
+    claimed_at = models.DateTimeField(null=True, blank=True)
+    sent_at = models.DateTimeField(null=True, blank=True)
+    provider_message_id = models.CharField(max_length=100, blank=True)
+    failure_code = models.CharField(max_length=80, blank=True)
+    attempts = models.PositiveSmallIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("-created_at", "-id")
+        constraints = [models.UniqueConstraint(
+            fields=("user", "event_key"), name="unique_sms_automation_user_event"
+        )]
+        indexes = [
+            models.Index(fields=("status", "scheduled_at"), name="sms_auto_status_due_idx"),
+            models.Index(fields=("user", "-created_at"), name="sms_auto_user_time_idx"),
+        ]

@@ -479,6 +479,10 @@ PAYAMITO_NOTIFICATION_SMS_MAX_LENGTH = config(
 )
 PAYAMITO_SMS_RETRY_LIMIT = config("PAYAMITO_SMS_RETRY_LIMIT", default=3, cast=int)
 PAYAMITO_SMS_SEND_INLINE = config("PAYAMITO_SMS_SEND_INLINE", default=False, cast=bool)
+SMS_AUTOMATION_SUPPORT_LINK = config(
+    "SMS_AUTOMATION_SUPPORT_LINK", default="https://app.sokanex.com/support"
+)
+SMS_AUTOMATION_ENABLED = config("SMS_AUTOMATION_ENABLED", default=False, cast=bool)
 PAYMENT_PROVIDER_TIMEOUT_SECONDS = config("PAYMENT_PROVIDER_TIMEOUT_SECONDS", default=15, cast=int)
 PAYMENT_PROVIDER_RETRY_LIMIT = config("PAYMENT_PROVIDER_RETRY_LIMIT", default=1, cast=int)
 PAYMENT_CALLBACK_BASE_URL = config("PAYMENT_CALLBACK_BASE_URL", default="https://api.sokanex.com")

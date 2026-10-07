@@ -137,6 +137,10 @@ class DashboardService:
                     market_access_v2_enabled() and user_can_manage_market_access(user)
                 ),
 
+                "can_manage_sms_automation": bool(
+                    user.is_superuser or user.role == User.Role.SUPER_ADMIN
+                ),
+
                 "can_teach_academy": (
                     user.has_platform_permission(
                         User.Permission.ACADEMY_TEACH

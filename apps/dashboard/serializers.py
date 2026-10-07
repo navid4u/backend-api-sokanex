@@ -104,6 +104,8 @@ class DashboardCapabilitiesSerializer(
 
     can_manage_market_access = serializers.BooleanField()
 
+    can_manage_sms_automation = serializers.BooleanField()
+
     can_teach_academy = serializers.BooleanField()
 
     can_manage_academy = serializers.BooleanField()

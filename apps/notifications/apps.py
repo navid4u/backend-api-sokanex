@@ -8,3 +8,6 @@ class NotificationsConfig(AppConfig):
     )
 
     name = "apps.notifications"
+
+    def ready(self):
+        from . import sms_automation_signals  # noqa: F401

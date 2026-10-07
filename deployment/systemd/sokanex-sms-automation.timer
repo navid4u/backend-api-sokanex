@@ -1,0 +1,12 @@
+[Unit]
+Description=Run Sokanex SMS automation every five minutes
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=5min
+AccuracySec=30s
+Persistent=true
+Unit=sokanex-sms-automation.service
+
+[Install]
+WantedBy=timers.target
