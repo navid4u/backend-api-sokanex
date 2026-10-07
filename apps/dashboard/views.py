@@ -36,6 +36,7 @@ class DashboardView(APIView):
             data,
             context={
                 "request": request,
+                "market_access_v2": data["market_access_v2"],
             },
         )
 

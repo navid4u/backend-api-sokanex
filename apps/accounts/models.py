@@ -1,3 +1,5 @@
+import uuid
+
 from django.db import models
 from django.contrib.auth.models import AbstractUser
 from django.conf import settings
@@ -766,3 +768,265 @@ class BrokerConnection(models.Model):
 
     def __str__(self):
         return f"{self.user} - {self.broker_name} ({self.status})"
+
+
+# Market-access V2 is additive. Legacy level, market_type, and Gold trial fields
+# remain untouched until the audited production cutover.
+class UserAccessProfile(models.Model):
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="market_access_profile",
+    )
+    market_selection_confirmed_at = models.DateTimeField(null=True, blank=True)
+    is_elite = models.BooleanField(default=False)
+    elite_updated_at = models.DateTimeField(null=True, blank=True)
+    elite_updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="elite_access_changes",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+
+class UserMarketPreference(models.Model):
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="market_preferences_v2",
+    )
+    market = models.CharField(max_length=12, choices=User.MarketType.choices)
+    selected_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=("user", "market"),
+                name="unique_user_market_preference_v2",
+            ),
+            models.CheckConstraint(
+                condition=Q(market__in=User.MarketType.values),
+                name="valid_user_market_preference_v2",
+            ),
+        ]
+
+
+class UserMarketGrant(models.Model):
+    class Source(models.TextChoices):
+        ADMIN = "ADMIN", "Administrator"
+        APPROVED_REQUEST = "APPROVED_REQUEST", "Approved request"
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="market_grants_v2",
+    )
+    market = models.CharField(max_length=12, choices=User.MarketType.choices)
+    source = models.CharField(max_length=20, choices=Source.choices)
+    granted_at = models.DateTimeField(default=timezone.now)
+    granted_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name="market_grants_issued_v2",
+    )
+    revoked_at = models.DateTimeField(null=True, blank=True)
+    revoked_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="market_grants_revoked_v2",
+    )
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=("user", "market"),
+                condition=Q(revoked_at__isnull=True),
+                name="unique_active_user_market_grant_v2",
+            ),
+            models.CheckConstraint(
+                condition=Q(market__in=User.MarketType.values),
+                name="valid_user_market_grant_v2",
+            ),
+            models.CheckConstraint(
+                condition=Q(revoked_at__isnull=True) | Q(revoked_at__gte=models.F("granted_at")),
+                name="market_grant_revoked_after_grant_v2",
+            ),
+        ]
+        indexes = [models.Index(fields=("user", "revoked_at"), name="mkt_grant_user_active_v2_idx")]
+
+
+class MarketAccessRequest(models.Model):
+    """A user's V2 application, separate from legacy paid UpgradeRequest."""
+
+    class RequestedTier(models.TextChoices):
+        PRO = "PRO", "Pro"
+        GOLD = "GOLD", "Gold"
+        ELITE = "ELITE", "Elite"
+
+    class Status(models.TextChoices):
+        PENDING = "PENDING", "Pending"
+        APPROVED = "APPROVED", "Approved"
+        REJECTED = "REJECTED", "Rejected"
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="market_access_requests_v2",
+    )
+    requested_tier = models.CharField(max_length=8, choices=RequestedTier.choices)
+    requested_markets = models.JSONField(default=list)
+    message = models.CharField(max_length=1000, blank=True)
+    status = models.CharField(max_length=8, choices=Status.choices, default=Status.PENDING)
+    approved_markets = models.JSONField(default=list)
+    approved_elite = models.BooleanField(default=False)
+    admin_note = models.CharField(max_length=1000, blank=True)
+    reviewed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="market_access_requests_reviewed_v2",
+    )
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("-created_at", "-id")
+        constraints = [
+            models.UniqueConstraint(
+                fields=("user",),
+                condition=Q(status="PENDING"),
+                name="unique_pending_market_access_request_v2",
+            ),
+        ]
+        indexes = [models.Index(fields=("status", "-created_at"), name="mkt_request_status_time_v2_idx")]
+
+
+class TrialCampaign(models.Model):
+    class Status(models.TextChoices):
+        PENDING = "PENDING", "Pending"
+        APPLIED = "APPLIED", "Applied"
+        CANCELLED = "CANCELLED", "Cancelled"
+
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name="trial_campaigns_created_v2",
+    )
+    created_from = models.DateTimeField(null=True, blank=True)
+    duration_days = models.PositiveSmallIntegerField(default=7)
+    status = models.CharField(max_length=12, choices=Status.choices, default=Status.PENDING)
+    created_at = models.DateTimeField(auto_now_add=True)
+    applied_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        constraints = [
+            models.CheckConstraint(condition=Q(duration_days__gt=0), name="trial_campaign_positive_days_v2"),
+        ]
+
+
+class TrialGrant(models.Model):
+    # One-to-one, not the legacy Gold dates, enforces one V2 trial per account.
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="trial_grant_v2",
+    )
+    campaign = models.ForeignKey(
+        TrialCampaign,
+        on_delete=models.PROTECT,
+        related_name="grants",
+    )
+    started_at = models.DateTimeField()
+    ends_at = models.DateTimeField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.CheckConstraint(condition=Q(ends_at__gt=models.F("started_at")), name="trial_grant_ends_after_start_v2"),
+        ]
+        indexes = [models.Index(fields=("ends_at",), name="trial_grant_ends_at_v2_idx")]
+
+
+class UserAccessAudit(models.Model):
+    class Action(models.TextChoices):
+        PREFERENCES_CHANGED = "PREFERENCES_CHANGED", "Preferences changed"
+        MARKET_GRANTED = "MARKET_GRANTED", "Market granted"
+        MARKET_REVOKED = "MARKET_REVOKED", "Market revoked"
+        ELITE_CHANGED = "ELITE_CHANGED", "Elite changed"
+        TRIAL_STARTED = "TRIAL_STARTED", "Trial started"
+        LEGACY_RESET = "LEGACY_RESET", "Legacy access reset"
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name="market_access_audits_v2",
+    )
+    subject_user_id = models.PositiveBigIntegerField()
+    actor = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="market_access_actions_v2",
+    )
+    action = models.CharField(max_length=24, choices=Action.choices)
+    before = models.JSONField(default=dict)
+    after = models.JSONField(default=dict)
+    operation_id = models.UUIDField(default=uuid.uuid4, db_index=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("-created_at", "-id")
+        indexes = [models.Index(fields=("subject_user_id", "-created_at"), name="access_audit_user_time_v2_idx")]
+
+
+def default_content_access_tiers():
+    return ["LEVEL_1", "BASIC", "PRO", "GOLD"]
+
+
+class ContentSectionAccessPolicy(models.Model):
+    """V2 section-wide visibility; legacy per-item level flags remain stored."""
+
+    class Section(models.TextChoices):
+        ARTICLES = "ARTICLES", "Articles"
+        VIDEOS = "VIDEOS", "Videos"
+        LIVESTREAMS = "LIVESTREAMS", "Livestreams"
+
+    section = models.CharField(max_length=16, choices=Section.choices, unique=True)
+    allowed_tiers = models.JSONField(default=default_content_access_tiers)
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="content_section_policy_updates_v2",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+
+class ContentSectionAccessAudit(models.Model):
+    section = models.CharField(max_length=16, choices=ContentSectionAccessPolicy.Section.choices)
+    actor = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="content_section_policy_audits_v2",
+    )
+    before = models.JSONField(default=list)
+    after = models.JSONField(default=list)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("-created_at", "-id")

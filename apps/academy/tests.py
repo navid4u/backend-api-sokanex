@@ -30,10 +30,10 @@ class AcademyAndCustomRoleAPITests(APITestCase):
             password=self.password,
             access_level=1,
         )
-        self.level_two = User.objects.create_user(
-            username="level-two",
+        self.level_three = User.objects.create_user(
+            username="level-three",
             password=self.password,
-            access_level=2,
+            access_level=3,
         )
 
     def authenticate(self, user):
@@ -54,6 +54,8 @@ class AcademyAndCustomRoleAPITests(APITestCase):
                 "username": "registered-user",
                 "email": "registered@example.com",
                 "password": self.password,
+                "password_confirm": self.password,
+                "phone": "09120040001",
                 "first_name": "New",
                 "last_name": "User",
             },
@@ -144,12 +146,12 @@ class AcademyAndCustomRoleAPITests(APITestCase):
 
     def test_course_visibility_is_restricted_by_level(self):
         Course.objects.create(
-            title="Level two course",
+            title="Level three course",
             instructor=self.admin,
             status=Course.Status.PUBLISHED,
             allowed_level_1=False,
-            allowed_level_2=True,
-            allowed_level_3=False,
+            allowed_level_2=False,
+            allowed_level_3=True,
             allowed_level_4=False,
             allowed_level_5=False,
         )
@@ -160,7 +162,7 @@ class AcademyAndCustomRoleAPITests(APITestCase):
         )
         self.assertEqual(hidden_response.data["count"], 0)
 
-        self.authenticate(self.level_two)
+        self.authenticate(self.level_three)
         visible_response = self.client.get(
             reverse("academy-course-list-create")
         )

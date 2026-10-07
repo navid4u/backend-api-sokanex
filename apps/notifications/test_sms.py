@@ -169,7 +169,7 @@ class NotificationSMSTests(APITestCase):
         self.assertEqual(NotificationSMSDelivery.objects.count(), 1)
         send.assert_not_called()
 
-    def test_level_restricted_notification_visibility(self):
+    def test_expired_level_two_uses_level_one_notification_access(self):
         Notification.objects.create(
             title="Level 2", message="Only level 2", created_by=self.employee,
             allowed_level_1=False, allowed_level_2=True, allowed_level_3=False,
@@ -178,4 +178,10 @@ class NotificationSMSTests(APITestCase):
         self.client.force_authenticate(self.level_1)
         self.assertEqual(self.client.get(reverse("notification-list-create")).data["count"], 0)
         self.client.force_authenticate(self.level_2)
+        self.assertEqual(self.client.get(reverse("notification-list-create")).data["count"], 0)
+        Notification.objects.create(
+            title="Level 1", message="Available to basic users", created_by=self.employee,
+            allowed_level_1=True, allowed_level_2=False, allowed_level_3=False,
+            allowed_level_4=False, allowed_level_5=False,
+        )
         self.assertEqual(self.client.get(reverse("notification-list-create")).data["count"], 1)

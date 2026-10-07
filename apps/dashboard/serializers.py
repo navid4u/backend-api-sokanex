@@ -102,6 +102,8 @@ class DashboardCapabilitiesSerializer(
         serializers.BooleanField()
     )
 
+    can_manage_market_access = serializers.BooleanField()
+
     can_teach_academy = serializers.BooleanField()
 
     can_manage_academy = serializers.BooleanField()
@@ -138,6 +140,8 @@ class DashboardSerializer(
     stats = DashboardStatsSerializer()
 
     premium_subscription = serializers.DictField()
+
+    market_access_v2 = serializers.DictField()
 
     personality_result = FinancialPersonalityResultSerializer(allow_null=True)
 

@@ -14,6 +14,13 @@ class TrialAlreadyUsed(APIException):
     machine_code = "TRIAL_ALREADY_USED"
 
 
+class LegacyGoldFlowDisabled(APIException):
+    status_code = 409
+    default_detail = "این مسیر اشتراک قدیمی در سیستم جدید غیرفعال است."
+    default_code = "LEGACY_GOLD_FLOW_DISABLED"
+    machine_code = "LEGACY_GOLD_FLOW_DISABLED"
+
+
 class ProfileCompletionService:
     @staticmethod
     def status(user):
@@ -55,6 +62,10 @@ class PremiumAccessService:
     @classmethod
     def refresh_user_state(cls, user):
         """Start legacy level-5 trials once, and downgrade expired trials on auth."""
+        from .market_access import market_access_v2_enabled
+
+        if market_access_v2_enabled():
+            return user
         if (
             user.access_level != User.AccessLevel.LEVEL_5
             or user.gold_permanent_granted_at
@@ -91,6 +102,10 @@ class PremiumAccessService:
     @classmethod
     @transaction.atomic
     def activate_trial(cls, user):
+        from .market_access import market_access_v2_enabled
+
+        if market_access_v2_enabled():
+            raise LegacyGoldFlowDisabled()
         locked = User.objects.select_for_update().get(pk=user.pk)
         now = timezone.now()
         # An active trial is idempotent: repeated clicks return it unchanged.
@@ -119,6 +134,10 @@ class PremiumAccessService:
     @classmethod
     @transaction.atomic
     def request_permanent_gold(cls, user, market_type, message=""):
+        from .market_access import market_access_v2_enabled
+
+        if market_access_v2_enabled():
+            raise LegacyGoldFlowDisabled()
         locked = User.objects.select_for_update().get(pk=user.pk)
         trial_expired = bool(
             locked.gold_trial_started_at
@@ -152,6 +171,10 @@ class PremiumAccessService:
 
     @staticmethod
     def expire_trials():
+        from .market_access import market_access_v2_enabled
+
+        if market_access_v2_enabled():
+            return 0
         now = timezone.now()
         return User.objects.filter(
             access_level=User.AccessLevel.LEVEL_5,

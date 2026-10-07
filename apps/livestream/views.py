@@ -162,6 +162,12 @@ class LiveEventDetailView(
         return permissions
 
     def get_serializer_class(self):
+        if getattr(self, "swagger_fake_view", False):
+            return (
+                LiveEventWriteSerializer
+                if self.request.method in ("PUT", "PATCH")
+                else LiveEventDetailSerializer
+            )
         if self.request.method in [
             "PUT",
             "PATCH",
@@ -177,6 +183,8 @@ class LiveEventDetailView(
         return LiveEventDetailSerializer
 
     def get_queryset(self):
+        if getattr(self, "swagger_fake_view", False):
+            return LiveEvent.objects.none()
         user = self.request.user
 
         if (

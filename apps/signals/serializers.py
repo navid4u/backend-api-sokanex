@@ -46,11 +46,11 @@ class VIPSignalPostSerializer(serializers.ModelSerializer):
         )
         read_only_fields = fields
 
-    def get_excerpt(self, obj):
+    def get_excerpt(self, obj) -> str:
         words = obj.text.split()
         return " ".join(words[:30]) + ("…" if len(words) > 30 else "")
 
-    def get_kind(self, obj):
+    def get_kind(self, obj) -> str:
         return "VIP_CHANNEL_POST"
 
     @extend_schema_field(VIPSignalReplyPreviewSerializer(allow_null=True))

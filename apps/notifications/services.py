@@ -23,6 +23,7 @@ from .models import (
     WebPushSubscription,
 )
 from apps.accounts.models import User
+from apps.accounts.market_access import has_basic_access, market_access_v2_enabled, users_with_basic_access
 from common.sms import PayamitoSMSService, SMSProviderError, render_sms_template
 from common.phone import normalize_iran_phone
 
@@ -92,29 +93,31 @@ class NotificationService:
             )
         )
 
+        role_and_personal = Q(recipient=user) | Q(
+            recipient__isnull=True, target_role=user.role
+        )
+        broadcast = Q(recipient__isnull=True, target_role="")
+        if market_access_v2_enabled():
+            audience = role_and_personal
+            if has_basic_access(user):
+                audience |= broadcast
+            level_filter = Q()
+        else:
+            audience = role_and_personal | broadcast
+            level_filter = (
+                Q(allowed_level_1=True)
+                | Q(allowed_level_2=True)
+                | Q(allowed_level_3=True)
+                | Q(allowed_level_4=True)
+                | Q(allowed_level_5=True)
+            ) if user.effective_access_level == User.AccessLevel.LEVEL_5 else Q(
+                **{f"allowed_level_{user.effective_access_level}": True}
+            )
+
         return (
-            Notification.objects.filter(
-                Q(recipient=user)
-                | Q(
-                    recipient__isnull=True,
-                    target_role="",
-                )
-                | Q(
-                    recipient__isnull=True,
-                    target_role=user.role,
-                ),
-                is_active=True,
-            ).filter(
-                (
-                    Q(allowed_level_1=True)
-                    | Q(allowed_level_2=True)
-                    | Q(allowed_level_3=True)
-                    | Q(allowed_level_4=True)
-                    | Q(allowed_level_5=True)
-                )
-                if user.effective_access_level == User.AccessLevel.LEVEL_5
-                else Q(**{f"allowed_level_{user.effective_access_level}": True})
-            ).filter(Q(expires_at__isnull=True) | Q(expires_at__gt=timezone.now()))
+            Notification.objects.filter(audience, is_active=True)
+            .filter(level_filter)
+            .filter(Q(expires_at__isnull=True) | Q(expires_at__gt=timezone.now()))
             .select_related("created_by")
             .annotate(
                 is_read=Exists(read_record),
@@ -197,6 +200,10 @@ class NotificationService:
             return queryset.filter(pk=notification.recipient_id)
         if notification.target_role:
             return queryset.filter(role=notification.target_role)
+        if market_access_v2_enabled():
+            # V2 broadcasts are available at Basic+; old allowed_levels flags
+            # are retained for legacy mode but must not determine V2 recipients.
+            return users_with_basic_access(queryset)
         if notification.allowed_levels:
             requested_levels = set(notification.allowed_levels)
             actual_levels = set(requested_levels)

@@ -28,6 +28,7 @@ from django.utils import timezone
 from django.core.exceptions import ValidationError as DjangoValidationError
 from common.phone import normalize_iran_phone
 from .authentication import issue_login_tokens
+from .market_access import market_access_payload, market_access_v2_enabled, user_can_manage_market_access
 
 from .models import (
     Badge,
@@ -195,6 +196,7 @@ class UserSerializer(serializers.ModelSerializer):
     crm_synced_at = serializers.SerializerMethodField()
     wallet_balance_usd = serializers.SerializerMethodField()
     premium_subscription = serializers.SerializerMethodField()
+    market_access_v2 = serializers.SerializerMethodField()
 
     class Meta:
         model = User
@@ -220,6 +222,7 @@ class UserSerializer(serializers.ModelSerializer):
             "crm_synced_at",
             "wallet_balance_usd",
             "premium_subscription",
+            "market_access_v2",
             "created_at",
         )
         read_only_fields = (
@@ -258,6 +261,9 @@ class UserSerializer(serializers.ModelSerializer):
             and obj.has_platform_permission(User.Permission.CONTENT_MANAGE)
         )
         return {
+            "can_manage_market_access": (
+                market_access_v2_enabled() and user_can_manage_market_access(obj)
+            ),
             "can_manage_internal_analysis": bool(
                 obj.is_superuser
                 or obj.role == User.Role.SUPER_ADMIN
@@ -289,6 +295,10 @@ class UserSerializer(serializers.ModelSerializer):
         from apps.wallet.services import WalletService
 
         return WalletService.premium_subscription(obj)
+
+    @extend_schema_field(serializers.DictField())
+    def get_market_access_v2(self, obj) -> dict:
+        return self.context.get("market_access_v2") or market_access_payload(obj)
 
 
 class CustomTokenObtainPairSerializer(
@@ -778,6 +788,7 @@ class UserCustomRoleUpdateSerializer(serializers.Serializer):
 
 class UserProfileDetailsSerializer(serializers.ModelSerializer):
     access_level = serializers.IntegerField(source="user.access_level", read_only=True)
+    market_access_v2 = serializers.SerializerMethodField()
     market_type = serializers.ChoiceField(
         source="user.market_type", choices=User.MarketType.choices, required=False
     )
@@ -816,6 +827,7 @@ class UserProfileDetailsSerializer(serializers.ModelSerializer):
         fields = (
             "id",
             "access_level",
+            "market_access_v2",
             "username",
             "email",
             "market_type",
@@ -862,6 +874,7 @@ class UserProfileDetailsSerializer(serializers.ModelSerializer):
         )
         read_only_fields = (
             "id",
+            "market_access_v2",
             "username",
             "email",
             "profile_completion",
@@ -881,6 +894,10 @@ class UserProfileDetailsSerializer(serializers.ModelSerializer):
             instance.user.market_type = user_data["market_type"]
             instance.user.save(update_fields=("market_type", "updated_at"))
         return super().update(instance, validated_data)
+
+    @extend_schema_field(serializers.DictField())
+    def get_market_access_v2(self, obj) -> dict:
+        return market_access_payload(obj.user)
 
     def _validate_string_list(self, value, field_name, max_items=30):
         if not isinstance(value, list):

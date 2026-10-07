@@ -20,6 +20,7 @@ from django.utils import timezone
 from rest_framework.exceptions import APIException, ValidationError
 
 from .models import CryptoMarketSnapshot, MarketQuoteSnapshot, NewsArticle, NewsSource
+from .http import MarketResponseTooLarge, read_market_json
 
 
 logger = logging.getLogger(__name__)
@@ -73,7 +74,9 @@ def _request_json(url, headers=None, *, timeout=None, retries=None):
     for _ in range(request_retries + 1):
         try:
             with urlopen(request, timeout=request_timeout) as response:
-                return json.loads(response.read().decode("utf-8"))
+                return read_market_json(response)
+        except MarketResponseTooLarge:
+            raise
         except (HTTPError, URLError, TimeoutError, ValueError) as exc:
             last_error = exc
     raise last_error

@@ -34,9 +34,17 @@ class ContentChannelConsumer(AsyncJsonWebsocketConsumer):
     @database_sync_to_async
     def can_access(self, user_id, slug):
         from apps.accounts.models import User
+        from apps.accounts.market_access import can_access_gold_features, can_access_market, market_access_v2_enabled
         try:
             user = User.objects.get(pk=user_id, is_active=True)
             channel = Channel.objects.get(slug=slug, is_active=True)
         except (User.DoesNotExist, Channel.DoesNotExist):
             return False
+        if market_access_v2_enabled() and user.role != User.Role.SUPPORT:
+            if user.is_staff or user.role in (User.Role.EMPLOYEE, User.Role.ADMIN, User.Role.SUPER_ADMIN):
+                return True
+            if slug in {"vip-signals", "internal-analysis"}:
+                return can_access_gold_features(user) and (
+                    slug != "internal-analysis" or can_access_market(user, User.MarketType.INTERNAL)
+                )
         return user.is_staff or user.effective_access_level >= channel.min_access_level

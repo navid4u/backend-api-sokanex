@@ -7,6 +7,7 @@ from apps.notifications.services import NotificationService
 from apps.chat.services import ChatService
 from apps.livestream.services import LiveEventService
 from apps.accounts.models import BrokerConnection
+from apps.accounts.market_access import market_access_payload, market_access_v2_enabled, user_can_manage_market_access
 from common.content_access import user_can_access_gold_content
 
 
@@ -107,6 +108,8 @@ class DashboardService:
 
             "premium_subscription": WalletService.premium_subscription(user),
 
+            "market_access_v2": market_access_payload(user),
+
             "personality_result": personality_result,
 
             "capabilities": {
@@ -128,6 +131,10 @@ class DashboardService:
                     user.has_platform_permission(
                         User.Permission.USER_MANAGE
                     )
+                ),
+
+                "can_manage_market_access": (
+                    market_access_v2_enabled() and user_can_manage_market_access(user)
                 ),
 
                 "can_teach_academy": (

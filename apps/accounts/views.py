@@ -107,7 +107,8 @@ from .models import (
 )
 from django.utils import timezone
 from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken, OutstandingToken
-from .services import FinancialPersonalityService, ProfileCompletionService, PremiumAccessService, TrialAlreadyUsed, UserService
+from .services import FinancialPersonalityService, LegacyGoldFlowDisabled, ProfileCompletionService, PremiumAccessService, TrialAlreadyUsed, UserService
+from .market_access import market_access_v2_enabled
 from apps.activity.models import UserActivity
 from apps.activity.services import ActivityService
 from .authentication import issue_login_tokens
@@ -1029,6 +1030,8 @@ class UpdateUserAccessLevelView(APIView):
         responses=UserListSerializer,
     )
     def patch(self, request, pk):
+        if market_access_v2_enabled():
+            raise LegacyGoldFlowDisabled()
         user = get_object_or_404(User, pk=pk)
         serializer = UserAccessLevelUpdateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -1047,6 +1050,11 @@ class UpdateUserAccessLevelView(APIView):
 class MyUpgradeRequestListCreateView(generics.ListCreateAPIView):
     permission_classes = [IsAuthenticated]
     serializer_class = UpgradeRequestSerializer
+
+    def create(self, request, *args, **kwargs):
+        if market_access_v2_enabled():
+            raise LegacyGoldFlowDisabled()
+        return super().create(request, *args, **kwargs)
 
     def get_queryset(self):
         if getattr(self, "swagger_fake_view", False):
@@ -1068,6 +1076,8 @@ class PremiumPurchaseView(APIView):
         responses={201: PremiumPurchaseResponseSerializer, 200: PremiumPurchaseResponseSerializer, 402: None},
     )
     def post(self, request):
+        if market_access_v2_enabled():
+            raise LegacyGoldFlowDisabled()
         from apps.wallet.services import WalletService
 
         serializer = PremiumPurchaseSerializer(data=request.data)
@@ -1157,6 +1167,8 @@ class GoldRenewalRequestView(APIView):
         responses={200: GoldRenewalRequestResponseSerializer, 201: GoldRenewalRequestResponseSerializer},
     )
     def post(self, request):
+        if market_access_v2_enabled():
+            raise LegacyGoldFlowDisabled()
         from apps.wallet.services import WalletService
 
         serializer = GoldRenewalRequestCreateSerializer(data=request.data)

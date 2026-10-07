@@ -1,5 +1,16 @@
 from django.urls import path
 
+from .market_access_views import (
+    ContentSectionPolicyView,
+    MarketAccessUserDetailView,
+    MarketAccessUserListView,
+    MarketTrialCampaignPreviewView,
+    MarketTrialCampaignStartView,
+    MyMarketPreferencesView,
+    MyMarketAccessRequestView,
+    MarketAccessRequestManagementView,
+    MarketAccessRequestReviewView,
+)
 from .views import (
     BadgeDetailView,
     BadgeListCreateView,
@@ -47,6 +58,14 @@ from .views import (
 
 
 urlpatterns = [
+    path("market-access/requests/", MyMarketAccessRequestView.as_view(), name="my-market-access-requests-v2"),
+    path("admin/market-access/requests/", MarketAccessRequestManagementView.as_view(), name="market-access-requests-v2"),
+    path("admin/market-access/requests/<int:pk>/review/", MarketAccessRequestReviewView.as_view(), name="market-access-request-review-v2"),
+    path("admin/market-access/content-policy/", ContentSectionPolicyView.as_view(), name="market-access-content-policy"),
+    path("admin/market-access/trial-campaigns/preview/", MarketTrialCampaignPreviewView.as_view(), name="market-trial-campaign-preview"),
+    path("admin/market-access/trial-campaigns/", MarketTrialCampaignStartView.as_view(), name="market-trial-campaign-start"),
+    path("admin/market-access/users/", MarketAccessUserListView.as_view(), name="market-access-user-list"),
+    path("admin/market-access/users/<int:pk>/", MarketAccessUserDetailView.as_view(), name="market-access-user-detail"),
     path("admin/crm-syncs/", CrmContactSyncListView.as_view(), name="crm-sync-list"),
     path("admin/crm-syncs/<int:pk>/retry/", CrmContactSyncRetryView.as_view(), name="crm-sync-retry"),
     path("admin/crm-syncs/retry-all/", CrmContactSyncRetryAllView.as_view(), name="crm-sync-retry-all"),
@@ -129,6 +148,11 @@ urlpatterns = [
         "profile/market-type/",
         MarketTypeView.as_view(),
         name="profile-market-type",
+    ),
+    path(
+        "profile/market-preferences/",
+        MyMarketPreferencesView.as_view(),
+        name="my-market-preferences-v2",
     ),
     path(
         "users/<int:pk>/access-level/",

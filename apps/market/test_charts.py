@@ -2,6 +2,7 @@ from datetime import timedelta
 from unittest.mock import patch
 from urllib.error import URLError
 
+from django.conf import settings
 from django.core.cache import cache
 from django.urls import reverse
 from django.utils import timezone
@@ -55,6 +56,9 @@ class MarketChartAPITests(APITestCase):
         with patch.object(MarketChartService, "_coingecko", return_value=self.points):
             self.client.get(self.url, self.params)
         cache.delete("market:chart:v1:fresh:crypto:BINANCE:BTCUSDT:1d:auto")
+        MarketChartSnapshot.objects.update(
+            updated_at=timezone.now() - timedelta(seconds=settings.MARKET_CHART_CRYPTO_TTL + 1)
+        )
         with patch.object(MarketChartService, "_coingecko", side_effect=URLError("down")), patch.object(
             MarketChartService, "_coinbase", side_effect=URLError("down")
         ):

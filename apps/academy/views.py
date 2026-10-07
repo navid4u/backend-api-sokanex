@@ -18,6 +18,7 @@ import os
 from common.serializers import EmptySerializer
 
 from apps.accounts.models import User
+from apps.accounts.market_access import has_basic_access, market_access_v2_enabled
 from common.content_access import restrict_queryset_for_user
 from common.permissions import CanTeachAcademy
 
@@ -57,6 +58,10 @@ def visible_courses(user):
     queryset = Course.objects.filter(
         status=Course.Status.PUBLISHED
     ).select_related("instructor")
+    if market_access_v2_enabled():
+        # V2 section availability starts at Basic. Old per-course level flags
+        # remain stored for a reversible cutover, but do not gate V2 readers.
+        return queryset if has_basic_access(user) else queryset.none()
     return restrict_queryset_for_user(queryset, user)
 
 

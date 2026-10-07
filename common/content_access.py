@@ -101,6 +101,17 @@ def user_can_access_levels(user, allowed_levels):
 def user_can_access_gold_content(user):
     if not user or not user.is_authenticated:
         return False
+    # V2 entitlement is derived from three market grants or an active V2 trial.
+    # Staff/role capabilities and the entire legacy path remain unchanged.
+    from apps.accounts.market_access import can_access_gold_features, market_access_v2_enabled
+
+    if market_access_v2_enabled() and user.role != User.Role.SUPPORT:
+        return bool(
+            user.is_staff
+            or user.is_superuser
+            or user.has_platform_permission(User.Permission.CONTENT_VIEW_ALL)
+            or can_access_gold_features(user)
+        )
     return bool(
         user.is_staff
         or user.is_superuser

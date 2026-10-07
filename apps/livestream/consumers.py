@@ -35,7 +35,8 @@ class LivestreamConsumer(AsyncJsonWebsocketConsumer):
     @database_sync_to_async
     def event_id(self, slug, event_id, user_id):
         from apps.accounts.models import User
-        from common.content_access import user_can_access_levels
+        from apps.accounts.content_section_access import user_can_access_content_section
+        from apps.accounts.models import ContentSectionAccessPolicy
         try:
             user = User.objects.get(pk=user_id, is_active=True)
             event = LiveEvent.objects.get(
@@ -46,6 +47,10 @@ class LivestreamConsumer(AsyncJsonWebsocketConsumer):
             )
         except (User.DoesNotExist, LiveEvent.DoesNotExist):
             return None
-        if user_can_access_levels(user, event.allowed_levels):
+        if user_can_access_content_section(
+            user,
+            ContentSectionAccessPolicy.Section.LIVESTREAMS,
+            legacy_allowed_levels=event.allowed_levels,
+        ):
             return event.pk
         return None

@@ -11,6 +11,23 @@ class CanAccessGoldContent(BasePermission):
         return request.user.is_authenticated and user_can_access_gold_content(request.user)
 
 
+class CanAccessBasicContent(BasePermission):
+    """General V2 features are Basic+; preserve the legacy Gold gate."""
+
+    message = "برای دسترسی به این بخش، عضویت Basic یا بالاتر لازم است."
+
+    def has_permission(self, request, view):
+        from apps.accounts.market_access import has_basic_access, market_access_v2_enabled
+
+        user = request.user
+        if not user.is_authenticated:
+            return False
+        if market_access_v2_enabled():
+            return has_basic_access(user)
+        self.message = CanAccessGoldContent.message
+        return user_can_access_gold_content(user)
+
+
 class IsTrader(BasePermission):
     """
     Trader or super admin can access.
@@ -87,6 +104,48 @@ class CanReviewSignals(BasePermission):
             and request.user.has_platform_permission(
                 User.Permission.SIGNAL_REVIEW
             )
+        )
+
+
+class CanManageMarketAccess(BasePermission):
+    """V2 access-management capability without broadening legacy user admin."""
+
+    def has_permission(self, request, view):
+        from apps.accounts.market_access import user_can_manage_market_access
+
+        return user_can_manage_market_access(request.user)
+
+
+class CanStartMarketTrialCampaign(BasePermission):
+    """Only the real super administrator may start a V2 trial campaign."""
+
+    def has_permission(self, request, view):
+        user = request.user
+        return bool(
+            user.is_authenticated
+            and (user.is_superuser or user.role == User.Role.SUPER_ADMIN)
+        )
+
+
+class MarketAccessV2Enabled(BasePermission):
+    """Keep new management APIs unavailable until the coordinated cutover."""
+
+    def has_permission(self, request, view):
+        from apps.accounts.market_access import market_access_v2_enabled
+
+        return market_access_v2_enabled()
+
+
+class CanAccessMarketV2(BasePermission):
+    """For V2 views with `required_market`; fail closed until cutover."""
+
+    def has_permission(self, request, view):
+        from apps.accounts.market_access import can_access_market, market_access_v2_enabled
+
+        return bool(
+            request.user.is_authenticated
+            and market_access_v2_enabled()
+            and can_access_market(request.user, getattr(view, "required_market", ""))
         )
 
 

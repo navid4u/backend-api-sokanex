@@ -12,6 +12,7 @@ from django.utils import timezone
 from rest_framework.exceptions import ValidationError
 
 from .models import MarketChartSnapshot
+from .http import MarketResponseTooLarge, read_market_json
 
 
 CHART_SYMBOLS = {
@@ -60,7 +61,7 @@ def _request_json(url, headers=None):
     )
     timeout = max(1, min(settings.MARKET_CHART_TIMEOUT_SECONDS, 7))
     with urlopen(request, timeout=timeout) as response:
-        return json.loads(response.read().decode("utf-8"))
+        return read_market_json(response)
 
 
 def _iso_timestamp(value):
@@ -234,6 +235,8 @@ class MarketChartService:
                     {"timestamp": row["datetime"], "value": row["close"]}
                     for row in payload.get("values", [])
                 ]
+            except MarketResponseTooLarge:
+                raise
             except (HTTPError, URLError, TimeoutError, OSError, ValueError, KeyError, TypeError, json.JSONDecodeError) as exc:
                 last_error = exc
                 if attempt == 0:

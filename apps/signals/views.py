@@ -36,6 +36,7 @@ from rest_framework.throttling import ScopedRateThrottle
 from django.db import models, transaction
 from django.db.models import Count
 from apps.accounts.models import User
+from apps.accounts.market_access import market_access_v2_enabled, resolve_market_access
 
 
 
@@ -63,12 +64,28 @@ from common.pagination import DefaultPagination
 logger = logging.getLogger(__name__)
 
 
+def _apply_v2_signal_market_filter(queryset, user):
+    if (
+        not market_access_v2_enabled()
+        or user.role == User.Role.SUPPORT
+        or user.is_staff
+        or user.has_platform_permission(User.Permission.CONTENT_VIEW_ALL)
+    ):
+        return queryset
+    allowed = resolve_market_access(user).effective_markets
+    return queryset.filter(
+        channel__in=[market.upper() for market in allowed if market in {"crypto", "forex"}]
+    )
+
+
 class VIPSignalPostListView(generics.ListAPIView):
     permission_classes = [IsAuthenticated, CanAccessGoldContent]
     serializer_class = VIPSignalPostSerializer
     pagination_class = DefaultPagination
 
     def get_queryset(self):
+        if getattr(self, "swagger_fake_view", False):
+            return VIPSignalPost.objects.none()
         default_channel = (
             VIPSignalPost.Channel.FOREX
             if self.request.user.market_type == "forex"
@@ -77,13 +94,17 @@ class VIPSignalPostListView(generics.ListAPIView):
         channel = self.request.query_params.get("channel", default_channel).upper()
         if channel not in VIPSignalPost.Channel.values:
             raise serializers.ValidationError({"channel": "channel must be CRYPTO or FOREX."})
-        return VIPSignalPost.objects.filter(channel=channel, is_active=True).select_related("parent")
+        queryset = VIPSignalPost.objects.filter(channel=channel, is_active=True).select_related("parent")
+        return _apply_v2_signal_market_filter(queryset, self.request.user)
 
 
 class VIPSignalPostDetailView(generics.RetrieveAPIView):
     permission_classes = [IsAuthenticated, CanAccessGoldContent]
     serializer_class = VIPSignalPostSerializer
     queryset = VIPSignalPost.objects.filter(is_active=True).select_related("parent")
+
+    def get_queryset(self):
+        return _apply_v2_signal_market_filter(super().get_queryset(), self.request.user)
 
 
 class VIPSignalPostIngestionView(APIView):
@@ -207,6 +228,7 @@ class ManualSignalPostListCreateView(generics.ListCreateAPIView):
 
 class ManualSignalPostDeleteView(generics.DestroyAPIView):
     permission_classes = [IsAuthenticated, IsSuperAdmin]
+    serializer_class = ManualSignalPostSerializer
     queryset = ManualSignalPost.objects.all()
 
     def perform_destroy(self, instance):

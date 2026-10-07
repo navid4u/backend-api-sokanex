@@ -86,7 +86,7 @@ class AccessLevelAPITests(APITestCase):
             allowed_level_5=True,
         )
         self.authenticate(self.admin)
-        response = self.client.get("/api/signals/")
+        response = self.client.get("/api/signals/legacy/")
         self.assertEqual(response.data["count"], 1)
 
     def test_level_five_sees_content_allowed_for_any_lower_level(self):

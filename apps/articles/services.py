@@ -1,7 +1,8 @@
 from django.utils import timezone
 
 from .models import Article
-from common.content_access import restrict_queryset_for_user
+from apps.accounts.content_section_access import restrict_content_section_queryset
+from apps.accounts.models import ContentSectionAccessPolicy
 
 
 class ArticleService:
@@ -16,7 +17,7 @@ class ArticleService:
             "category",
         )
         if user is not None:
-            queryset = restrict_queryset_for_user(queryset, user)
+            queryset = restrict_content_section_queryset(queryset, user, ContentSectionAccessPolicy.Section.ARTICLES)
         return queryset
 
     @staticmethod

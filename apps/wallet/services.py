@@ -42,7 +42,41 @@ class WalletService:
 
     @staticmethod
     def premium_subscription(user):
-        from apps.accounts.models import UpgradeRequest
+        from apps.accounts.market_access import market_access_v2_enabled, resolve_market_access
+        from apps.accounts.models import MarketAccessRequest, UpgradeRequest
+
+        if market_access_v2_enabled():
+            state = resolve_market_access(user)
+            trial = getattr(user, "trial_grant_v2", None)
+            now = timezone.now()
+            expired_trial = bool(trial and trial.ends_at <= now)
+            remaining = 0
+            if state.trial_active and trial:
+                remaining_seconds = max((trial.ends_at - now).total_seconds(), 0)
+                remaining = int((remaining_seconds + 86399) // 86400)
+            pending = MarketAccessRequest.objects.filter(
+                user=user, status=MarketAccessRequest.Status.PENDING
+            ).exists()
+            return {
+                "active": state.has_gold_features,
+                "tier": "GOLD" if state.has_gold_features else None,
+                "plan_id": None,
+                "purchased_at": None,
+                "access_level": None,
+                "trial": trial is not None,
+                "trial_expires_at": trial.ends_at if trial else None,
+                "days_remaining": remaining,
+                "status": "ACTIVE" if state.has_gold_features else "EXPIRED" if expired_trial else "INACTIVE",
+                "can_start_trial": False,
+                "can_request": bool(
+                    state.special_role is None
+                    and state.market_selection_confirmed
+                    and state.selected_markets
+                    and not state.trial_active
+                    and not state.has_gold_features
+                    and not pending
+                ),
+            }
 
         purchase = UpgradeRequest.objects.filter(
             user=user,
@@ -125,6 +159,11 @@ class WalletService:
 
     @classmethod
     def purchase_premium(cls, user, idempotency_key, plan_id=None):
+        from apps.accounts.market_access import market_access_v2_enabled
+        from apps.accounts.services import LegacyGoldFlowDisabled
+
+        if market_access_v2_enabled():
+            raise LegacyGoldFlowDisabled()
         from apps.accounts.models import UpgradeRequest
 
         try:

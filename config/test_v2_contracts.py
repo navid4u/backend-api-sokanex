@@ -1,3 +1,6 @@
+from unittest.mock import patch
+
+from django.core.cache import cache
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.urls import reverse
 from django.utils import timezone
@@ -7,6 +10,8 @@ from apps.accounts.models import BrokerConnection, User
 from apps.academy.models import Course, CourseEnrollment, CourseSession, Quiz, QuizOption, QuizQuestion
 from apps.chat.models import SupportThread
 from apps.content_channels.models import Channel, ChannelPost
+from apps.market.models import MarketQuoteSnapshot
+from apps.market.services import MarketQuoteService
 from apps.signals.models import Signal, SignalStatus
 
 
@@ -46,9 +51,15 @@ class FrontendV2ContractTests(APITestCase):
 
     def test_market_never_returns_fake_quotes_without_provider(self):
         self.auth()
-        response = self.client.get("/api/market/quotes/?symbols=usd-irr")
-        self.assertEqual(response.status_code, 503)
-        self.assertFalse(response.data["success"])
+        cache.clear()
+        MarketQuoteSnapshot.objects.all().delete()
+        with patch.object(MarketQuoteService, "_generic_provider", return_value={}), patch.object(
+            MarketQuoteService, "_brsapi_provider", return_value={}
+        ), patch.object(MarketQuoteService, "_tgju_provider", return_value={}):
+            response = self.client.get("/api/market/quotes/?symbols=usd-irr")
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(response.data["available"])
+        self.assertEqual(response.data["results"], [])
 
     def test_signal_updates_are_persisted_and_embedded(self):
         signal = Signal.objects.create(
@@ -58,12 +69,12 @@ class FrontendV2ContractTests(APITestCase):
         )
         self.auth()
         response = self.client.post(
-            f"/api/signals/{signal.pk}/updates/",
+            f"/api/signals/legacy/{signal.pk}/updates/",
             {"title": "Risk Free", "message": "Move stop loss", "status": "successful"},
             format="json",
         )
         self.assertEqual(response.status_code, 201)
-        detail = self.client.get(f"/api/signals/{signal.pk}/")
+        detail = self.client.get(f"/api/signals/legacy/{signal.pk}/")
         self.assertEqual(detail.data["updates"][0]["title"], "Risk Free")
 
     def test_channel_access_post_and_short_lived_ticket(self):

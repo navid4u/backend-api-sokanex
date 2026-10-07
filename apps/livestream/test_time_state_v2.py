@@ -146,9 +146,14 @@ class LiveManualStatusTests(APITestCase):
             LiveEvent.Status.ACTIVE,
             allowed_level_1=False,
             allowed_level_2=True,
+            allowed_level_3=True,
         )
         self.authenticate(self.user)
         self.assertEqual(self.client.get(f"/api/livestream/{event.slug}/").status_code, 404)
         self.user.access_level = 2
+        self.user.save(update_fields=("access_level", "updated_at"))
+        # In the legacy contract, expired level 2 has level 1 entitlements.
+        self.assertEqual(self.client.get(f"/api/livestream/{event.slug}/").status_code, 404)
+        self.user.access_level = 3
         self.user.save(update_fields=("access_level", "updated_at"))
         self.assertEqual(self.client.get(f"/api/livestream/{event.slug}/").status_code, 200)

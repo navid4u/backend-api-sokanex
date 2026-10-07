@@ -15,6 +15,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.accounts.models import User
+from apps.accounts.market_access import can_access_gold_features, can_access_market, market_access_v2_enabled
 from common.permissions import CanAccessGoldContent, CanManageInternalAnalysis, IsEmployee
 from .models import Channel, ChannelPost
 from .serializers import ChannelPostSerializer, InternalAnalysisIngestionSerializer, InternalAnalysisPostSerializer
@@ -54,6 +55,14 @@ def accessible_channel(user, slug):
         return get_object_or_404(queryset)
     required_level = 5 if slug in {"vip-signals", "internal-analysis"} else None
     channel = get_object_or_404(queryset)
+    if market_access_v2_enabled() and user.role != User.Role.SUPPORT and required_level:
+        if not can_access_gold_features(user) or (
+            slug == "internal-analysis" and not can_access_market(user, User.MarketType.INTERNAL)
+        ):
+            from rest_framework.exceptions import PermissionDenied
+
+            raise PermissionDenied("اشتراک طلایی فعال برای دسترسی به این محتوا لازم است.")
+        return channel
     if required_level and user.effective_access_level < required_level:
         from rest_framework.exceptions import PermissionDenied
 

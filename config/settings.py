@@ -233,6 +233,9 @@ else:
 
 AUTH_USER_MODEL = "accounts.User"
 
+# Market-access V2 remains dormant until the audited, coordinated cutover.
+MARKET_ACCESS_V2_ENABLED = config("MARKET_ACCESS_V2_ENABLED", default=False, cast=bool)
+
 
 # --------------------------------------------------
 # Password validation

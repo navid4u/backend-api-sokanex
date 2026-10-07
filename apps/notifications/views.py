@@ -176,6 +176,7 @@ class WebPushSubscriptionListCreateView(APIView):
 class WebPushSubscriptionDeleteView(APIView):
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(responses={204: None})
     def delete(self, request, pk):
         subscription = get_object_or_404(WebPushSubscription, pk=pk, user=request.user)
         subscription.delete()

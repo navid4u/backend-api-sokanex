@@ -1,6 +1,7 @@
 from datetime import timedelta
 
 from django.core.cache import cache
+from django.test import override_settings
 from django.urls import reverse
 from django.utils import timezone
 from rest_framework import status
@@ -43,6 +44,10 @@ class UserProfileDetailsAPITests(APITestCase):
                 "username": "new-profile-user",
                 "email": "new-profile@example.com",
                 "password": self.password,
+                "password_confirm": self.password,
+                "phone": "09120030001",
+                "first_name": "New",
+                "last_name": "Profile",
             },
             format="json",
         )
@@ -64,6 +69,16 @@ class UserProfileDetailsAPITests(APITestCase):
             UserProfile.objects.filter(user=self.user).exists()
         )
         self.assertEqual(response.data["profile_completion"], 0)
+        self.assertEqual(response.data["market_access_v2"], {"enabled": False})
+
+    @override_settings(MARKET_ACCESS_V2_ENABLED=True)
+    def test_profile_details_exposes_backend_market_access_state(self):
+        self.authenticate(self.user)
+        response = self.client.get(reverse("profile-details"))
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(response.data["market_access_v2"]["enabled"])
+        self.assertEqual(response.data["market_access_v2"]["membership_tier"], "LEVEL_1")
+        self.assertEqual(response.data["market_access_v2"]["approved_markets"], [])
 
     def test_user_can_update_structured_profile(self):
         self.authenticate(self.user)
