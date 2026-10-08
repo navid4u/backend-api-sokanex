@@ -180,7 +180,9 @@ def send_pending(*, limit=100):
         with transaction.atomic():
             delivery = (
                 SMSAutomationDelivery.objects.select_for_update(skip_locked=True)
-                .select_related("user", "rule", "broadcast")
+                # PostgreSQL cannot lock the nullable side of an outer join.
+                # Load rule/broadcast lazily after claiming the delivery row.
+                .select_related("user")
                 .filter(status=SMSAutomationDelivery.Status.PENDING, scheduled_at__lte=timezone.now())
                 .order_by("scheduled_at", "pk").first()
             )

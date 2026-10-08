@@ -2,7 +2,9 @@ from datetime import timedelta
 from unittest.mock import patch
 import uuid
 
+from django.db import connection
 from django.test import TestCase, override_settings
+from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
 from rest_framework.test import APIClient
 
@@ -50,7 +52,15 @@ class SMSAutomationTests(TestCase):
         queue_event(self.user.pk, "WELCOME", "WELCOME:REGISTRATION")
         self.assertEqual(SMSAutomationDelivery.objects.count(), 1)
         with patch("apps.notifications.sms_automation.PayamitoSMSService.send", return_value={"message_id": "42"}) as send:
-            self.assertEqual(send_pending(), 1)
+            with CaptureQueriesContext(connection) as queries:
+                self.assertEqual(send_pending(), 1)
+        claim_sql = next(
+            item["sql"] for item in queries
+            if f'FROM "{SMSAutomationDelivery._meta.db_table}"' in item["sql"]
+        )
+        # Nullable rule/broadcast joins make PostgreSQL reject FOR UPDATE.
+        self.assertNotIn(SMSAutomationRule._meta.db_table, claim_sql)
+        self.assertNotIn(SMSBroadcast._meta.db_table, claim_sql)
         self.assertIn("علی", send.call_args.args[1])
         self.assertEqual(SMSAutomationDelivery.objects.get().status, "SENT")
 
