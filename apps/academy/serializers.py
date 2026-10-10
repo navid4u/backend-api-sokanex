@@ -1,4 +1,6 @@
 from rest_framework import serializers
+from rest_framework.fields import empty
+from pathlib import Path
 
 from common.content_access import AllowedLevelsSerializerMixin
 from common.validators import validate_image_upload, validate_video_upload
@@ -7,6 +9,33 @@ from .models import (
     Course, CourseEnrollment, CourseSession, SessionProgress,
     Quiz, QuizAttempt, QuizOption, QuizQuestion,
 )
+
+
+class OmissionPreservingBooleanField(serializers.BooleanField):
+    """An absent multipart checkbox must retain the model default/current value."""
+
+    def get_value(self, dictionary):
+        if self.field_name not in dictionary:
+            return empty
+        return super().get_value(dictionary)
+
+
+def validate_academy_video_signature(uploaded_file):
+    """Reject disguised text/scripts even when filename and MIME are forged."""
+    position = uploaded_file.tell()
+    try:
+        uploaded_file.seek(0)
+        header = uploaded_file.read(16)
+    finally:
+        uploaded_file.seek(position)
+    extension = Path(uploaded_file.name).suffix.lower()
+    if extension in (".mp4", ".mov"):
+        valid = len(header) >= 8 and header[4:8] in (b"ftyp", b"moov")
+    else:
+        valid = header.startswith(b"\x1a\x45\xdf\xa3")
+    if not valid:
+        raise serializers.ValidationError("Video content does not match its file type.")
+    return uploaded_file
 
 
 class CourseListSerializer(
@@ -100,6 +129,11 @@ class CourseWriteSerializer(
         read_only=True,
     )
     instructor_name = serializers.SerializerMethodField()
+    is_free = OmissionPreservingBooleanField(required=False)
+    enrollment_open = OmissionPreservingBooleanField(required=False)
+    estimated_duration_minutes = serializers.IntegerField(required=False, allow_null=True, min_value=0)
+    weekly_session_limit = serializers.IntegerField(required=False, allow_null=True, min_value=0)
+    monthly_session_limit = serializers.IntegerField(required=False, allow_null=True, min_value=0)
 
     class Meta:
         model = Course
@@ -167,6 +201,10 @@ class CourseWriteSerializer(
 
 
 class CourseSessionSerializer(serializers.ModelSerializer):
+    is_published = OmissionPreservingBooleanField(required=False)
+    is_preview = OmissionPreservingBooleanField(required=False)
+    duration_seconds = serializers.IntegerField(required=False, allow_null=True, min_value=0)
+    duration_minutes = serializers.IntegerField(required=False, allow_null=True, min_value=0)
     course = serializers.CharField(
         source="course.slug",
         read_only=True,
@@ -215,7 +253,8 @@ class CourseSessionSerializer(serializers.ModelSerializer):
         )
 
     def validate_video_file(self, value):
-        return validate_video_upload(value, max_size_mb=500, file_label="Session video")
+        validate_video_upload(value, max_size_mb=500, file_label="Session video")
+        return validate_academy_video_signature(value)
 
     def validate(self, attrs):
         video_url = attrs.get("video_url", getattr(self.instance, "video_url", ""))

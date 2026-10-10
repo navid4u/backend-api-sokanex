@@ -3,6 +3,7 @@ from django.shortcuts import get_object_or_404
 from rest_framework import generics, serializers
 from rest_framework.filters import OrderingFilter, SearchFilter
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from drf_spectacular.utils import extend_schema
@@ -47,6 +48,12 @@ def can_manage_all_academy(user):
     )
 
 
+def can_edit_academy(user):
+    return can_manage_all_academy(user) or user.has_platform_permission(
+        User.Permission.ACADEMY_TEACH
+    )
+
+
 def manageable_courses(user):
     queryset = Course.objects.select_related("instructor")
     if can_manage_all_academy(user):
@@ -66,7 +73,7 @@ def visible_courses(user):
 
 
 def session_lock_reason(session, user):
-    if manageable_courses(user).filter(pk=session.course_id).exists():
+    if can_edit_academy(user) and manageable_courses(user).filter(pk=session.course_id).exists():
         return ""
     enrollment = CourseEnrollment.objects.filter(user=user, course=session.course).first()
     if not session.course.is_free:
@@ -96,6 +103,7 @@ def session_lock_reason(session, user):
 
 
 class CourseListCreateView(generics.ListCreateAPIView):
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
     filter_backends = [
         DjangoFilterBackend,
         SearchFilter,
@@ -140,6 +148,7 @@ class CourseManagementListView(generics.ListAPIView):
 
 
 class CourseDetailView(generics.RetrieveUpdateDestroyAPIView):
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
     lookup_field = "slug"
 
     def get_permissions(self):
@@ -160,14 +169,13 @@ class CourseDetailView(generics.RetrieveUpdateDestroyAPIView):
             return manageable_courses(self.request.user)
 
         visible = visible_courses(self.request.user)
-        if self.request.user.has_platform_permission(
-            User.Permission.ACADEMY_TEACH
-        ):
+        if can_edit_academy(self.request.user):
             return (visible | manageable_courses(self.request.user)).distinct()
         return visible
 
 
 class CourseSessionListCreateView(generics.ListCreateAPIView):
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
     serializer_class = CourseSessionSerializer
 
     def get_permissions(self):
@@ -183,12 +191,8 @@ class CourseSessionListCreateView(generics.ListCreateAPIView):
             queryset = manageable_courses(self.request.user)
         else:
             queryset = visible_courses(self.request.user)
-            if self.request.user.has_platform_permission(
-                User.Permission.ACADEMY_TEACH
-            ):
-                queryset = (
-                    queryset | manageable_courses(self.request.user)
-                ).distinct()
+            if can_edit_academy(self.request.user):
+                queryset = (queryset | manageable_courses(self.request.user)).distinct()
         self._course = get_object_or_404(
             queryset,
             slug=self.kwargs["slug"],
@@ -201,9 +205,9 @@ class CourseSessionListCreateView(generics.ListCreateAPIView):
         queryset = CourseSession.objects.filter(course=self.get_course())
         if (
             self.request.method == "GET"
-            and not manageable_courses(self.request.user).filter(
+            and not (can_edit_academy(self.request.user) and manageable_courses(self.request.user).filter(
                 pk=self.get_course().pk
-            ).exists()
+            ).exists())
         ):
             queryset = queryset.filter(is_published=True)
         return queryset
@@ -215,6 +219,7 @@ class CourseSessionListCreateView(generics.ListCreateAPIView):
 class CourseSessionDetailView(
     generics.RetrieveUpdateDestroyAPIView
 ):
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
     serializer_class = CourseSessionSerializer
 
     def get_permissions(self):
@@ -231,10 +236,13 @@ class CourseSessionDetailView(
             return CourseSession.objects.filter(
                 course__in=courses
             ).select_related("course")
-        return CourseSession.objects.filter(
-            course__in=visible_courses(self.request.user),
-            is_published=True,
-        ).select_related("course")
+        public = CourseSession.objects.filter(
+            course__in=visible_courses(self.request.user), is_published=True
+        )
+        managed = CourseSession.objects.filter(
+            course__in=manageable_courses(self.request.user)
+        ) if can_edit_academy(self.request.user) else CourseSession.objects.none()
+        return (public | managed).distinct().select_related("course")
 
     def get_object(self):
         obj = super().get_object()

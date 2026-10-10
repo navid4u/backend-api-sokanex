@@ -4,12 +4,24 @@ from django.db import models
 from django.contrib.auth.models import AbstractUser
 from django.conf import settings
 from django.db.models import Q
+from django.db.models.functions import Lower, Trim
 from django.utils import timezone
 from django.utils.text import slugify
 from common.phone import normalize_iran_phone, validate_iran_phone
 
 
 class User(AbstractUser):
+    class Meta:
+        verbose_name = "user"
+        verbose_name_plural = "users"
+        constraints = [
+            models.UniqueConstraint(
+                Lower(Trim("email")),
+                condition=~Q(email=""),
+                name="accounts_user_email_ci_uniq",
+            ),
+        ]
+
     class MarketType(models.TextChoices):
         INTERNAL = "internal", "Internal market"
         FOREX = "forex", "Forex"
@@ -947,6 +959,7 @@ class TrialGrant(models.Model):
     )
     started_at = models.DateTimeField()
     ends_at = models.DateTimeField()
+    revoked_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

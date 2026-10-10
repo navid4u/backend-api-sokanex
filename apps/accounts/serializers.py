@@ -355,10 +355,10 @@ class CustomTokenObtainPairSerializer(
 class RegisterSerializer(serializers.ModelSerializer):
     username = serializers.CharField(required=False, allow_blank=True, max_length=30)
     email = serializers.EmailField(required=False, allow_blank=True)
-    phone = serializers.CharField(required=True)
+    phone = serializers.CharField(required=False, allow_blank=True)
     first_name = serializers.CharField(required=True, allow_blank=False)
     last_name = serializers.CharField(required=True, allow_blank=False)
-    password_confirm = serializers.CharField(write_only=True, required=True)
+    password_confirm = serializers.CharField(write_only=True, required=False)
     password = serializers.CharField(
         write_only=True,
         trim_whitespace=False,
@@ -389,25 +389,24 @@ class RegisterSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         validated_data.pop("password_confirm", None)
-        phone = validated_data.get("phone")
+        phone = validated_data.get("phone") or None
         username = validated_data.get("username") or phone
         with transaction.atomic():
-            user = User.objects.create_user(
-                username=username,
-                phone=phone,
-                email=validated_data.get("email", ""),
-                password=validated_data["password"],
-                first_name=validated_data.get(
-                    "first_name",
-                    "",
-                ),
-                last_name=validated_data.get(
-                    "last_name",
-                    "",
-                ),
-                role=User.Role.USER,
-                access_level=User.AccessLevel.LEVEL_1,
-            )
+            try:
+                user = User.objects.create_user(
+                    username=username,
+                    phone=phone,
+                    email=validated_data.get("email", ""),
+                    password=validated_data["password"],
+                    first_name=validated_data.get("first_name", ""),
+                    last_name=validated_data.get("last_name", ""),
+                    role=User.Role.USER,
+                    access_level=User.AccessLevel.LEVEL_1,
+                )
+            except IntegrityError as exc:
+                # A concurrent registration can pass validation before the
+                # database enforces unique username, phone, or email.
+                raise serializers.ValidationError({"detail": "نام کاربری، ایمیل یا شماره همراه قبلاً ثبت شده است."}) from exc
             UserProfile.objects.create(user=user)
             ActivityService.record(
                 user,
@@ -428,10 +427,16 @@ class RegisterSerializer(serializers.ModelSerializer):
         return {
             **user_data,
             **getattr(self, "_issued_tokens", {}),
+            "tokens": {
+                "access": getattr(self, "_issued_tokens", {}).get("access"),
+                "refresh": getattr(self, "_issued_tokens", {}).get("refresh"),
+            },
             "user": user_data,
         }
 
     def validate_phone(self, value):
+        if not value.strip():
+            return None
         try:
             phone = normalize_iran_phone(value)
         except DjangoValidationError as exc:
@@ -441,8 +446,11 @@ class RegisterSerializer(serializers.ModelSerializer):
         return phone
 
     def validate(self, attrs):
+        forbidden = set(self.initial_data) & {"role", "access_level"}
+        if forbidden:
+            raise serializers.ValidationError({key: "این فیلد قابل تنظیم نیست." for key in sorted(forbidden)})
         confirmation = attrs.get("password_confirm")
-        if confirmation != attrs.get("password"):
+        if confirmation is not None and confirmation != attrs.get("password"):
             raise serializers.ValidationError({"password_confirm": "تکرار رمز عبور مطابقت ندارد."})
         username = str(attrs.get("username") or "").strip()
         if username:
@@ -457,8 +465,10 @@ class RegisterSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError({"first_name": "این فیلد الزامی است."})
         if not str(attrs.get("last_name", "")).strip():
             raise serializers.ValidationError({"last_name": "این فیلد الزامی است."})
-        if not attrs.get("phone"):
-            raise serializers.ValidationError({"phone": "شماره همراه الزامی است."})
+        if not username and not attrs.get("phone"):
+            raise serializers.ValidationError({"username": "نام کاربری الزامی است."})
+        if not attrs.get("email") and not attrs.get("phone"):
+            raise serializers.ValidationError({"email": "ایمیل یا شماره همراه الزامی است."})
         return attrs
 
     def validate_email(self, value):

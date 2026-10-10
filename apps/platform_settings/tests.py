@@ -56,6 +56,31 @@ class TranslationCatalogAPITests(APITestCase):
         self.client.force_authenticate(manager)
         self.assertEqual(self.client.get(self.admin_url).status_code, 200)
 
+    def test_public_catalog_starts_with_complete_ui_dictionary(self):
+        response = self.client.get(self.public_url)
+        self.assertEqual(response.status_code, 200)
+        translations = response.data["translations"]
+        self.assertGreaterEqual(len(translations), 1400)
+        self.assertEqual(translations["خانه"], "Home")
+        self.assertEqual(translations["تست شخصیت مالی"], "Financial Personality Test")
+
+    def test_seed_preserves_existing_admin_translation(self):
+        from importlib import import_module
+        from types import SimpleNamespace
+        from django.apps import apps
+        from django.db import connection
+
+        catalog = UITranslationCatalog.load("en")
+        catalog.translations = {"خانه": "My homepage"}
+        catalog.save(update_fields=("translations", "updated_at"))
+        seed = import_module(
+            "apps.platform_settings.migrations.0003_seed_current_english_ui_catalog"
+        ).seed_current_english_ui_catalog
+        seed(apps, SimpleNamespace(connection=connection))
+        catalog.refresh_from_db()
+        self.assertEqual(catalog.translations["خانه"], "My homepage")
+        self.assertIn("تست شخصیت مالی", catalog.translations)
+
     def test_replace_is_atomic_versions_and_audits(self):
         self.client.force_authenticate(self.super_admin)
         payload = {"translations": {"خانه": "Home", "ورود به سوکانکس": "Sign in to Sokanex"}}
@@ -75,6 +100,7 @@ class TranslationCatalogAPITests(APITestCase):
         self.client.force_authenticate(self.super_admin)
         for translations in (
             {"خانه": 12},
+            {"خانه": "   "},
             {"خانه": "<script>alert(1)</script>"},
             {"<img src=x onerror=alert(1)>": "Home"},
             {"خانه": "x" * 1001},

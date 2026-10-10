@@ -49,7 +49,7 @@ class WalletService:
             state = resolve_market_access(user)
             trial = getattr(user, "trial_grant_v2", None)
             now = timezone.now()
-            expired_trial = bool(trial and trial.ends_at <= now)
+            expired_trial = bool(trial and trial.revoked_at is None and trial.ends_at <= now)
             remaining = 0
             if state.trial_active and trial:
                 remaining_seconds = max((trial.ends_at - now).total_seconds(), 0)
@@ -64,7 +64,7 @@ class WalletService:
                 "purchased_at": None,
                 "access_level": None,
                 "trial": trial is not None,
-                "trial_expires_at": trial.ends_at if trial else None,
+                "trial_expires_at": trial.ends_at if trial and trial.revoked_at is None else None,
                 "days_remaining": remaining,
                 "status": "ACTIVE" if state.has_gold_features else "EXPIRED" if expired_trial else "INACTIVE",
                 "can_start_trial": False,

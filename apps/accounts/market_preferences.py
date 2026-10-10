@@ -20,7 +20,7 @@ def update_market_preferences(*, user, selected_markets):
         requested = set(selected_markets)
     except (TypeError, ValueError) as exc:
         raise ValidationError({"selected_markets": "Choose distinct, known markets."}) from exc
-    if len(requested) != len(selected_markets) or not requested.issubset(MARKETS):
+    if not requested or len(requested) != len(selected_markets) or not requested.issubset(MARKETS):
         raise ValidationError({"selected_markets": "Choose distinct, known markets."})
     existing = list(UserMarketPreference.objects.select_for_update().filter(user=target))
     previous = {entry.market for entry in existing}

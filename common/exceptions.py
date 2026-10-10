@@ -1,6 +1,7 @@
 import logging
 
 from rest_framework import status
+from rest_framework.exceptions import APIException
 from rest_framework.response import Response
 from rest_framework.views import (
     exception_handler,
@@ -86,6 +87,10 @@ def custom_exception_handler(
         "message": getattr(exc, "public_message", "Request Failed"),
         "errors": response.data,
     }
+    if isinstance(exc, APIException):
+        # Stable machine-readable codes let the UI localize the message
+        # without translating or altering user-generated content.
+        payload["error_codes"] = exc.get_codes()
     machine_code = getattr(exc, "machine_code", None)
     if machine_code:
         payload["error_code"] = machine_code

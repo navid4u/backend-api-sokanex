@@ -116,7 +116,9 @@ def queue_due_trial_messages(*, now=None):
         return 0
     count = 0
     grants = (
-        TrialGrant.objects.filter(started_at__lte=now, ends_at__gt=now, user__is_active=True)
+        TrialGrant.objects.filter(
+            revoked_at__isnull=True, started_at__lte=now, ends_at__gt=now, user__is_active=True
+        )
         .select_related("user", "user__market_access_profile")
         .prefetch_related(
             "user__trial_grant_v2", "user__market_preferences_v2", "user__market_grants_v2"

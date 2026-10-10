@@ -41,16 +41,18 @@ class MyMarketPreferencesV2Tests(APITestCase):
     def test_edit_and_empty_selection_preserve_access_separation(self):
         self.client.put(self.url, {"selected_markets": ["internal"]}, format="json")
         edited = self.client.put(self.url, {"selected_markets": []}, format="json")
-        self.assertEqual(edited.status_code, 200)
-        self.assertEqual(edited.data["selected_markets"], [])
-        self.assertTrue(edited.data["market_selection_confirmed"])
-        self.assertFalse(UserMarketPreference.objects.filter(user=self.user).exists())
-        self.assertEqual(UserAccessAudit.objects.filter(subject_user_id=self.user.pk).count(), 2)
+        self.assertEqual(edited.status_code, 400)
+        state = self.client.get(self.url)
+        self.assertEqual(state.data["selected_markets"], ["internal"])
+        self.assertTrue(state.data["market_selection_confirmed"])
+        self.assertEqual(UserMarketPreference.objects.filter(user=self.user).count(), 1)
+        self.assertEqual(UserAccessAudit.objects.filter(subject_user_id=self.user.pk).count(), 1)
 
     def test_invalid_input_is_400_and_cannot_escalate_level_or_role(self):
         for payload in (
             {"selected_markets": ["crypto", "crypto"]},
             {"selected_markets": ["unknown"]},
+            {"selected_markets": ["CRYPTO"]},
             {"selected_markets": ["crypto"], "approved_markets": ["crypto"]},
             {"selected_markets": ["crypto"], "access_level": 5},
             {"selected_markets": ["crypto"], "user_id": self.support.pk},

@@ -86,7 +86,7 @@ def resolve_market_access(user, *, at=None) -> MarketAccessState:
         for grant in user.market_grants_v2.all()
         if grant.revoked_at is None and grant.market in MARKETS
     )
-    trial_active = bool(trial and trial.started_at <= at < trial.ends_at)
+    trial_active = bool(trial and trial.revoked_at is None and trial.started_at <= at < trial.ends_at)
     tier = TIER_BY_MARKET_COUNT[len(granted)]
     return MarketAccessState(
         membership_tier=tier,
@@ -95,7 +95,7 @@ def resolve_market_access(user, *, at=None) -> MarketAccessState:
         effective_markets=MARKETS if trial_active else granted,
         market_selection_confirmed=bool(profile and profile.market_selection_confirmed_at),
         trial_active=trial_active,
-        trial_ends_at=trial.ends_at if trial else None,
+        trial_ends_at=trial.ends_at if trial and trial.revoked_at is None else None,
         is_elite=bool(profile and profile.is_elite),
         has_gold_features=trial_active or tier == "GOLD",
         special_role=None,
@@ -137,7 +137,7 @@ def users_with_basic_access(queryset, *, at=None):
     ]
     grants = UserMarketGrant.objects.filter(user_id=OuterRef("pk"), revoked_at__isnull=True)
     trials = TrialGrant.objects.filter(
-        user_id=OuterRef("pk"), started_at__lte=at, ends_at__gt=at
+        user_id=OuterRef("pk"), revoked_at__isnull=True, started_at__lte=at, ends_at__gt=at
     )
     return queryset.alias(
         _v2_basic_grant=Exists(grants), _v2_basic_trial=Exists(trials)

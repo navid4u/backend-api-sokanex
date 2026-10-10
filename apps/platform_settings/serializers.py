@@ -61,6 +61,8 @@ class UITranslationReplaceSerializer(serializers.Serializer):
                 raise serializers.ValidationError("Translation keys may contain at most 500 characters.")
             if not isinstance(translation, str):
                 raise serializers.ValidationError(f"Translation for {key!r} must be a string.")
+            if not translation.strip():
+                raise serializers.ValidationError(f"Translation for {key!r} cannot be blank.")
             if len(translation) > 1000:
                 raise serializers.ValidationError(f"Translation for {key!r} may contain at most 1000 characters.")
             if HTML_PATTERN.search(key) or HTML_PATTERN.search(translation):

@@ -92,5 +92,6 @@ class CustomExceptionHandlerTests(
             "email",
             response.data["errors"],
         )
+        self.assertEqual(response.data["error_codes"]["email"], ["invalid"])
 
         mocked_logger.assert_not_called()

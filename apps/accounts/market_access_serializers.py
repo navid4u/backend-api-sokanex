@@ -73,7 +73,7 @@ class UserMarketAccessUpdateSerializer(serializers.Serializer):
 class MyMarketPreferencesUpdateSerializer(serializers.Serializer):
     selected_markets = serializers.ListField(
         child=serializers.ChoiceField(choices=sorted(MARKETS)),
-        allow_empty=True,
+        allow_empty=False,
         max_length=3,
     )
 
