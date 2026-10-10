@@ -8,6 +8,12 @@ from .models import UpgradeRequest, User, UserProfile
 
 @receiver(post_save, sender=UpgradeRequest, dispatch_uid="premium_upgrade_enforces_level_five")
 def premium_upgrade_enforces_level_five(sender, instance, **kwargs):
+    from .market_access import market_access_v2_enabled
+
+    # Approved legacy requests remain as history after the V2 cutover. Saving
+    # one must not silently undo the explicit level-one cohort reset.
+    if market_access_v2_enabled():
+        return
     if (
         instance.request_type == UpgradeRequest.Type.PREMIUM
         and instance.status == UpgradeRequest.Status.APPROVED

@@ -24,9 +24,10 @@ def submit_market_access_request(*, user, requested_tier, message=""):
     target = User.objects.select_for_update().get(pk=user.pk)
     if target.is_superuser or target.role in (User.Role.SUPER_ADMIN, User.Role.SUPPORT):
         raise PermissionDenied("Special roles do not request regular market access.")
-    if not UserAccessProfile.objects.filter(
-        user=target, market_selection_confirmed_at__isnull=False
-    ).exists():
+    confirmed_at = UserAccessProfile.objects.filter(user=target).values_list(
+        "market_selection_confirmed_at", flat=True
+    ).first()
+    if confirmed_at is None:
         raise ValidationError({"selected_markets": "Confirm your market preferences first."})
     selected = sorted(UserMarketPreference.objects.filter(user=target).values_list("market", flat=True))
     if not selected:
@@ -41,6 +42,14 @@ def submit_market_access_request(*, user, requested_tier, message=""):
     pending = MarketAccessRequest.objects.filter(
         user=target, status=MarketAccessRequest.Status.PENDING
     ).first()
+    if pending and pending.created_at < confirmed_at:
+        # A cohort reset requires a fresh application after the new market
+        # confirmation. Retain the old request as reviewed history.
+        pending.status = MarketAccessRequest.Status.REJECTED
+        pending.admin_note = "Superseded by a new market selection confirmation."
+        pending.reviewed_at = timezone.now()
+        pending.save(update_fields=("status", "admin_note", "reviewed_at", "updated_at"))
+        pending = None
     if pending:
         if pending.requested_tier == requested_tier and pending.requested_markets == selected:
             return pending, False
@@ -76,6 +85,14 @@ def review_market_access_request(*, actor, request_id, status, admin_note="",
         raise MarketAccessRequestConflict("This request has already been reviewed.")
     if status not in (MarketAccessRequest.Status.APPROVED, MarketAccessRequest.Status.REJECTED):
         raise ValidationError({"status": "Choose APPROVED or REJECTED."})
+    if status == MarketAccessRequest.Status.APPROVED:
+        confirmed_at = UserAccessProfile.objects.filter(user=target).values_list(
+            "market_selection_confirmed_at", flat=True
+        ).first()
+        if confirmed_at is None or application.created_at < confirmed_at:
+            raise MarketAccessRequestConflict(
+                "The user must confirm markets and submit a fresh request after the baseline reset."
+            )
     if status == MarketAccessRequest.Status.REJECTED:
         if approved_markets is not None or is_elite is not None:
             raise ValidationError({"approved_markets": "Rejection cannot change access."})
