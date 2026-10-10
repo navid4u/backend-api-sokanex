@@ -102,6 +102,32 @@ class SMSAutomationTests(TestCase):
         delivery.refresh_from_db()
         self.assertEqual(delivery.status, "SKIPPED")
 
+    def test_old_trial_sms_does_not_send_during_new_trial(self):
+        rule = SMSAutomationRule.objects.get(slot="TRIAL_3", market="ALL")
+        rule.enabled = True
+        rule.send_time_utc = timezone.datetime.min.time()
+        rule.save()
+        now = timezone.now()
+        old_campaign = TrialCampaign.objects.create(created_by=self.admin, status="APPLIED")
+        old_grant = TrialGrant.objects.create(
+            user=self.user, campaign=old_campaign,
+            started_at=now - timedelta(days=2, hours=2),
+            ends_at=now + timedelta(days=4, hours=22),
+        )
+        self.assertEqual(queue_due_trial_messages(now=now), 1)
+        old_grant.invalidated_at = now
+        old_grant.revoked_at = now
+        old_grant.save(update_fields=("invalidated_at", "revoked_at"))
+        new_campaign = TrialCampaign.objects.create(created_by=self.admin, status="APPLIED")
+        TrialGrant.objects.create(
+            user=self.user, campaign=new_campaign,
+            started_at=now, ends_at=now + timedelta(days=7),
+        )
+        with patch("apps.notifications.sms_automation.PayamitoSMSService.send") as send:
+            self.assertEqual(send_pending(), 0)
+        send.assert_not_called()
+        self.assertEqual(SMSAutomationDelivery.objects.get().status, "SKIPPED")
+
     def test_rule_validation_and_patch(self):
         rule = SMSAutomationRule.objects.get(slot="TRIAL_1", market="ALL")
         url = f"/api/notifications/sms-automation/rules/{rule.pk}/"

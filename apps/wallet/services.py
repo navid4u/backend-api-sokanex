@@ -42,12 +42,12 @@ class WalletService:
 
     @staticmethod
     def premium_subscription(user):
-        from apps.accounts.market_access import market_access_v2_enabled, resolve_market_access
+        from apps.accounts.market_access import current_trial_grant, market_access_v2_enabled, resolve_market_access
         from apps.accounts.models import MarketAccessRequest, UpgradeRequest
 
         if market_access_v2_enabled():
             state = resolve_market_access(user)
-            trial = getattr(user, "trial_grant_v2", None)
+            trial = current_trial_grant(user)
             now = timezone.now()
             expired_trial = bool(trial and trial.revoked_at is None and trial.ends_at <= now)
             remaining = 0

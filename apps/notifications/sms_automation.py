@@ -8,6 +8,7 @@ from datetime import datetime, time, timedelta, timezone as dt_timezone
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import transaction
+from django.db.models import Prefetch
 from django.utils import timezone
 
 from apps.accounts.market_access import (
@@ -117,11 +118,17 @@ def queue_due_trial_messages(*, now=None):
     count = 0
     grants = (
         TrialGrant.objects.filter(
-            revoked_at__isnull=True, started_at__lte=now, ends_at__gt=now, user__is_active=True
+            invalidated_at__isnull=True, revoked_at__isnull=True,
+            started_at__lte=now, ends_at__gt=now, user__is_active=True
         )
         .select_related("user", "user__market_access_profile")
         .prefetch_related(
-            "user__trial_grant_v2", "user__market_preferences_v2", "user__market_grants_v2"
+            Prefetch(
+                "user__trial_grants_v2",
+                queryset=TrialGrant.objects.filter(invalidated_at__isnull=True),
+                to_attr="_current_trial_grants_v2",
+            ),
+            "user__market_preferences_v2", "user__market_grants_v2",
         )
     )
     for grant in grants.iterator(chunk_size=200):
@@ -164,6 +171,11 @@ def _still_eligible(delivery, *, now):
         return False
     if delivery.event == SMSAutomationRule.Event.TRIAL:
         if not market_access_v2_enabled():
+            return False
+        from apps.accounts.market_access import current_trial_grant
+
+        grant = current_trial_grant(user)
+        if not grant or not delivery.event_key.startswith(f"TRIAL:{grant.pk}:"):
             return False
         state = resolve_market_access(user, at=now)
         return state.trial_active and not state.granted_markets

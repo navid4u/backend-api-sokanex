@@ -946,11 +946,11 @@ class TrialCampaign(models.Model):
 
 
 class TrialGrant(models.Model):
-    # One-to-one, not the legacy Gold dates, enforces one V2 trial per account.
-    user = models.OneToOneField(
+    # A reset may void a prior grant without erasing its campaign history.
+    user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
-        related_name="trial_grant_v2",
+        related_name="trial_grants_v2",
     )
     campaign = models.ForeignKey(
         TrialCampaign,
@@ -960,13 +960,23 @@ class TrialGrant(models.Model):
     started_at = models.DateTimeField()
     ends_at = models.DateTimeField()
     revoked_at = models.DateTimeField(null=True, blank=True)
+    invalidated_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         constraints = [
             models.CheckConstraint(condition=Q(ends_at__gt=models.F("started_at")), name="trial_grant_ends_after_start_v2"),
+            models.UniqueConstraint(fields=("user",), condition=Q(invalidated_at__isnull=True), name="unique_current_trial_grant_v2"),
         ]
         indexes = [models.Index(fields=("ends_at",), name="trial_grant_ends_at_v2_idx")]
+
+
+class MarketAccessBaselineReset(models.Model):
+    key = models.CharField(max_length=64, primary_key=True)
+    operation_id = models.UUIDField(unique=True)
+    applied_at = models.DateTimeField(auto_now_add=True)
+    normal_users = models.PositiveIntegerField()
+    invalidated_trials = models.PositiveIntegerField()
 
 
 class UserAccessAudit(models.Model):

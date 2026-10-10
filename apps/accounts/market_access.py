@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from datetime import datetime
 
 from django.conf import settings
-from django.db.models import Exists, OuterRef, Q
+from django.db.models import Exists, OuterRef, Prefetch, Q
 from django.utils import timezone
 
 from .models import PlatformRole, TrialGrant, User, UserMarketGrant
@@ -51,9 +51,24 @@ def user_can_manage_market_access(user) -> bool:
 
 def with_market_access_relations(queryset):
     """Prefetch once for paginated user lists instead of N+1 access queries."""
-    return queryset.select_related(
-        "market_access_profile", "trial_grant_v2"
-    ).prefetch_related("market_preferences_v2", "market_grants_v2")
+    return queryset.select_related("market_access_profile").prefetch_related(
+        "market_preferences_v2", "market_grants_v2",
+        Prefetch(
+            "trial_grants_v2",
+            queryset=TrialGrant.objects.filter(invalidated_at__isnull=True),
+            to_attr="_current_trial_grants_v2",
+        ),
+    )
+
+
+def current_trial_grant(user):
+    """The one non-invalidated grant, including expired grants used in this era."""
+    cached = getattr(user, "_current_trial_grants_v2", None)
+    if cached is not None:
+        return cached[0] if cached else None
+    if getattr(user, "pk", None) is None:
+        return None
+    return TrialGrant.objects.filter(user_id=user.pk, invalidated_at__isnull=True).first()
 
 
 def resolve_market_access(user, *, at=None) -> MarketAccessState:
@@ -75,7 +90,7 @@ def resolve_market_access(user, *, at=None) -> MarketAccessState:
         return MarketAccessState(None, empty, empty, empty, False, False, None, False, False, "SUPPORT")
 
     profile = getattr(user, "market_access_profile", None)
-    trial = getattr(user, "trial_grant_v2", None)
+    trial = current_trial_grant(user)
     selected = frozenset(
         preference.market
         for preference in user.market_preferences_v2.all()
@@ -137,7 +152,8 @@ def users_with_basic_access(queryset, *, at=None):
     ]
     grants = UserMarketGrant.objects.filter(user_id=OuterRef("pk"), revoked_at__isnull=True)
     trials = TrialGrant.objects.filter(
-        user_id=OuterRef("pk"), revoked_at__isnull=True, started_at__lte=at, ends_at__gt=at
+        user_id=OuterRef("pk"), invalidated_at__isnull=True,
+        revoked_at__isnull=True, started_at__lte=at, ends_at__gt=at
     )
     return queryset.alias(
         _v2_basic_grant=Exists(grants), _v2_basic_trial=Exists(trials)
@@ -156,7 +172,7 @@ def market_access_payload(user, *, at=None) -> dict:
     if not market_access_v2_enabled():
         return {"enabled": False}
     state = resolve_market_access(user, at=at)
-    trial = getattr(user, "trial_grant_v2", None)
+    trial = current_trial_grant(user)
     return {
         "enabled": True,
         "membership_tier": state.membership_tier,

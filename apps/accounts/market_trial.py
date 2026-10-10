@@ -38,11 +38,11 @@ def _registration_cutoff(registered_from):
 def eligible_trial_users(*, registered_from=None):
     """Level 1 means zero active V2 grants, never the legacy access_level.
 
-    Legacy Gold/trial dates are intentionally ignored. The O2O TrialGrant is
-    the lifetime-use marker. Disabled and privileged accounts are excluded.
+    Legacy Gold/trial dates and explicitly invalidated pre-reset grants are
+    ignored. The current TrialGrant is the lifetime-use marker for this era.
     """
     grants = UserMarketGrant.objects.filter(user_id=OuterRef("pk"), revoked_at__isnull=True)
-    prior_trial = TrialGrant.objects.filter(user_id=OuterRef("pk"))
+    prior_trial = TrialGrant.objects.filter(user_id=OuterRef("pk"), invalidated_at__isnull=True)
     users = (
         User.objects.filter(is_active=True, is_superuser=False)
         .exclude(role__in=(User.Role.SUPER_ADMIN, User.Role.SUPPORT))
