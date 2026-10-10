@@ -30,7 +30,7 @@ from apps.accounts.models import (
 )
 
 
-@override_settings(MARKET_ACCESS_V2_ENABLED=True)
+@override_settings(MARKET_ACCESS_V2_ENABLED=True, CRM_ENABLED=False)
 class ResetMarketAccessV2BaselineTests(TestCase):
     def setUp(self):
         self.superadmin = User.objects.create_superuser(
