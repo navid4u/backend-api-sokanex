@@ -3,7 +3,7 @@ from django.test import override_settings
 from rest_framework.test import APITestCase
 
 from apps.accounts.models import PlatformRole, User
-from .models import SystemContent, UITranslationAuditLog, UITranslationCatalog
+from .models import PlatformSettings, SystemContent, UITranslationAuditLog, UITranslationCatalog
 
 
 class PlatformSettingsAPITests(APITestCase):
@@ -18,6 +18,34 @@ class PlatformSettingsAPITests(APITestCase):
         self.assertEqual(self.client.get("/api/admin/platform/financial-settings/").status_code, 403)
         self.client.force_authenticate(self.super_admin)
         self.assertEqual(self.client.patch("/api/admin/platform/financial-settings/", {"minimum_deposit_irt": 20000}, format="json").status_code, 200)
+
+    def test_default_theme_persists_without_changing_financial_values(self):
+        url = "/api/admin/platform/financial-settings/"
+        public = "/api/platform/settings/public/"
+        before = self.client.get(public)
+        self.assertEqual(before.data["default_theme"], "dark")
+        self.assertNotIn("updated_by", before.data)
+        self.client.force_authenticate(self.super_admin)
+        original_deposit = PlatformSettings.load().minimum_deposit_irt
+        changed = self.client.patch(url, {"default_theme": "light"}, format="json")
+        self.assertEqual(changed.status_code, 200, changed.data)
+        self.assertEqual(changed.data["default_theme"], "light")
+        self.assertEqual(self.client.get(url).data["default_theme"], "light")
+        self.assertEqual(PlatformSettings.load().minimum_deposit_irt, original_deposit)
+        self.client.force_authenticate(user=None)
+        self.assertEqual(self.client.get(public).data["default_theme"], "light")
+
+    def test_default_theme_rejects_invalid_and_unknown_fields(self):
+        url = "/api/admin/platform/financial-settings/"
+        self.client.force_authenticate(self.user)
+        self.assertEqual(self.client.patch(url, {"default_theme": "light"}, format="json").status_code, 403)
+        self.client.force_authenticate(self.super_admin)
+        for payload, field in (({"default_theme": "auto"}, "default_theme"), ({"api_key": "secret"}, "api_key")):
+            with self.subTest(payload=payload):
+                response = self.client.patch(url, payload, format="json")
+                self.assertEqual(response.status_code, 400)
+                self.assertIn(field, response.data["errors"])
+        self.assertEqual(PlatformSettings.load().default_theme, "dark")
 
     def test_seeded_content_can_be_updated(self):
         self.client.force_authenticate(self.super_admin)

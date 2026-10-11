@@ -10,6 +10,7 @@ from django.db import IntegrityError, transaction
 from django.db import connection
 from django.apps import apps
 from django.test import override_settings
+from django.core.cache import cache
 from django.utils import timezone
 from rest_framework.test import APITestCase
 from rest_framework_simplejwt.tokens import RefreshToken
@@ -20,6 +21,24 @@ from .models import (
 )
 from .market_access import resolve_market_access
 from .views import RegisterView
+from .serializers import RegisterSerializer
+
+
+@override_settings(CRM_ENABLED=False)
+class EmailRegistrationThrottleTests(APITestCase):
+    def setUp(self):
+        cache.clear()
+
+    def test_email_only_registration_obeys_existing_rate_limit(self):
+        for index in range(4):
+            result = self.client.post("/api/accounts/register/", {
+                "username": f"email-rate-{index}",
+                "email": f"email-rate-{index}@example.com",
+                "password": "StrongPass123!",
+                "password_confirm": "StrongPass123!",
+                "first_name": "Rate", "last_name": "Test",
+            }, format="json", REMOTE_ADDR="10.88.77.66")
+            self.assertEqual(result.status_code, 201 if index < 3 else 429, result.data)
 
 
 @override_settings(MARKET_ACCESS_V2_ENABLED=True, CRM_ENABLED=False)
@@ -46,6 +65,42 @@ class RegistrationMarketJourneyTests(APITestCase):
         self.assertEqual(response.data["user"]["market_access_v2"]["effective_markets"], [])
         self.assertFalse(TrialGrant.objects.filter(user=user).exists())
 
+    @override_settings(PAYAMITO_ENABLED=False)
+    def test_email_registration_allows_followup_password_login_and_dashboard(self):
+        registered = self.client.post("/api/accounts/register/", {
+            "username": "email.login.user", "email": "Email.Login@Example.com",
+            "password": "StrongPass123!", "password_confirm": "StrongPass123!",
+            "first_name": "Email", "last_name": "User",
+        }, format="json")
+        self.assertEqual(registered.status_code, 201, registered.data)
+        self.assertIsNone(User.objects.get(username="email.login.user").phone)
+        logged_in = self.client.post("/api/token/", {
+            "username": "email.login.user", "password": "StrongPass123!",
+        }, format="json")
+        self.assertEqual(logged_in.status_code, 200, logged_in.data)
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {logged_in.data['access']}")
+        dashboard = self.client.get("/api/dashboard/")
+        self.assertEqual(dashboard.status_code, 200)
+        self.assertEqual(dashboard.data["data"]["user"]["username"], "email.login.user")
+
+    def test_email_registration_field_errors_are_actionable(self):
+        base = {
+            "username": "field.check", "email": "fields@example.com",
+            "password": "StrongPass123!", "password_confirm": "StrongPass123!",
+            "first_name": "First", "last_name": "Last",
+        }
+        for changed, field in (
+            ({"email": "not-an-email"}, "email"),
+            ({"first_name": ""}, "first_name"),
+            ({"last_name": ""}, "last_name"),
+            ({"password_confirm": "different"}, "password_confirm"),
+            ({"username": ""}, "username"),
+        ):
+            with self.subTest(field=field):
+                result = self.client.post("/api/accounts/register/", {**base, **changed}, format="json")
+                self.assertEqual(result.status_code, 400)
+                self.assertIn(field, result.data["errors"])
+
     def test_email_uniqueness_validation_and_database_constraint(self):
         User.objects.create_user(username="existing", email="existing@example.com")
         payload = {
@@ -57,6 +112,15 @@ class RegistrationMarketJourneyTests(APITestCase):
         self.assertIn("email", response.data["errors"])
         with self.assertRaises(IntegrityError), transaction.atomic():
             User.objects.create_user(username="third", email="EXISTING@example.com")
+
+        # Simulate a second request passing the pre-insert uniqueness check:
+        # the database constraint must still become an email field error.
+        with patch.object(RegisterSerializer, "validate_email", lambda _self, value: value.strip().lower()):
+            raced = self.client.post("/api/accounts/register/", {
+                **payload, "username": "racing-user",
+            }, format="json")
+        self.assertEqual(raced.status_code, 400)
+        self.assertIn("email", raced.data["errors"])
 
     def test_optional_confirmation_and_invalid_inputs(self):
         base = {

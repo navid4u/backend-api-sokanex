@@ -3,7 +3,12 @@ from django.db import models
 
 
 class PlatformSettings(models.Model):
+    class DefaultTheme(models.TextChoices):
+        LIGHT = "light", "Light"
+        DARK = "dark", "Dark"
+
     site_name = models.CharField(max_length=120, default="Sokanex")
+    default_theme = models.CharField(max_length=5, choices=DefaultTheme.choices, default=DefaultTheme.DARK)
     support_email = models.EmailField(blank=True)
     support_phone = models.CharField(max_length=30, blank=True)
     maintenance_mode = models.BooleanField(default=False)

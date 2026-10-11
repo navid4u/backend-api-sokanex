@@ -10,7 +10,7 @@ from .models import PlatformSettings, SystemContent, UITranslationCatalog
 class PublicPlatformSettingsSerializer(serializers.ModelSerializer):
     class Meta:
         model = PlatformSettings
-        fields = ("site_name", "support_email", "support_phone", "maintenance_mode", "updated_at")
+        fields = ("site_name", "support_email", "support_phone", "maintenance_mode", "default_theme", "updated_at")
 
 
 class FinancialSettingsSerializer(serializers.ModelSerializer):
@@ -18,7 +18,7 @@ class FinancialSettingsSerializer(serializers.ModelSerializer):
         model = PlatformSettings
         fields = (
             "minimum_deposit_irt", "minimum_withdrawal_irt",
-            "maximum_withdrawal_irt", "withdrawal_fee_irt", "updated_at",
+            "maximum_withdrawal_irt", "withdrawal_fee_irt", "default_theme", "updated_at",
         )
         read_only_fields = ("updated_at",)
 
@@ -28,6 +28,12 @@ class FinancialSettingsSerializer(serializers.ModelSerializer):
         if minimum > maximum:
             raise serializers.ValidationError({"maximum_withdrawal_irt": "Must be at least the minimum withdrawal."})
         return attrs
+
+    def to_internal_value(self, data):
+        unknown = set(data) - set(self.fields)
+        if unknown:
+            raise serializers.ValidationError({name: "Unknown field." for name in sorted(unknown)})
+        return super().to_internal_value(data)
 
 
 class SystemContentSerializer(serializers.ModelSerializer):

@@ -131,6 +131,25 @@ class DashboardFinanceSerializer(serializers.Serializer):
     updated_at = serializers.DateTimeField(allow_null=True)
 
 
+class VIPSignalPreviewSerializer(serializers.Serializer):
+    id = serializers.IntegerField()
+    channel = serializers.CharField()
+    excerpt = serializers.CharField(allow_blank=True)
+    image = serializers.CharField(allow_null=True)
+    published_at = serializers.DateTimeField()
+    can_view = serializers.BooleanField()
+
+
+class InternalAnalysisPreviewSerializer(serializers.Serializer):
+    id = serializers.IntegerField()
+    title = serializers.CharField()
+    excerpt = serializers.CharField(allow_blank=True)
+    image = serializers.CharField(allow_null=True)
+    scope = serializers.CharField()
+    published_at = serializers.DateTimeField()
+    can_view = serializers.BooleanField()
+
+
 class DashboardSerializer(
     serializers.Serializer
 ):
@@ -156,6 +175,10 @@ class DashboardSerializer(
     recent_signals = VIPSignalPostSerializer(
         many=True,
     )
+
+    vip_signal_previews = VIPSignalPreviewSerializer(many=True)
+
+    recent_internal_analysis = InternalAnalysisPreviewSerializer(many=True)
 
     recent_articles = ArticleListSerializer(
         many=True,

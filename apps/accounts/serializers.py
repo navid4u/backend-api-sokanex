@@ -391,8 +391,8 @@ class RegisterSerializer(serializers.ModelSerializer):
         validated_data.pop("password_confirm", None)
         phone = validated_data.get("phone") or None
         username = validated_data.get("username") or phone
-        with transaction.atomic():
-            try:
+        try:
+            with transaction.atomic():
                 user = User.objects.create_user(
                     username=username,
                     phone=phone,
@@ -403,22 +403,25 @@ class RegisterSerializer(serializers.ModelSerializer):
                     role=User.Role.USER,
                     access_level=User.AccessLevel.LEVEL_1,
                 )
-            except IntegrityError as exc:
-                # A concurrent registration can pass validation before the
-                # database enforces unique username, phone, or email.
-                raise serializers.ValidationError({"detail": "نام کاربری، ایمیل یا شماره همراه قبلاً ثبت شده است."}) from exc
-            UserProfile.objects.create(user=user)
-            ActivityService.record(
-                user,
-                UserActivity.Type.REGISTER,
-                "Account registered",
-            )
-            from .authentication import issue_login_tokens
+                UserProfile.objects.create(user=user)
+                ActivityService.record(
+                    user,
+                    UserActivity.Type.REGISTER,
+                    "Account registered",
+                )
+                from .authentication import issue_login_tokens
 
-            self._issued_tokens = issue_login_tokens(
-                user, self.context["request"], record_login=True
-            )
-            return user
+                self._issued_tokens = issue_login_tokens(
+                    user, self.context["request"], record_login=True
+                )
+                return user
+        except IntegrityError as exc:
+            # The transaction has rolled back, so a concurrent registration
+            # can safely be checked here and reported as a field error.
+            email = validated_data.get("email")
+            if email and User.objects.filter(email__iexact=email).exists():
+                raise serializers.ValidationError({"email": "A user with this email already exists."}) from exc
+            raise serializers.ValidationError({"detail": "نام کاربری یا شماره همراه قبلاً ثبت شده است."}) from exc
 
     def to_representation(self, instance):
         user_data = UserSerializer(instance, context=self.context).data

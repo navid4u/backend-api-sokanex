@@ -7,8 +7,64 @@ from apps.notifications.services import NotificationService
 from apps.chat.services import ChatService
 from apps.livestream.services import LiveEventService
 from apps.accounts.models import BrokerConnection
-from apps.accounts.market_access import market_access_payload, market_access_v2_enabled, user_can_manage_market_access
+from apps.accounts.market_access import can_access_market, market_access_payload, market_access_v2_enabled, user_can_manage_market_access
+from apps.content_channels.models import ChannelPost
 from common.content_access import user_can_access_gold_content
+from django.utils import timezone
+from django.utils.html import strip_tags
+from html import unescape
+import re
+
+
+def _public_excerpt(value):
+    return re.sub(r"\s+", " ", strip_tags(unescape(value or ""))).strip()[:160]
+
+
+def _vip_previews(user):
+    can_read_gold = user_can_access_gold_content(user)
+    privileged = (
+        user.role == User.Role.SUPPORT or user.is_staff
+        or user.has_platform_permission(User.Permission.CONTENT_VIEW_ALL)
+    )
+    posts = VIPSignalPost.objects.filter(is_active=True).order_by("-published_at", "-id")[:4]
+    result = []
+    for post in posts:
+        can_view = can_read_gold and (
+            not market_access_v2_enabled() or privileged
+            or can_access_market(user, post.channel.lower())
+        )
+        result.append({
+            "id": post.pk,
+            "channel": post.channel,
+            "excerpt": _public_excerpt(post.text) if can_view else "پست جدید کانال ویژه سوکانکس",
+            # The model stores the original private image, not a public thumbnail.
+            "image": None,
+            "published_at": post.published_at,
+            "can_view": can_view,
+        })
+    return result
+
+
+def _internal_previews(user):
+    # Mirror the existing internal-analysis read permission (Gold); do not
+    # change its list/detail access policy as part of dashboard previews.
+    can_view = user_can_access_gold_content(user)
+    posts = ChannelPost.objects.filter(
+        channel__slug="internal-analysis", channel__is_active=True,
+        status=ChannelPost.Status.PUBLISHED,
+        scope__in=(ChannelPost.Scope.DOLLAR, ChannelPost.Scope.GOLD,
+                   ChannelPost.Scope.STOCK, ChannelPost.Scope.HOUSING),
+        published_at__lte=timezone.now(),
+    ).order_by("-published_at", "-id")[:3]
+    return [{
+        "id": post.pk,
+        "title": _public_excerpt(post.title) if can_view else "تحلیل جدید بازار داخلی",
+        "excerpt": _public_excerpt(post.body) if can_view else "تحلیل جدید بازار داخلی سوکانکس",
+        "image": None,
+        "scope": post.scope,
+        "published_at": post.published_at,
+        "can_view": can_view,
+    } for post in posts]
 
 
 class DashboardService:
@@ -201,6 +257,10 @@ class DashboardService:
             },
 
             "recent_signals": recent_signals,
+
+            "vip_signal_previews": _vip_previews(user),
+
+            "recent_internal_analysis": _internal_previews(user),
 
             "recent_articles": (
                 published_articles[:5]

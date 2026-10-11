@@ -2,11 +2,14 @@ from datetime import timedelta
 from decimal import Decimal
 
 from django.urls import reverse
+from django.test import override_settings
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
 
 from apps.accounts.models import User
+from apps.accounts.models import UserMarketGrant
+from apps.content_channels.models import Channel, ChannelPost
 from apps.articles.models import Article
 from apps.chat.models import ChatRoom
 from apps.livestream.models import LiveEvent
@@ -366,3 +369,98 @@ class DashboardAPITests(APITestCase):
         data = response.data["data"]
         self.assertEqual(data["stats"]["signals"], 0)
         self.assertEqual(data["recent_signals"], [])
+
+    def _make_internal_post(self, scope, title, body, published_at=None, status=ChannelPost.Status.PUBLISHED):
+        channel, _ = Channel.objects.get_or_create(slug="internal-analysis", defaults={"name": "Internal"})
+        return ChannelPost.objects.create(
+            channel=channel, title=title, body=body, scope=scope,
+            author=self.employee, status=status,
+            published_at=published_at or timezone.now(),
+        )
+
+    @override_settings(MARKET_ACCESS_V2_ENABLED=True)
+    def test_locked_previews_include_only_public_projection_and_filter_feeds(self):
+        now = timezone.now()
+        private = "PRIVATE_ENTRY_9988 " * 30
+        self.vip_signal.text = private
+        self.vip_signal.image = "signals/private-secret-image.png"
+        self.vip_signal.published_at = now
+        self.vip_signal.save()
+        newer = VIPSignalPost.objects.create(channel="FOREX", text="secret forex", published_at=now)
+        inactive = VIPSignalPost.objects.create(channel="CRYPTO", text="inactive", is_active=False, published_at=now + timedelta(hours=1))
+        internal = self._make_internal_post("GOLD", "Gold opportunity", private, now)
+        internal.image = "channels/private-analysis-image.png"
+        internal.save(update_fields=["image"])
+        self._make_internal_post("FOREX", "Forex excluded", "forex", now + timedelta(hours=1))
+        self._make_internal_post("GOLD", "Draft excluded", "draft", now, ChannelPost.Status.DRAFT)
+        self._make_internal_post("STOCK", "Future excluded", "future", now + timedelta(hours=1))
+        self.authenticate(self.customer)
+        data = self.client.get(self.dashboard_url).data["data"]
+        previews = data["vip_signal_previews"]
+        self.assertEqual([p["id"] for p in previews], [newer.pk, self.vip_signal.pk])
+        self.assertTrue(all(not p["can_view"] and p["image"] is None for p in previews))
+        self.assertEqual([p["id"] for p in data["recent_internal_analysis"]], [internal.pk])
+        self.assertFalse(data["recent_internal_analysis"][0]["can_view"])
+        self.assertNotIn(private, str(data))
+        self.assertNotIn("private-secret-image", str(data))
+        self.assertNotIn("private-analysis-image", str(data))
+        self.assertNotIn(inactive.pk, [p["id"] for p in previews])
+        self.assertEqual(self.client.get("/api/signals/").status_code, 403)
+        self.assertEqual(self.client.get("/api/channels/internal-analysis/").status_code, 403)
+
+    @override_settings(MARKET_ACCESS_V2_ENABLED=True)
+    def test_v2_market_grants_and_admin_previews(self):
+        VIPSignalPost.objects.create(channel="FOREX", text="Forex post")
+        for market in ("crypto", "forex", "internal"):
+            UserMarketGrant.objects.create(user=self.customer, market=market, source=UserMarketGrant.Source.ADMIN)
+        self.authenticate(self.customer)
+        data = self.client.get(self.dashboard_url).data["data"]
+        self.assertEqual({p["channel"] for p in data["vip_signal_previews"] if p["can_view"]}, {"CRYPTO", "FOREX"})
+        self.authenticate(self.super_admin)
+        admin_data = self.client.get(self.dashboard_url).data["data"]
+        self.assertTrue(all(p["can_view"] for p in admin_data["vip_signal_previews"]))
+
+    @override_settings(MARKET_ACCESS_V2_ENABLED=True)
+    def test_single_market_grants_do_not_bypass_gold_gate(self):
+        VIPSignalPost.objects.create(channel="FOREX", text="Forex private body")
+        for market in ("crypto", "forex"):
+            with self.subTest(market=market):
+                UserMarketGrant.objects.filter(user=self.customer).delete()
+                UserMarketGrant.objects.create(user=self.customer, market=market, source=UserMarketGrant.Source.ADMIN)
+                self.authenticate(self.customer)
+                data = self.client.get(self.dashboard_url).data["data"]
+                self.assertTrue(all(not post["can_view"] for post in data["vip_signal_previews"]))
+                self.assertNotIn("Forex private body", str(data))
+
+    @override_settings(MARKET_ACCESS_V2_ENABLED=False)
+    def test_legacy_gold_preview_is_viewable(self):
+        self.customer.access_level = User.AccessLevel.LEVEL_5
+        self.customer.gold_trial_started_at = timezone.now()
+        self.customer.gold_trial_expires_at = timezone.now() + timedelta(days=7)
+        self.customer.save(update_fields=["access_level", "gold_trial_started_at", "gold_trial_expires_at"])
+        self.authenticate(self.customer)
+        data = self.client.get(self.dashboard_url).data["data"]
+        self.assertTrue(data["vip_signal_previews"][0]["can_view"])
+
+    @override_settings(MARKET_ACCESS_V2_ENABLED=False)
+    def test_legacy_level_one_preview_remains_locked(self):
+        self.authenticate(self.customer)
+        data = self.client.get(self.dashboard_url).data["data"]
+        self.assertFalse(data["vip_signal_previews"][0]["can_view"])
+
+    def test_preview_limits_and_deterministic_order(self):
+        now = timezone.now()
+        for index in range(6):
+            VIPSignalPost.objects.create(channel="CRYPTO", text=str(index), published_at=now)
+            self._make_internal_post("GOLD", f"Gold {index}", "Body", now)
+        self.authenticate(self.customer)
+        data = self.client.get(self.dashboard_url).data["data"]
+        self.assertEqual(len(data["vip_signal_previews"]), 4)
+        self.assertEqual(len(data["recent_internal_analysis"]), 3)
+        self.assertEqual([p["id"] for p in data["vip_signal_previews"]], sorted([p["id"] for p in data["vip_signal_previews"]], reverse=True))
+
+    def test_inactive_internal_channel_is_not_previewed(self):
+        self._make_internal_post("GOLD", "Hidden", "Private")
+        Channel.objects.filter(slug="internal-analysis").update(is_active=False)
+        self.authenticate(self.customer)
+        self.assertEqual(self.client.get(self.dashboard_url).data["data"]["recent_internal_analysis"], [])
