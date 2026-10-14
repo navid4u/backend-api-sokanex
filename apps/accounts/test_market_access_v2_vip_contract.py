@@ -17,7 +17,17 @@ class MarketScopedVIPTests(APITestCase):
     def setUp(self):
         self.admin = User.objects.create_user(username="vip-admin", role=User.Role.SUPER_ADMIN)
         self.support = User.objects.create_user(username="vip-support", role=User.Role.SUPPORT)
-        self.spoof = User.objects.create_user(username="support")
+        # A chat migration creates this username in the test database. Make it
+        # an ordinary user here to prove the name alone grants no VIP access.
+        self.spoof = User.objects.get(username="support")
+        self.spoof.role = User.Role.USER
+        self.spoof.is_superuser = False
+        self.spoof.is_staff = False
+        self.spoof.custom_role = None
+        self.spoof.access_level = User.AccessLevel.LEVEL_1
+        self.spoof.save(update_fields=["role", "is_superuser", "is_staff", "custom_role", "access_level"])
+        self.spoof.groups.clear()
+        self.spoof.user_permissions.clear()
         self.user = User.objects.create_user(
             username="vip-normal", access_level=5, market_type="forex",
             gold_trial_started_at=timezone.now() - timedelta(days=8),
