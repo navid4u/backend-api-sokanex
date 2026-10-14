@@ -9,7 +9,8 @@ from django.utils import timezone
 from rest_framework.test import APIClient
 
 from apps.accounts.models import (
-    TrialCampaign, TrialGrant, User, UserAccessAudit, UserMarketGrant,
+    TrialCampaign, TrialGrant, User, UserAccessAudit, UserAccessProfile,
+    UserMarketGrant, UserMarketPreference,
 )
 from common.sms import SMSProviderError
 
@@ -36,6 +37,49 @@ class SMSAutomationTests(TestCase):
         )
         self.client = APIClient()
         self.client.force_authenticate(self.admin)
+
+    def _broadcast_members(self):
+        def make(username, phone, markets=(), *, selected=(), elite=False, active=True):
+            user = User.objects.create_user(username=username, phone=phone, is_active=active)
+            for market in markets:
+                UserMarketGrant.objects.create(
+                    user=user, market=market, source=UserMarketGrant.Source.ADMIN,
+                    granted_by=self.admin,
+                )
+            for market in selected:
+                UserMarketPreference.objects.create(user=user, market=market)
+            if elite:
+                UserAccessProfile.objects.update_or_create(user=user, defaults={"is_elite": True})
+            return user
+
+        basic = make("sms-basic", "09120000001", ("crypto",), selected=("crypto",))
+        pro = make("sms-pro", "09120000002", ("forex", "internal"), selected=("forex",))
+        pro_elite = make(
+            "sms-pro-elite", "09120000003", ("forex", "internal"),
+            selected=("internal",), elite=True,
+        )
+        gold = make(
+            "sms-gold", "09120000004", ("crypto", "forex", "internal"),
+            selected=("crypto",),
+        )
+        make("sms-inactive-pro", "09120000005", ("forex", "internal"), active=False)
+        make("sms-missing-phone-pro", None, ("forex", "internal"))
+        invalid = make("sms-invalid-phone-pro", "09120000006", ("forex", "internal"))
+        User.objects.filter(pk=invalid.pk).update(phone="invalid-legacy-phone")
+        campaign = TrialCampaign.objects.create(created_by=self.admin, status="APPLIED")
+        TrialGrant.objects.create(
+            user=self.user, campaign=campaign,
+            started_at=timezone.now() - timedelta(days=1),
+            ends_at=timezone.now() + timedelta(days=6),
+        )
+        return basic, pro, pro_elite, gold
+
+    def _preview(self, tiers, market="ALL"):
+        return self.client.post(
+            "/api/notifications/sms-automation/broadcasts/preview/",
+            {"membership_tiers": tiers, "market": market, "text": "سلام"},
+            format="json",
+        )
 
     def test_rules_are_disabled_by_default_and_user_cannot_manage(self):
         self.assertFalse(SMSAutomationRule.objects.filter(enabled=True).exists())
@@ -159,6 +203,65 @@ class SMSAutomationTests(TestCase):
         self.assertEqual(SMSAutomationDelivery.objects.filter(broadcast__isnull=False).count(), 1)
         self.assertEqual(self.client.post("/api/notifications/sms-automation/broadcasts/send/", send_body, format="json").status_code, 200)
         self.assertEqual(SMSAutomationDelivery.objects.filter(broadcast__isnull=False).count(), 1)
+
+    def test_broadcast_tiers_elite_union_market_and_exclusion_diagnostics(self):
+        _, pro, _, _ = self._broadcast_members()
+        expected = {"LEVEL_1": 1, "BASIC": 1, "PRO": 2, "GOLD": 1, "ELITE": 1}
+        for tier, count in expected.items():
+            with self.subTest(tier=tier):
+                response = self._preview([tier])
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual(response.data["eligible_count"], count)
+        pro_preview = self._preview(["PRO"])
+        self.assertEqual(pro_preview.data["diagnostics"], {
+            "matched_count": 5,
+            "excluded_counts": {"inactive": 1, "missing_phone": 1, "invalid_phone": 1},
+        })
+        self.assertEqual(pro_preview.data["diagnostics"]["matched_count"],
+                         pro_preview.data["eligible_count"] + 3)
+        self.assertEqual(self._preview(["PRO", "ELITE"]).data["eligible_count"], 2)
+        self.assertEqual(self._preview(["PRO"], "forex").data["eligible_count"], 1)
+        self.assertEqual(self._preview(["PRO"], "internal").data["eligible_count"], 1)
+        self.assertEqual(self._preview(["PRO"], "crypto").data["eligible_count"], 0)
+        self.assertEqual(self._preview(["BASIC"], "crypto").data["eligible_count"], 1)
+        self.assertEqual(self._preview(["GOLD"], "crypto").data["eligible_count"], 1)
+        self.assertEqual(self._preview(["LEVEL_1"], "ALL").data["eligible_count"], 1)
+        self.client.force_authenticate(pro)
+        profile = self.client.get("/api/accounts/profile/")
+        self.assertEqual(profile.data["market_access_v2"]["membership_tier"], "PRO")
+        dashboard = self.client.get("/api/dashboard/")
+        self.assertEqual(dashboard.data["data"]["market_access_v2"]["membership_tier"], "PRO")
+        self.assertEqual(self._preview(["PRO"]).status_code, 403)
+        self.client.force_authenticate(self.admin)
+        admin_detail = self.client.get(f"/api/accounts/admin/market-access/users/{pro.pk}/")
+        self.assertEqual(admin_detail.data["access"]["membership_tier"], "PRO")
+
+    def test_broadcast_send_uses_preview_union_and_rejects_changed_audience(self):
+        self._broadcast_members()
+        preview = self._preview(["PRO", "ELITE"])
+        self.assertEqual(preview.data["eligible_count"], 2)
+        body = {
+            "membership_tiers": ["PRO", "ELITE"], "market": "ALL", "text": "سلام",
+            "expected_eligible_count": preview.data["eligible_count"],
+            "expected_candidate_digest": preview.data["candidate_digest"],
+            "confirm": True, "idempotency_key": "pro-elite-audience-1",
+        }
+        send_url = "/api/notifications/sms-automation/broadcasts/send/"
+        self.assertEqual(self.client.post(send_url, body, format="json").status_code, 201)
+        self.assertEqual(SMSAutomationDelivery.objects.filter(broadcast__isnull=False).count(), 2)
+        self.assertEqual(self.client.post(send_url, body, format="json").status_code, 200)
+        self.assertEqual(SMSAutomationDelivery.objects.filter(broadcast__isnull=False).count(), 2)
+        stale = self._preview(["PRO"])
+        User.objects.filter(username="sms-pro").update(is_active=False)
+        changed = self.client.post(send_url, {
+            "membership_tiers": ["PRO"], "market": "ALL", "text": "سلام",
+            "expected_eligible_count": stale.data["eligible_count"],
+            "expected_candidate_digest": stale.data["candidate_digest"],
+            "confirm": True, "idempotency_key": "pro-audience-stale-1",
+        }, format="json")
+        self.assertEqual(changed.status_code, 409)
+        self.assertEqual(changed.data["code"], "AUDIENCE_CHANGED")
+        self.assertEqual(SMSBroadcast.objects.count(), 1)
 
     def test_delivery_log_is_paginated_and_private(self):
         self.client.post(

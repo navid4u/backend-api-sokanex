@@ -125,12 +125,24 @@ class SMSAutomationStatusResponseSerializer(serializers.Serializer):
     needs_reconciliation = serializers.IntegerField()
 
 
+class SMSBroadcastExclusionCountsSerializer(serializers.Serializer):
+    inactive = serializers.IntegerField()
+    missing_phone = serializers.IntegerField()
+    invalid_phone = serializers.IntegerField()
+
+
+class SMSBroadcastDiagnosticsSerializer(serializers.Serializer):
+    matched_count = serializers.IntegerField()
+    excluded_counts = SMSBroadcastExclusionCountsSerializer()
+
+
 class SMSBroadcastPreviewResponseSerializer(serializers.Serializer):
     eligible_count = serializers.IntegerField()
     candidate_digest = serializers.CharField()
     membership_tiers = serializers.ListField(child=serializers.CharField())
     market = serializers.CharField()
     text = serializers.CharField()
+    diagnostics = SMSBroadcastDiagnosticsSerializer()
 
 
 class SMSBroadcastCreatedResponseSerializer(serializers.Serializer):
@@ -201,8 +213,13 @@ class SMSBroadcastPreviewView(APIView):
         serializer = SMSBroadcastInputSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
+        diagnostics = {
+            "matched_count": 0,
+            "excluded_counts": {"inactive": 0, "missing_phone": 0, "invalid_phone": 0},
+        }
         ids = [user.pk for user in broadcast_candidates(
-            tiers=set(data["membership_tiers"]), market=data["market"]
+            tiers=set(data["membership_tiers"]), market=data["market"],
+            diagnostics=diagnostics,
         )]
         return Response({
             "eligible_count": len(ids),
@@ -212,6 +229,7 @@ class SMSBroadcastPreviewView(APIView):
             "membership_tiers": data["membership_tiers"],
             "market": data["market"],
             "text": data["text"],
+            "diagnostics": diagnostics,
         })
 
 

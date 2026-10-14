@@ -234,11 +234,16 @@ def send_pending(*, limit=100):
     return sent
 
 
-def broadcast_candidates(*, tiers, market):
-    """V2 tier is backend-derived; never use the obsolete numeric Gold level."""
-    users = User.objects.filter(is_active=True, is_superuser=False).exclude(
+def broadcast_candidates(*, tiers, market, diagnostics=None):
+    """Use the canonical V2 tier and report sequential exclusions when requested.
+
+    Market targeting follows selected preferences, not grants or the legacy
+    single ``market_type``. ``ALL`` adds no market restriction. Elite is an
+    independent flag, so selecting it with the base tier is a union.
+    """
+    users = User.objects.filter(is_superuser=False).exclude(
         role__in=(User.Role.SUPER_ADMIN, User.Role.SUPPORT)
-    ).exclude(phone__isnull=True).exclude(phone="")
+    )
     for user in with_market_access_relations(users).order_by("pk").iterator(chunk_size=200):
         state = resolve_market_access(user) if market_access_v2_enabled() else None
         memberships = ({state.membership_tier} | ({"ELITE"} if state.is_elite else set())) if state else {f"LEVEL_{user.access_level}"}
@@ -246,8 +251,21 @@ def broadcast_candidates(*, tiers, market):
             continue
         if market != "ALL" and market not in (state.selected_markets if state else {_preferred_market(user)}):
             continue
-        if _phone(user):
+        if diagnostics is not None:
+            diagnostics["matched_count"] += 1
+        # These reasons are exclusive and checked in the same order for every
+        # candidate. The broadcast remains limited to active, valid phones.
+        if not user.is_active:
+            reason = "inactive"
+        elif not user.phone:
+            reason = "missing_phone"
+        elif not _phone(user):
+            reason = "invalid_phone"
+        else:
             yield user
+            continue
+        if diagnostics is not None:
+            diagnostics["excluded_counts"][reason] += 1
 
 
 def broadcast_digest(user_ids, tiers, market, text):
