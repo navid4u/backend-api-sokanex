@@ -85,9 +85,9 @@ def resolve_market_access(user, *, at=None) -> MarketAccessState:
         return MarketAccessState(None, empty, empty, empty, False, False, None, False, False, None)
 
     if user.is_superuser or user.role == User.Role.SUPER_ADMIN:
-        return MarketAccessState(None, empty, empty, MARKETS, False, False, None, False, True, "SUPER_ADMIN")
+        return MarketAccessState(None, empty, empty, MARKETS, True, False, None, False, True, "SUPER_ADMIN")
     if user.role == User.Role.SUPPORT:
-        return MarketAccessState(None, empty, empty, empty, False, False, None, False, False, "SUPPORT")
+        return MarketAccessState(None, empty, empty, MARKETS, True, False, None, False, True, "SUPPORT")
 
     profile = getattr(user, "market_access_profile", None)
     trial = current_trial_grant(user)
@@ -124,6 +124,24 @@ def can_access_market(user, market: str, *, at=None) -> bool:
     if market not in MARKETS:
         return False
     return market in resolve_market_access(user, at=at).effective_markets
+
+
+def can_view_vip_market(user, market: str, *, at=None) -> bool:
+    """Market-scoped VIP entitlement, separate from full Gold features."""
+    if not getattr(user, "is_authenticated", False) or not isinstance(market, str):
+        return False
+    market = market.strip().lower()
+    if market not in MARKETS:
+        return False
+    if not market_access_v2_enabled():
+        from common.content_access import user_can_access_gold_content
+        return user_can_access_gold_content(user)
+    state = resolve_market_access(user, at=at)
+    if state.special_role or user.is_staff or user.has_platform_permission(User.Permission.CONTENT_VIEW_ALL):
+        return True
+    return market in state.effective_markets and (
+        market in state.granted_markets or state.trial_active
+    )
 
 
 def can_access_gold_features(user, *, at=None) -> bool:

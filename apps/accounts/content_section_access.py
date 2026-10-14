@@ -39,9 +39,9 @@ def user_can_access_content_section(user, section, *, legacy_allowed_levels=None
         return False
     if section not in CONTENT_SECTIONS:
         return False
-    if not market_access_v2_enabled() or user.role == User.Role.SUPPORT:
+    if not market_access_v2_enabled():
         return True if legacy_allowed_levels is None else user_can_access_levels(user, legacy_allowed_levels)
-    if user.is_superuser or user.role == User.Role.SUPER_ADMIN:
+    if user.is_superuser or user.role in (User.Role.SUPER_ADMIN, User.Role.SUPPORT):
         return True
     if user.has_platform_permission(User.Permission.CONTENT_VIEW_ALL):
         return True
@@ -58,8 +58,10 @@ def user_can_access_content_section(user, section, *, legacy_allowed_levels=None
 def restrict_content_section_queryset(queryset, user, section):
     if not getattr(user, "is_authenticated", False):
         return queryset.none()
-    if not market_access_v2_enabled() or user.role == User.Role.SUPPORT:
+    if not market_access_v2_enabled():
         return restrict_queryset_for_user(queryset, user)
+    if user.is_superuser or user.role in (User.Role.SUPER_ADMIN, User.Role.SUPPORT):
+        return queryset
     return queryset if user_can_access_content_section(user, section) else queryset.none()
 
 

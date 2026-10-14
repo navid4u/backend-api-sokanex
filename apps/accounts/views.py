@@ -290,6 +290,7 @@ class CustomTokenObtainPairView(
     def dispatch(self, *args, **kwargs):
         return super().dispatch(*args, **kwargs)
 
+@method_decorator(never_cache, name="dispatch")
 class ProfileView(APIView):
     permission_classes = [
         IsAuthenticated,

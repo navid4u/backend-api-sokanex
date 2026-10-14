@@ -421,7 +421,7 @@ class DashboardAPITests(APITestCase):
         self.assertTrue(all(p["can_view"] for p in admin_data["vip_signal_previews"]))
 
     @override_settings(MARKET_ACCESS_V2_ENABLED=True)
-    def test_single_market_grants_do_not_bypass_gold_gate(self):
+    def test_single_market_grants_open_only_their_vip_channel(self):
         VIPSignalPost.objects.create(channel="FOREX", text="Forex private body")
         for market in ("crypto", "forex"):
             with self.subTest(market=market):
@@ -429,8 +429,12 @@ class DashboardAPITests(APITestCase):
                 UserMarketGrant.objects.create(user=self.customer, market=market, source=UserMarketGrant.Source.ADMIN)
                 self.authenticate(self.customer)
                 data = self.client.get(self.dashboard_url).data["data"]
-                self.assertTrue(all(not post["can_view"] for post in data["vip_signal_previews"]))
-                self.assertNotIn("Forex private body", str(data))
+                self.assertEqual(
+                    {post["channel"] for post in data["vip_signal_previews"] if post["can_view"]},
+                    {market.upper()},
+                )
+                if market == "crypto":
+                    self.assertNotIn("Forex private body", str(data))
 
     @override_settings(MARKET_ACCESS_V2_ENABLED=False)
     def test_legacy_gold_preview_is_viewable(self):

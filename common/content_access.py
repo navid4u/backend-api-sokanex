@@ -105,7 +105,7 @@ def user_can_access_gold_content(user):
     # Staff/role capabilities and the entire legacy path remain unchanged.
     from apps.accounts.market_access import can_access_gold_features, market_access_v2_enabled
 
-    if market_access_v2_enabled() and user.role != User.Role.SUPPORT:
+    if market_access_v2_enabled():
         return bool(
             user.is_staff
             or user.is_superuser

@@ -1,6 +1,8 @@
 import logging
 
 from django.shortcuts import get_object_or_404
+from django.utils.decorators import method_decorator
+from django.views.decorators.cache import never_cache
 
 from django_filters.rest_framework import (
     DjangoFilterBackend,
@@ -26,7 +28,6 @@ from common.permissions import (
     IsSignalOwnerOrEmployee,
     IsSuperAdmin,
     IsTrader,
-    CanAccessGoldContent,
 )
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -36,7 +37,8 @@ from rest_framework.throttling import ScopedRateThrottle
 from django.db import models, transaction
 from django.db.models import Count
 from apps.accounts.models import User
-from apps.accounts.market_access import market_access_v2_enabled, resolve_market_access
+from apps.accounts.market_access import can_view_vip_market, market_access_v2_enabled
+from rest_framework.exceptions import PermissionDenied
 
 
 
@@ -72,14 +74,15 @@ def _apply_v2_signal_market_filter(queryset, user):
         or user.has_platform_permission(User.Permission.CONTENT_VIEW_ALL)
     ):
         return queryset
-    allowed = resolve_market_access(user).effective_markets
+    allowed = {market for market in ("crypto", "forex") if can_view_vip_market(user, market)}
     return queryset.filter(
         channel__in=[market.upper() for market in allowed if market in {"crypto", "forex"}]
     )
 
 
+@method_decorator(never_cache, name="dispatch")
 class VIPSignalPostListView(generics.ListAPIView):
-    permission_classes = [IsAuthenticated, CanAccessGoldContent]
+    permission_classes = [IsAuthenticated]
     serializer_class = VIPSignalPostSerializer
     pagination_class = DefaultPagination
 
@@ -94,17 +97,26 @@ class VIPSignalPostListView(generics.ListAPIView):
         channel = self.request.query_params.get("channel", default_channel).upper()
         if channel not in VIPSignalPost.Channel.values:
             raise serializers.ValidationError({"channel": "channel must be CRYPTO or FOREX."})
+        if not can_view_vip_market(self.request.user, channel.lower()):
+            raise PermissionDenied("Market access is required for this channel.")
         queryset = VIPSignalPost.objects.filter(channel=channel, is_active=True).select_related("parent")
         return _apply_v2_signal_market_filter(queryset, self.request.user)
 
 
+@method_decorator(never_cache, name="dispatch")
 class VIPSignalPostDetailView(generics.RetrieveAPIView):
-    permission_classes = [IsAuthenticated, CanAccessGoldContent]
+    permission_classes = [IsAuthenticated]
     serializer_class = VIPSignalPostSerializer
     queryset = VIPSignalPost.objects.filter(is_active=True).select_related("parent")
 
     def get_queryset(self):
-        return _apply_v2_signal_market_filter(super().get_queryset(), self.request.user)
+        return super().get_queryset()
+
+    def get_object(self):
+        post = super().get_object()
+        if not can_view_vip_market(self.request.user, post.channel.lower()):
+            raise PermissionDenied("Market access is required for this channel.")
+        return post
 
 
 class VIPSignalPostIngestionView(APIView):

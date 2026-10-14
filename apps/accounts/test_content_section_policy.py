@@ -56,6 +56,16 @@ class ContentSectionPolicyTests(APITestCase):
             self.assertEqual(self.client.get(url).status_code, 200, url)
         self.assertFalse(ContentSectionAccessPolicy.objects.exists())
 
+    def test_official_support_bypasses_section_tier_lock_only(self):
+        support = User.objects.create_user(username="section-support", role=User.Role.SUPPORT)
+        ContentSectionAccessPolicy.objects.create(
+            section=ContentSectionAccessPolicy.Section.ARTICLES,
+            allowed_tiers=[],
+        )
+        self.client.force_authenticate(support)
+        self.assertEqual(self.client.get(f"/api/articles/{self.article.slug}/").status_code, 200)
+        self.assertTrue(user_can_access_content_section(support, ContentSectionAccessPolicy.Section.ARTICLES))
+
     def test_admin_policy_disables_only_selected_section_and_tier(self):
         self.client.force_authenticate(self.admin)
         initial = self.client.get(self.policy_url)

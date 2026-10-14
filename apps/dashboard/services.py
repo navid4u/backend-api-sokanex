@@ -7,9 +7,8 @@ from apps.notifications.services import NotificationService
 from apps.chat.services import ChatService
 from apps.livestream.services import LiveEventService
 from apps.accounts.models import BrokerConnection
-from apps.accounts.market_access import can_access_market, market_access_payload, market_access_v2_enabled, user_can_manage_market_access
+from apps.accounts.market_access import can_view_vip_market, market_access_payload, market_access_v2_enabled, user_can_manage_market_access
 from apps.content_channels.models import ChannelPost
-from common.content_access import user_can_access_gold_content
 from django.utils import timezone
 from django.utils.html import strip_tags
 from html import unescape
@@ -21,18 +20,10 @@ def _public_excerpt(value):
 
 
 def _vip_previews(user):
-    can_read_gold = user_can_access_gold_content(user)
-    privileged = (
-        user.role == User.Role.SUPPORT or user.is_staff
-        or user.has_platform_permission(User.Permission.CONTENT_VIEW_ALL)
-    )
     posts = VIPSignalPost.objects.filter(is_active=True).order_by("-published_at", "-id")[:4]
     result = []
     for post in posts:
-        can_view = can_read_gold and (
-            not market_access_v2_enabled() or privileged
-            or can_access_market(user, post.channel.lower())
-        )
+        can_view = can_view_vip_market(user, post.channel.lower())
         result.append({
             "id": post.pk,
             "channel": post.channel,
@@ -46,9 +37,8 @@ def _vip_previews(user):
 
 
 def _internal_previews(user):
-    # Mirror the existing internal-analysis read permission (Gold); do not
-    # change its list/detail access policy as part of dashboard previews.
-    can_view = user_can_access_gold_content(user)
+    # Mirror the market-scoped internal-analysis read permission.
+    can_view = can_view_vip_market(user, "internal")
     posts = ChannelPost.objects.filter(
         channel__slug="internal-analysis", channel__is_active=True,
         status=ChannelPost.Status.PUBLISHED,
@@ -88,8 +78,8 @@ class DashboardService:
         )
 
         visible_signals = VIPSignalPost.objects.filter(is_active=True)
-        if not user_can_access_gold_content(user):
-            visible_signals = visible_signals.none()
+        allowed_channels = [market.upper() for market in ("crypto", "forex") if can_view_vip_market(user, market)]
+        visible_signals = visible_signals.filter(channel__in=allowed_channels)
         recent_signals = visible_signals[:5]
 
         wallet = WalletService.get_wallet(user)
@@ -120,6 +110,8 @@ class DashboardService:
         upcoming_live_events = (
             LiveEventService.upcoming(user)
         )
+
+        access_state = market_access_payload(user)
 
         return {
             "user": user,
@@ -164,7 +156,9 @@ class DashboardService:
 
             "premium_subscription": WalletService.premium_subscription(user),
 
-            "market_access_v2": market_access_payload(user),
+            "market_access_v2": access_state,
+
+            "special_role": access_state.get("special_role"),
 
             "personality_result": personality_result,
 

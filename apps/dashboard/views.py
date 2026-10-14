@@ -5,6 +5,8 @@ from drf_spectacular.utils import (
 from rest_framework import serializers
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.views import APIView
+from django.utils.decorators import method_decorator
+from django.views.decorators.cache import never_cache
 
 from common.responses import success_response
 
@@ -12,6 +14,7 @@ from .serializers import DashboardSerializer
 from .services import DashboardService
 
 
+@method_decorator(never_cache, name="dispatch")
 class DashboardView(APIView):
     permission_classes = [
         IsAuthenticated,

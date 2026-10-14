@@ -58,6 +58,23 @@ class MarketAccessAdminAPITests(APITestCase):
         self.assertEqual(len(response.data["results"]), 1)
         self.assertEqual(response.data["results"][0]["id"], self.user.pk)
 
+    def test_tier_and_elite_filters_apply_before_pagination(self):
+        second = User.objects.create_user(username="v2-second", email="second@example.com")
+        self.client.force_authenticate(self.admin)
+        self.client.patch(self.detail_url(), {"approved_markets": ["crypto"], "is_elite": True}, format="json")
+        self.client.patch(self.detail_url(second), {"approved_markets": ["crypto", "forex"]}, format="json")
+        basic = self.client.get(self.list_url, {"membership_tier": "BASIC", "is_elite": "true", "page_size": 1})
+        self.assertEqual(basic.status_code, 200)
+        self.assertEqual(basic.data["count"], 1)
+        self.assertEqual(basic.data["results"][0]["id"], self.user.pk)
+        self.assertIn("email", basic.data["results"][0])
+        pro = self.client.get(self.list_url, {"membership_tier": "PRO", "is_elite": "false", "search": "second"})
+        self.assertEqual(pro.data["count"], 1)
+        self.assertEqual(pro.data["results"][0]["id"], second.pk)
+        for params in ({"membership_tier": "VIP"}, {"is_elite": "yes"}, {"unknown": "1"}):
+            with self.subTest(params=params):
+                self.assertEqual(self.client.get(self.list_url, params).status_code, 400)
+
     def test_read_distinguishes_preferences_from_approved_grants(self):
         UserMarketPreference.objects.create(user=self.user, market="crypto")
         self.client.force_authenticate(self.support)

@@ -197,6 +197,7 @@ class UserSerializer(serializers.ModelSerializer):
     wallet_balance_usd = serializers.SerializerMethodField()
     premium_subscription = serializers.SerializerMethodField()
     market_access_v2 = serializers.SerializerMethodField()
+    special_role = serializers.SerializerMethodField()
 
     class Meta:
         model = User
@@ -210,6 +211,7 @@ class UserSerializer(serializers.ModelSerializer):
             "market_type",
             "avatar",
             "role",
+            "special_role",
             "access_level",
             "custom_role",
             "is_verified",
@@ -299,6 +301,10 @@ class UserSerializer(serializers.ModelSerializer):
     @extend_schema_field(serializers.DictField())
     def get_market_access_v2(self, obj) -> dict:
         return self.context.get("market_access_v2") or market_access_payload(obj)
+
+    @extend_schema_field(serializers.CharField(allow_null=True))
+    def get_special_role(self, obj):
+        return self.get_market_access_v2(obj).get("special_role")
 
 
 class CustomTokenObtainPairSerializer(
@@ -801,6 +807,8 @@ class UserCustomRoleUpdateSerializer(serializers.Serializer):
 
 class UserProfileDetailsSerializer(serializers.ModelSerializer):
     access_level = serializers.IntegerField(source="user.access_level", read_only=True)
+    role = serializers.CharField(source="user.role", read_only=True)
+    special_role = serializers.SerializerMethodField()
     market_access_v2 = serializers.SerializerMethodField()
     market_type = serializers.ChoiceField(
         source="user.market_type", choices=User.MarketType.choices, required=False
@@ -840,6 +848,8 @@ class UserProfileDetailsSerializer(serializers.ModelSerializer):
         fields = (
             "id",
             "access_level",
+            "role",
+            "special_role",
             "market_access_v2",
             "username",
             "email",
@@ -911,6 +921,10 @@ class UserProfileDetailsSerializer(serializers.ModelSerializer):
     @extend_schema_field(serializers.DictField())
     def get_market_access_v2(self, obj) -> dict:
         return market_access_payload(obj.user)
+
+    @extend_schema_field(serializers.CharField(allow_null=True))
+    def get_special_role(self, obj):
+        return self.get_market_access_v2(obj).get("special_role")
 
     def _validate_string_list(self, value, field_name, max_items=30):
         if not isinstance(value, list):

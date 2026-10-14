@@ -1,11 +1,15 @@
 """New, gated administrator APIs for market membership management."""
 
-from drf_spectacular.utils import extend_schema
+from drf_spectacular.utils import OpenApiParameter, extend_schema, extend_schema_view
 from rest_framework import generics, status
 from rest_framework.filters import SearchFilter
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from rest_framework.exceptions import ValidationError
+from django.db.models import Count, Q
+from django.utils.decorators import method_decorator
+from django.views.decorators.cache import never_cache
 
 from common.permissions import CanManageMarketAccess, CanStartMarketTrialCampaign, MarketAccessV2Enabled
 
@@ -55,6 +59,7 @@ class ContentSectionPolicyView(APIView):
         return Response(ContentSectionPolicySerializer(content_policy_rows(), many=True).data)
 
 
+@method_decorator(never_cache, name="dispatch")
 class MyMarketPreferencesView(APIView):
     """User selections are requests/preferences, never direct entitlements."""
 
@@ -78,20 +83,56 @@ class MyMarketPreferencesView(APIView):
         return Response(MarketAccessStateSerializer(market_access_payload(user)).data)
 
 
+@extend_schema_view(get=extend_schema(parameters=[
+    OpenApiParameter("membership_tier", str, required=False, enum=["LEVEL_1", "BASIC", "PRO", "GOLD"]),
+    OpenApiParameter("is_elite", bool, required=False),
+]))
+@method_decorator(never_cache, name="dispatch")
 class MarketAccessUserListView(generics.ListAPIView):
     """Paginated admin list; no legacy user endpoint is changed."""
 
     permission_classes = [IsAuthenticated, CanManageMarketAccess, MarketAccessV2Enabled]
     serializer_class = UserMarketAccessReadSerializer
     filter_backends = [SearchFilter]
-    search_fields = ["username", "first_name", "last_name", "phone"]
+    search_fields = ["username", "first_name", "last_name", "phone", "email"]
 
     def get_queryset(self):
+        params = self.request.query_params
+        unexpected = set(params) - {"page", "page_size", "search", "membership_tier", "is_elite"}
+        if unexpected:
+            raise ValidationError({field: "Unknown filter." for field in sorted(unexpected)})
+        tier = params.get("membership_tier")
+        if tier is not None and tier not in ("LEVEL_1", "BASIC", "PRO", "GOLD"):
+            raise ValidationError({"membership_tier": "Invalid membership tier."})
+        elite = params.get("is_elite")
+        if elite is not None and elite.lower() not in ("true", "false"):
+            raise ValidationError({"is_elite": "Use true or false."})
+        queryset = User.objects.all()
+        if tier is not None:
+            market_count = {"LEVEL_1": 0, "BASIC": 1, "PRO": 2, "GOLD": 3}[tier]
+            queryset = queryset.annotate(
+                _active_market_count=Count(
+                    "market_grants_v2",
+                    filter=Q(market_grants_v2__revoked_at__isnull=True),
+                    distinct=True,
+                )
+            ).filter(_active_market_count=market_count)
+            # Special roles have no count-based membership tier.
+            queryset = queryset.exclude(Q(is_superuser=True) | Q(role__in=(User.Role.SUPER_ADMIN, User.Role.SUPPORT)))
+        if elite is not None:
+            if elite.lower() == "true":
+                queryset = queryset.filter(market_access_profile__is_elite=True)
+            else:
+                queryset = queryset.filter(
+                    Q(market_access_profile__is_elite=False)
+                    | Q(market_access_profile__isnull=True)
+                )
         return with_market_access_relations(
-            User.objects.all().order_by("-date_joined", "-pk")
+            queryset.order_by("-date_joined", "-pk")
         )
 
 
+@method_decorator(never_cache, name="dispatch")
 class MarketAccessUserDetailView(generics.RetrieveAPIView):
     """Read state or atomically replace approved markets and/or Elite."""
 
@@ -156,6 +197,7 @@ class MarketTrialCampaignStartView(APIView):
         )
 
 
+@method_decorator(never_cache, name="dispatch")
 class MyMarketAccessRequestView(generics.ListAPIView):
     """Applications only; no price, wallet hold or legacy level mutation."""
 
@@ -183,6 +225,7 @@ class MyMarketAccessRequestView(generics.ListAPIView):
         )
 
 
+@method_decorator(never_cache, name="dispatch")
 class MarketAccessRequestManagementView(generics.ListAPIView):
     permission_classes = [IsAuthenticated, CanManageMarketAccess, MarketAccessV2Enabled]
     serializer_class = MarketAccessRequestReadSerializer
@@ -197,6 +240,7 @@ class MarketAccessRequestManagementView(generics.ListAPIView):
         return queryset
 
 
+@method_decorator(never_cache, name="dispatch")
 class MarketAccessRequestReviewView(APIView):
     permission_classes = [IsAuthenticated, CanManageMarketAccess, MarketAccessV2Enabled]
 

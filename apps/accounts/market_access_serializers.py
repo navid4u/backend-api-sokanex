@@ -35,7 +35,7 @@ class UserMarketAccessReadSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = (
-            "id", "username", "first_name", "last_name", "phone", "role",
+            "id", "username", "first_name", "last_name", "phone", "email", "role",
             "is_active", "date_joined", "legacy_access_level", "access",
         )
         read_only_fields = fields
@@ -208,6 +208,6 @@ class MarketAccessRequestReadSerializer(serializers.ModelSerializer):
     def get_tier_description(self, obj):
         return {
             "PRO": "دسترسی به دو بازار تأییدشده؛ سطح از تعداد بازارها محاسبه می‌شود.",
-            "GOLD": "دسترسی به هر سه بازار و امکانات ویژهٔ Gold.",
+            "GOLD": "درخواست عضویت اولیه؛ بازارها و سطح نهایی را مدیر تعیین می‌کند.",
             "ELITE": "نشان ویژهٔ مستقل از تعداد بازارها؛ دسترسی بازار جداگانه تعیین می‌شود.",
         }[obj.requested_tier]

@@ -7,6 +7,8 @@ from django.db import transaction
 from django.db.models import F, Q
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
+from django.utils.decorators import method_decorator
+from django.views.decorators.cache import never_cache
 from rest_framework import generics, serializers, status
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.permissions import IsAuthenticated
@@ -15,8 +17,8 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.accounts.models import User
-from apps.accounts.market_access import can_access_gold_features, can_access_market, market_access_v2_enabled
-from common.permissions import CanAccessGoldContent, CanManageInternalAnalysis, IsEmployee
+from apps.accounts.market_access import can_access_gold_features, can_view_vip_market, market_access_v2_enabled
+from common.permissions import CanManageInternalAnalysis, IsEmployee
 from .models import Channel, ChannelPost
 from .serializers import ChannelPostSerializer, InternalAnalysisIngestionSerializer, InternalAnalysisPostSerializer
 from common.ingestion import FixedIngestionKeyAuthentication
@@ -55,13 +57,17 @@ def accessible_channel(user, slug):
         return get_object_or_404(queryset)
     required_level = 5 if slug in {"vip-signals", "internal-analysis"} else None
     channel = get_object_or_404(queryset)
-    if market_access_v2_enabled() and user.role != User.Role.SUPPORT and required_level:
-        if not can_access_gold_features(user) or (
-            slug == "internal-analysis" and not can_access_market(user, User.MarketType.INTERNAL)
-        ):
+    if market_access_v2_enabled() and required_level:
+        # This legacy mixed-market channel has no reliable per-post crypto/
+        # forex classification. Keep its Gold gate; market-scoped VIP reads
+        # use /api/signals/ where every post has an explicit channel.
+        allowed = (can_view_vip_market(user, "internal") if slug == "internal-analysis"
+                   else can_access_gold_features(user) or user.is_staff
+                   or user.has_platform_permission(User.Permission.CONTENT_VIEW_ALL))
+        if not allowed:
             from rest_framework.exceptions import PermissionDenied
 
-            raise PermissionDenied("اشتراک طلایی فعال برای دسترسی به این محتوا لازم است.")
+            raise PermissionDenied("دسترسی بازار مربوط برای مشاهده این محتوا لازم است.")
         return channel
     if required_level and user.effective_access_level < required_level:
         from rest_framework.exceptions import PermissionDenied
@@ -145,13 +151,17 @@ class VIPSignalChannelView(ChannelPostListCreateView):
     OpenApiParameter("page", int, required=False),
     OpenApiParameter("page_size", int, required=False),
 ]))
+@method_decorator(never_cache, name="dispatch")
 class InternalAnalysisChannelView(generics.ListAPIView):
-    permission_classes = [IsAuthenticated, CanAccessGoldContent]
+    permission_classes = [IsAuthenticated]
     serializer_class = InternalAnalysisPostSerializer
 
     def get_queryset(self):
         if getattr(self, "swagger_fake_view", False):
             return ChannelPost.objects.none()
+        if not can_view_vip_market(self.request.user, "internal"):
+            from rest_framework.exceptions import PermissionDenied
+            raise PermissionDenied("Internal market access is required.")
         queryset = ChannelPost.objects.filter(
             channel__slug="internal-analysis",
             channel__is_active=True,
@@ -160,7 +170,13 @@ class InternalAnalysisChannelView(generics.ListAPIView):
         ).select_related("author").order_by("-is_pinned", "-published_at", "-created_at")
         scope = self.request.query_params.get("scope")
         if scope:
+            if (market_access_v2_enabled() and scope == ChannelPost.Scope.FOREX
+                    and not can_view_vip_market(self.request.user, "forex")):
+                from rest_framework.exceptions import PermissionDenied
+                raise PermissionDenied("Forex market access is required.")
             queryset = queryset.filter(scope=scope)
+        elif market_access_v2_enabled() and not can_view_vip_market(self.request.user, "forex"):
+            queryset = queryset.exclude(scope=ChannelPost.Scope.FOREX)
         source = self.request.query_params.get("source")
         if source:
             queryset = queryset.filter(source=source)
@@ -227,10 +243,13 @@ class InternalAnalysisManageDetailView(generics.RetrieveUpdateDestroyAPIView):
 
 
 class InternalAnalysisViewCountView(APIView):
-    permission_classes = [IsAuthenticated, CanAccessGoldContent]
+    permission_classes = [IsAuthenticated]
     serializer_class = EmptySerializer
 
     def post(self, request, pk):
+        if not can_view_vip_market(request.user, "internal"):
+            from rest_framework.exceptions import PermissionDenied
+            raise PermissionDenied("Internal market access is required.")
         post = get_object_or_404(
             ChannelPost,
             pk=pk,
@@ -238,6 +257,10 @@ class InternalAnalysisViewCountView(APIView):
             status=ChannelPost.Status.PUBLISHED,
             published_at__lte=timezone.now(),
         )
+        if (market_access_v2_enabled() and post.scope == ChannelPost.Scope.FOREX
+                and not can_view_vip_market(request.user, "forex")):
+            from rest_framework.exceptions import PermissionDenied
+            raise PermissionDenied("Forex market access is required.")
         cache_key = f"internal-analysis:view:{request.user.pk}:{post.pk}"
         counted = cache.add(cache_key, True, timeout=30 * 60)
         if counted:

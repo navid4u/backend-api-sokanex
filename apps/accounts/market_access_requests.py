@@ -32,10 +32,6 @@ def submit_market_access_request(*, user, requested_tier, message=""):
     selected = sorted(UserMarketPreference.objects.filter(user=target).values_list("market", flat=True))
     if not selected:
         raise ValidationError({"selected_markets": "Select at least one market."})
-    if requested_tier == MarketAccessRequest.RequestedTier.PRO and len(selected) < 2:
-        raise ValidationError({"requested_tier": "Pro requires at least two selected markets."})
-    if requested_tier == MarketAccessRequest.RequestedTier.GOLD and len(selected) != 3:
-        raise ValidationError({"requested_tier": "Gold requires all three selected markets."})
     if requested_tier not in MarketAccessRequest.RequestedTier.values:
         raise ValidationError({"requested_tier": "Unknown requested tier."})
 
@@ -56,12 +52,15 @@ def submit_market_access_request(*, user, requested_tier, message=""):
         raise MarketAccessRequestConflict("A different request is already pending review.")
 
     state = resolve_market_access(target)
-    if requested_tier == MarketAccessRequest.RequestedTier.ELITE and state.is_elite:
-        raise MarketAccessRequestConflict("Elite access is already active.")
-    if requested_tier == MarketAccessRequest.RequestedTier.GOLD and state.membership_tier == "GOLD":
-        raise MarketAccessRequestConflict("Gold access is already active.")
-    if requested_tier == MarketAccessRequest.RequestedTier.PRO and state.membership_tier in ("PRO", "GOLD"):
-        raise MarketAccessRequestConflict("Pro access or higher is already active.")
+    if state.granted_markets:
+        if requested_tier != MarketAccessRequest.RequestedTier.ELITE:
+            raise MarketAccessRequestConflict("Members may request Elite only.")
+        if state.is_elite:
+            raise MarketAccessRequestConflict("Elite access is already active.")
+    elif requested_tier != MarketAccessRequest.RequestedTier.GOLD:
+        # Revocation removes the current membership, so a fresh Gold request
+        # is allowed after any pending request has been resolved.
+        raise ValidationError({"requested_tier": "Initial membership requests must be GOLD."})
 
     request = MarketAccessRequest.objects.create(
         user=target,
