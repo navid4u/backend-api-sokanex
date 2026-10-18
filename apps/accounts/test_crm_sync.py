@@ -87,6 +87,29 @@ class CrmContactSyncTests(APITestCase):
         self.assertEqual(self.sync.status, CrmContactSync.Status.FAILED)
         self.assertIsNone(self.sync.next_retry_at)
         self.assertEqual(self.sync.last_response_code, "401")
+        # A terminal auth failure must not be selected again by the next pass,
+        # including after the in-process circuit cache has been cleared.
+        cache.clear()
+        self.assertEqual(CrmContactSyncService.process_pending(), 0)
+        self.assertEqual(urlopen.call_count, 1)
+
+    @patch("apps.accounts.crm.request.urlopen")
+    def test_unscheduled_failed_sync_requires_explicit_retry(self, urlopen):
+        self.sync.status = CrmContactSync.Status.FAILED
+        self.sync.next_retry_at = None
+        self.sync.save(update_fields=("status", "next_retry_at", "updated_at"))
+        self.assertEqual(CrmContactSyncService.process_pending(), 0)
+        urlopen.assert_not_called()
+
+    @patch("apps.accounts.crm.request.urlopen")
+    def test_scheduled_failed_sync_still_retries(self, urlopen):
+        urlopen.return_value = self.response({"status": 1000, "data": {"ulid": "RETRYULID"}})
+        self.sync.status = CrmContactSync.Status.FAILED
+        self.sync.next_retry_at = timezone.now()
+        self.sync.save(update_fields=("status", "next_retry_at", "updated_at"))
+        self.assertEqual(CrmContactSyncService.process_pending(), 1)
+        self.sync.refresh_from_db()
+        self.assertEqual(self.sync.status, CrmContactSync.Status.SYNCED)
 
     @patch("apps.accounts.crm.request.urlopen")
     def test_login_refresh_register_and_profile_never_call_crm_http(self, urlopen):

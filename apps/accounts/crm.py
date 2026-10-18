@@ -227,7 +227,7 @@ class CrmContactSyncService:
         now = timezone.now()
         ids = list(
             CrmContactSync.objects.filter(
-                status__in=(CrmContactSync.Status.PENDING, CrmContactSync.Status.FAILED),
+                status=CrmContactSync.Status.PENDING,
                 attempts__lt=settings.CRM_MAX_ATTEMPTS,
             )
             .filter(next_retry_at__isnull=True)[:limit]
