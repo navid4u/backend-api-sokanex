@@ -19,7 +19,7 @@ import os
 from common.serializers import EmptySerializer
 
 from apps.accounts.models import User
-from apps.accounts.market_access import has_basic_access, market_access_v2_enabled
+from apps.accounts.market_access import market_access_v2_enabled, resolve_market_access
 from common.content_access import restrict_queryset_for_user
 from common.permissions import CanTeachAcademy
 
@@ -66,10 +66,26 @@ def visible_courses(user):
         status=Course.Status.PUBLISHED
     ).select_related("instructor")
     if market_access_v2_enabled():
-        # V2 section availability starts at Basic. Old per-course level flags
-        # remain stored for a reversible cutover, but do not gate V2 readers.
-        return queryset if has_basic_access(user) else queryset.none()
+        # Unclassified legacy courses fail closed until an administrator
+        # explicitly assigns their market. Legacy per-item flags stay stored.
+        return queryset.filter(market__in=resolve_market_access(user).effective_markets)
     return restrict_queryset_for_user(queryset, user)
+
+
+def assert_course_market_access(user, course):
+    if not market_access_v2_enabled():
+        return
+    if can_manage_all_academy(user) or (
+        user.pk == course.instructor_id
+        and user.has_platform_permission(User.Permission.ACADEMY_TEACH)
+    ):
+        return
+    if course.market not in resolve_market_access(user).effective_markets:
+        raise PermissionDenied(detail={
+            "code": "MARKET_ACCESS_REQUIRED",
+            "market": course.market or None,
+            "detail": "Access to this course market is required.",
+        })
 
 
 def session_lock_reason(session, user):
@@ -127,7 +143,11 @@ class CourseListCreateView(generics.ListCreateAPIView):
     def get_queryset(self):
         if getattr(self, "swagger_fake_view", False):
             return Course.objects.none()
-        return visible_courses(self.request.user)
+        market = self.request.query_params.get("market")
+        if market is not None and market not in User.MarketType.values:
+            raise serializers.ValidationError({"market": "Choose internal, forex or crypto."})
+        queryset = visible_courses(self.request.user)
+        return queryset.filter(market=market) if market else queryset
 
     def perform_create(self, serializer):
         serializer.save(instructor=self.request.user)
@@ -173,6 +193,12 @@ class CourseDetailView(generics.RetrieveUpdateDestroyAPIView):
             return (visible | manageable_courses(self.request.user)).distinct()
         return visible
 
+    def get_object(self):
+        if self.request.method == "GET" and market_access_v2_enabled():
+            candidate = get_object_or_404(Course, slug=self.kwargs["slug"])
+            assert_course_market_access(self.request.user, candidate)
+        return super().get_object()
+
 
 class CourseSessionListCreateView(generics.ListCreateAPIView):
     parser_classes = [MultiPartParser, FormParser, JSONParser]
@@ -193,6 +219,9 @@ class CourseSessionListCreateView(generics.ListCreateAPIView):
             queryset = visible_courses(self.request.user)
             if can_edit_academy(self.request.user):
                 queryset = (queryset | manageable_courses(self.request.user)).distinct()
+        if self.request.method != "POST" and market_access_v2_enabled():
+            candidate = get_object_or_404(Course, slug=self.kwargs["slug"])
+            assert_course_market_access(self.request.user, candidate)
         self._course = get_object_or_404(
             queryset,
             slug=self.kwargs["slug"],
@@ -245,6 +274,9 @@ class CourseSessionDetailView(
         return (public | managed).distinct().select_related("course")
 
     def get_object(self):
+        if self.request.method == "GET" and market_access_v2_enabled():
+            candidate = get_object_or_404(CourseSession.objects.select_related("course"), pk=self.kwargs["pk"])
+            assert_course_market_access(self.request.user, candidate.course)
         obj = super().get_object()
         if self.request.method == "GET":
             reason = session_lock_reason(obj, self.request.user)
@@ -258,6 +290,8 @@ class EnrollCourseView(APIView):
 
     @extend_schema(request=None, responses=CourseEnrollmentSerializer)
     def post(self, request, slug):
+        if market_access_v2_enabled():
+            assert_course_market_access(request.user, get_object_or_404(Course, slug=slug))
         course = get_object_or_404(visible_courses(request.user), slug=slug, enrollment_open=True)
         if not course.is_free or course.purchase_required:
             raise PermissionDenied("Purchase this course before enrollment.")
@@ -285,6 +319,7 @@ class CoursePurchaseView(generics.GenericAPIView):
             Course.objects.select_for_update().filter(status=Course.Status.PUBLISHED),
             slug=slug, enrollment_open=True,
         )
+        assert_course_market_access(request.user, course)
         serializer = CoursePurchaseSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         if CoursePurchase.objects.filter(user=request.user, course=course).exists():
@@ -327,6 +362,7 @@ class CoursePurchaseStatusView(generics.GenericAPIView):
 
     def get(self, request, slug):
         course = get_object_or_404(Course, slug=slug)
+        assert_course_market_access(request.user, course)
         purchase = CoursePurchase.objects.filter(user=request.user, course=course).select_related("payment").first()
         enrollment = CourseEnrollment.objects.filter(user=request.user, course=course).first()
         return Response({
@@ -342,7 +378,10 @@ class MyEnrollmentListView(generics.ListAPIView):
     def get_queryset(self):
         if getattr(self, "swagger_fake_view", False):
             return CourseEnrollment.objects.none()
-        return CourseEnrollment.objects.filter(user=self.request.user).select_related("course", "course__instructor")
+        queryset = CourseEnrollment.objects.filter(user=self.request.user)
+        if market_access_v2_enabled():
+            queryset = queryset.filter(course__market__in=resolve_market_access(self.request.user).effective_markets)
+        return queryset.select_related("course", "course__instructor")
 
 
 class SessionProgressView(generics.RetrieveUpdateAPIView):
@@ -351,6 +390,7 @@ class SessionProgressView(generics.RetrieveUpdateAPIView):
 
     def get_object(self):
         session = get_object_or_404(CourseSession, pk=self.kwargs["pk"])
+        assert_course_market_access(self.request.user, session.course)
         enrollment = get_object_or_404(
             CourseEnrollment, user=self.request.user, course=session.course
         )
@@ -377,6 +417,9 @@ class SessionQuizView(generics.RetrieveAPIView):
     serializer_class = QuizPublicSerializer
 
     def get_object(self):
+        if market_access_v2_enabled():
+            candidate = get_object_or_404(CourseSession.objects.select_related("course"), pk=self.kwargs["pk"])
+            assert_course_market_access(self.request.user, candidate.course)
         session = get_object_or_404(CourseSession, pk=self.kwargs["pk"], course__in=visible_courses(self.request.user))
         reason = session_lock_reason(session, self.request.user)
         if reason:
@@ -391,6 +434,7 @@ class QuizAttemptCreateView(APIView):
     @transaction.atomic
     def post(self, request, pk):
         quiz = get_object_or_404(Quiz.objects.select_related("session__course").prefetch_related("questions__options"), pk=pk, is_active=True)
+        assert_course_market_access(request.user, quiz.session.course)
         if not CourseEnrollment.objects.filter(user=request.user, course=quiz.session.course).exists():
             raise PermissionDenied("Enroll in the course first.")
         previous = QuizAttempt.objects.select_for_update().filter(quiz=quiz, user=request.user).first()
@@ -427,7 +471,10 @@ class MyQuizAttemptListView(generics.ListAPIView):
     def get_queryset(self):
         if getattr(self, "swagger_fake_view", False):
             return QuizAttempt.objects.none()
-        return QuizAttempt.objects.filter(quiz_id=self.kwargs["pk"], user=self.request.user).select_related("quiz")
+        queryset = QuizAttempt.objects.filter(quiz_id=self.kwargs["pk"], user=self.request.user)
+        if market_access_v2_enabled():
+            queryset = queryset.filter(quiz__session__course__market__in=resolve_market_access(self.request.user).effective_markets)
+        return queryset.select_related("quiz")
 
 
 class QuizManagementCreateView(generics.CreateAPIView):
@@ -456,6 +503,9 @@ class SessionMediaTicketView(APIView):
     serializer_class = EmptySerializer
 
     def post(self, request, pk):
+        if market_access_v2_enabled():
+            candidate = get_object_or_404(CourseSession.objects.select_related("course"), pk=pk)
+            assert_course_market_access(request.user, candidate.course)
         session = get_object_or_404(CourseSession, pk=pk, course__in=visible_courses(request.user))
         reason = session_lock_reason(session, request.user)
         if reason:
@@ -481,6 +531,7 @@ class SessionMediaStreamView(APIView):
             raise PermissionDenied("Ticket does not match this session.")
         session = get_object_or_404(CourseSession, pk=pk)
         user = get_object_or_404(User, pk=payload.get("user_id"), is_active=True)
+        assert_course_market_access(user, session.course)
         reason = session_lock_reason(session, user)
         if reason:
             raise PermissionDenied(detail={"code": "SESSION_LOCKED", "lock_reason": reason})

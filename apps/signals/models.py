@@ -243,7 +243,7 @@ class VIPSignalPost(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        ordering = ["-published_at", "-id"]
+        ordering = ["-published_at", "-created_at", "-id"]
         constraints = [
             models.UniqueConstraint(
                 fields=["channel", "external_id"],
@@ -264,3 +264,10 @@ class VIPSignalPost(models.Model):
 
     def __str__(self):
         return f"{self.channel}: {self.text[:80]}"
+
+
+class VIPChannelRetention(models.Model):
+    """Per-channel lock and explicit post-backup activation marker."""
+
+    channel = models.CharField(max_length=10, choices=VIPSignalPost.Channel.choices, primary_key=True)
+    activated_at = models.DateTimeField(null=True, blank=True)

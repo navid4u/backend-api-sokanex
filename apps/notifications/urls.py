@@ -15,9 +15,11 @@ from .sms_automation_api import (
     SMSDeliveryListView, SMSBroadcastPreviewView, SMSBroadcastCreateView,
     SMSBroadcastListView,
 )
+from .trial_journey_api import TrialJourneyView
 
 
 urlpatterns = [
+    path("sms-automation/journey/", TrialJourneyView.as_view(), name="sms-trial-journey"),
     path("sms-automation/status/", SMSAutomationStatusView.as_view(), name="sms-automation-status"),
     path("sms-automation/rules/", SMSRuleListView.as_view(), name="sms-automation-rules"),
     path("sms-automation/rules/<int:pk>/", SMSRuleDetailView.as_view(), name="sms-automation-rule-detail"),

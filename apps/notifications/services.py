@@ -115,7 +115,7 @@ class NotificationService:
             )
 
         return (
-            Notification.objects.filter(audience, is_active=True)
+            Notification.objects.filter(audience, is_active=True, show_in_app=True)
             .filter(level_filter)
             .filter(Q(expires_at__isnull=True) | Q(expires_at__gt=timezone.now()))
             .select_related("created_by")

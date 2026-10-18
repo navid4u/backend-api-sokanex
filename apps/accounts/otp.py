@@ -151,7 +151,7 @@ class OTPService:
         return challenge
 
     @classmethod
-    def verify_registration_login(cls, phone, code):
+    def verify_registration_login(cls, phone, code, *, invite_token=None):
         invalid = False
         account_error = None
         user = None
@@ -219,6 +219,13 @@ class OTPService:
                             user.set_unusable_password()
                             user.save(update_fields=["password", "updated_at"])
                             UserProfile.objects.get_or_create(user=user)
+                            from .invitations import attribute_new_user
+                            attribute_new_user(
+                                user=user, token=invite_token,
+                                fallback_link=challenge.invitation_link,
+                            )
+                            from .market_trial import start_new_user_trial
+                            start_new_user_trial(user)
                             created = True
                     except IntegrityError:
                         user = User.objects.select_for_update().filter(phone=phone).first()

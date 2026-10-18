@@ -198,19 +198,36 @@ class MarketAccessRequestAPITests(APITestCase):
         self.client.force_authenticate(self.user)
         self.assertEqual(self.submit("GOLD").status_code, 201)
 
-    def test_changed_preferences_or_unselected_market_blocks_approval(self):
+    def test_superadmin_can_approve_unselected_market_but_changed_preferences_conflict(self):
         self.select(["crypto", "forex"])
         application = MarketAccessRequest.objects.get(pk=self.submit().data["id"])
         self.assertEqual(self.review(application, {
             "status": "APPROVED", "approved_markets": ["internal"],
-        }).status_code, 400)
-        self.client.force_authenticate(self.user)
+        }).status_code, 200)
+        self.assertTrue(UserMarketGrant.objects.filter(user=self.user, market="internal", revoked_at__isnull=True).exists())
+        self.assertEqual(MarketAccessRequest.objects.get(pk=application.pk).requested_markets, ["crypto", "forex"])
+
+        other = User.objects.create_user(username="changed-market-preferences")
+        self.client.force_authenticate(other)
+        self.select(["crypto", "forex"])
+        next_application = MarketAccessRequest.objects.get(pk=self.submit().data["id"])
         self.select(["crypto"])
-        self.assertEqual(self.review(application, {
+        self.assertEqual(self.review(next_application, {
             "status": "APPROVED", "approved_markets": ["crypto"],
         }).status_code, 409)
-        application.refresh_from_db()
-        self.assertEqual(application.status, "PENDING")
+        next_application.refresh_from_db()
+        self.assertEqual(next_application.status, "PENDING")
+        self.assertFalse(UserMarketGrant.objects.filter(user=other).exists())
+
+    def test_support_reviewer_cannot_approve_unselected_market(self):
+        self.select(["crypto"])
+        application = MarketAccessRequest.objects.get(pk=self.submit().data["id"])
+        self.client.force_authenticate(self.support)
+        response = self.client.patch(
+            f"{self.admin_url}{application.pk}/review/",
+            {"status": "APPROVED", "approved_markets": ["internal"]}, format="json",
+        )
+        self.assertEqual(response.status_code, 400)
         self.assertFalse(UserMarketGrant.objects.filter(user=self.user).exists())
 
     def test_permissions_and_isolation(self):

@@ -102,8 +102,14 @@ def review_market_access_request(*, actor, request_id, status, admin_note="",
         if selected_now != set(application.requested_markets):
             raise MarketAccessRequestConflict("Market preferences changed after this request was submitted.")
         chosen = set(approved_markets)
-        if not chosen or not chosen.issubset(selected_now) or not chosen.issubset(MARKETS):
-            raise ValidationError({"approved_markets": "Approve at least one market from the user's selections."})
+        superadmin = actor.is_superuser or actor.role == User.Role.SUPER_ADMIN
+        if not chosen or not chosen.issubset(MARKETS) or (not superadmin and not chosen.issubset(selected_now)):
+            raise ValidationError({
+                "approved_markets": (
+                    "Approve at least one valid market."
+                    if superadmin else "Approve at least one market from the user's selections."
+                )
+            })
         current_elite = UserAccessProfile.objects.filter(user=target, is_elite=True).exists()
         approved_elite = current_elite if is_elite is None else is_elite
         update_user_market_access(

@@ -88,6 +88,10 @@ def queue_event(user_id, slot, event_key):
     try:
         if not settings.SMS_AUTOMATION_ENABLED:
             return
+        if slot == "WELCOME":
+            from .models import TrialJourneyActivation
+            if TrialJourneyActivation.objects.filter(pk=1).exists():
+                return
         rules = _enabled_rules()
         user = with_market_access_relations(User.objects.filter(pk=user_id, is_active=True)).first()
         if not user or not _phone(user):
@@ -110,6 +114,9 @@ def queue_event(user_id, slot, event_key):
 def queue_due_trial_messages(*, now=None):
     """Materialize only today's still-eligible trial slot; never backfill old days."""
     if not settings.SMS_AUTOMATION_ENABLED or not market_access_v2_enabled():
+        return 0
+    from .models import TrialJourneyActivation
+    if TrialJourneyActivation.objects.filter(pk=1).exists():
         return 0
     now = now or timezone.now()
     rules = _enabled_rules()
@@ -169,7 +176,13 @@ def _still_eligible(delivery, *, now):
         return False
     if delivery.rule_id and not delivery.rule.enabled:
         return False
+    if delivery.event == "JOURNEY":
+        from .trial_journey import journey_sms_eligible
+        return journey_sms_eligible(delivery, now=now)
     if delivery.event == SMSAutomationRule.Event.TRIAL:
+        from .models import TrialJourneyActivation
+        if TrialJourneyActivation.objects.filter(pk=1).exists():
+            return False
         if not market_access_v2_enabled():
             return False
         from apps.accounts.market_access import current_trial_grant

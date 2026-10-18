@@ -3,6 +3,7 @@
 import uuid
 import hashlib
 from datetime import datetime, time, timedelta
+from zoneinfo import ZoneInfo
 
 from django.db import transaction
 from django.db.models import Exists, OuterRef
@@ -10,7 +11,10 @@ from django.utils import timezone
 from rest_framework.exceptions import APIException, PermissionDenied
 
 from .market_access import market_access_v2_enabled
-from .models import TrialCampaign, TrialGrant, User, UserAccessAudit, UserMarketGrant
+from .models import (
+    TrialAutoStartSettings, TrialAutoStartSettingsAudit, TrialCampaign,
+    TrialGrant, User, UserAccessAudit, UserMarketGrant,
+)
 
 
 class TrialCampaignConflict(APIException):
@@ -31,7 +35,7 @@ def _registration_cutoff(registered_from):
     if registered_from is None:
         return None
     return timezone.make_aware(
-        datetime.combine(registered_from, time.min), timezone.get_current_timezone()
+        datetime.combine(registered_from, time.min), ZoneInfo("Asia/Tehran")
     )
 
 
@@ -59,6 +63,84 @@ def trial_candidate_digest(user_ids):
     """Opaque fingerprint of the exact, sorted preview cohort (no user PII)."""
     encoded = ",".join(str(user_id) for user_id in sorted(user_ids)).encode("ascii")
     return hashlib.sha256(encoded).hexdigest()
+
+
+def auto_start_settings_payload():
+    setting = TrialAutoStartSettings.objects.filter(pk=1).first()
+    return {"auto_start_new_users": bool(setting and setting.auto_start_new_users)}
+
+
+@transaction.atomic
+def update_auto_start_settings(*, actor, auto_start_new_users):
+    _require_superadmin(actor)
+    setting, _ = TrialAutoStartSettings.objects.select_for_update().get_or_create(pk=1)
+    previous = setting.auto_start_new_users
+    if previous != auto_start_new_users:
+        if auto_start_new_users and setting.campaign_id is None:
+            now = timezone.now()
+            setting.campaign = TrialCampaign.objects.create(
+                created_by=actor, duration_days=7,
+                status=TrialCampaign.Status.APPLIED, applied_at=now,
+            )
+        setting.auto_start_new_users = auto_start_new_users
+        setting.updated_by = actor
+        setting.save(update_fields=("auto_start_new_users", "campaign", "updated_by", "updated_at"))
+        TrialAutoStartSettingsAudit.objects.create(
+            actor=actor, before=previous, after=auto_start_new_users,
+        )
+    return {"auto_start_new_users": setting.auto_start_new_users}
+
+
+def _create_trial_grants(*, user_ids, campaign, started_at, actor, source):
+    """One grant/audit writer shared by campaign and registration paths.
+
+    The caller owns an atomic transaction and has locked the relevant users.
+    """
+    ends_at = started_at + timedelta(days=7)
+    TrialGrant.objects.bulk_create(
+        (TrialGrant(user_id=user_id, campaign=campaign, started_at=started_at, ends_at=ends_at)
+         for user_id in user_ids),
+        batch_size=500,
+    )
+    from apps.notifications.trial_journey import enroll_new_grants
+    enroll_new_grants(
+        user_ids=user_ids, campaign=campaign, started_at=started_at,
+    )
+    operation_id = uuid.uuid4()
+    UserAccessAudit.objects.bulk_create(
+        (UserAccessAudit(
+            user_id=user_id, subject_user_id=user_id, actor=actor,
+            action=UserAccessAudit.Action.TRIAL_STARTED,
+            before={"trial_active": False, "trial_used": False},
+            after={"trial_active": True, "trial_used": True,
+                   "campaign_id": campaign.pk, "source": source},
+            operation_id=operation_id,
+        ) for user_id in user_ids),
+        batch_size=500,
+    )
+    return ends_at
+
+
+@transaction.atomic
+def start_new_user_trial(user):
+    """Best called inside registration's transaction; never from repeat login."""
+    if not market_access_v2_enabled():
+        return None
+    setting = TrialAutoStartSettings.objects.select_for_update().filter(pk=1).first()
+    if not setting or not setting.auto_start_new_users or not setting.campaign_id:
+        return None
+    target = User.objects.select_for_update().get(pk=user.pk)
+    if (not target.is_active or target.is_superuser
+            or target.role in (User.Role.SUPER_ADMIN, User.Role.SUPPORT)
+            or TrialGrant.objects.filter(user=target, invalidated_at__isnull=True).exists()
+            or UserMarketGrant.objects.filter(user=target, revoked_at__isnull=True).exists()):
+        return None
+    started_at = timezone.now()
+    _create_trial_grants(
+        user_ids=(target.pk,), campaign=setting.campaign,
+        started_at=started_at, actor=None, source="AUTO_SIGNUP",
+    )
+    return TrialGrant.objects.get(user=target, invalidated_at__isnull=True)
 
 
 def preview_trial_campaign(*, actor, registered_from=None):
@@ -114,35 +196,15 @@ def start_trial_campaign(*, actor, registered_from=None, expected_eligible_count
 
     now = timezone.now()
     duration_days = 7
-    ends_at = now + timedelta(days=duration_days)
     campaign = TrialCampaign.objects.create(
         created_by=actor,
         created_from=_registration_cutoff(registered_from),
         duration_days=duration_days,
         status=TrialCampaign.Status.PENDING,
     )
-    TrialGrant.objects.bulk_create(
-        (
-            TrialGrant(user_id=user_id, campaign=campaign, started_at=now, ends_at=ends_at)
-            for user_id in user_ids
-        ),
-        batch_size=500,
-    )
-    operation_id = uuid.uuid4()
-    UserAccessAudit.objects.bulk_create(
-        (
-            UserAccessAudit(
-                user_id=user_id,
-                subject_user_id=user_id,
-                actor=actor,
-                action=UserAccessAudit.Action.TRIAL_STARTED,
-                before={"trial_active": False, "trial_used": False},
-                after={"trial_active": True, "trial_used": True, "campaign_id": campaign.pk},
-                operation_id=operation_id,
-            )
-            for user_id in user_ids
-        ),
-        batch_size=500,
+    ends_at = _create_trial_grants(
+        user_ids=user_ids, campaign=campaign, started_at=now,
+        actor=actor, source="ADMIN_CAMPAIGN",
     )
     campaign.status = TrialCampaign.Status.APPLIED
     campaign.applied_at = now

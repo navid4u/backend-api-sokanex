@@ -146,7 +146,7 @@ class VIPSignalChannelView(ChannelPostListCreateView):
 
 
 @extend_schema_view(get=extend_schema(parameters=[
-    OpenApiParameter("scope", str, required=False, enum=["DOLLAR", "GOLD", "STOCK", "FOREX", "HOUSING"]),
+    OpenApiParameter("scope", str, required=False, enum=["DOLLAR", "GOLD", "STOCK", "HOUSING", "CAR", "FOREX"]),
     OpenApiParameter("source", str, required=False, enum=["LEGACY", "TELEGRAM_API"]),
     OpenApiParameter("page", int, required=False),
     OpenApiParameter("page_size", int, required=False),
@@ -167,7 +167,7 @@ class InternalAnalysisChannelView(generics.ListAPIView):
             channel__is_active=True,
             status=ChannelPost.Status.PUBLISHED,
             published_at__lte=timezone.now(),
-        ).select_related("author").order_by("-is_pinned", "-published_at", "-created_at")
+        ).select_related("author", "usage_guide_video_reference").order_by("-is_pinned", "-published_at", "-created_at")
         scope = self.request.query_params.get("scope")
         if scope:
             if (market_access_v2_enabled() and scope == ChannelPost.Scope.FOREX
@@ -184,7 +184,7 @@ class InternalAnalysisChannelView(generics.ListAPIView):
 
 
 @extend_schema_view(get=extend_schema(parameters=[
-    OpenApiParameter("scope", str, required=False, enum=["DOLLAR", "GOLD", "STOCK", "FOREX", "HOUSING"]),
+    OpenApiParameter("scope", str, required=False, enum=["DOLLAR", "GOLD", "STOCK", "HOUSING", "CAR", "FOREX"]),
     OpenApiParameter("status", str, required=False, enum=["DRAFT", "SCHEDULED", "PUBLISHED"]),
     OpenApiParameter("search", str, required=False),
     OpenApiParameter("is_pinned", bool, required=False),
@@ -201,7 +201,7 @@ class InternalAnalysisManageListCreateView(generics.ListCreateAPIView):
             return ChannelPost.objects.none()
         queryset = ChannelPost.objects.filter(
             channel__slug="internal-analysis"
-        ).select_related("author").order_by("-is_pinned", "-published_at", "-created_at")
+        ).select_related("author", "usage_guide_video_reference").order_by("-is_pinned", "-published_at", "-created_at")
         if self.request.query_params.get("scope"):
             queryset = queryset.filter(scope=self.request.query_params["scope"])
         if self.request.query_params.get("status"):
@@ -231,7 +231,7 @@ class InternalAnalysisManageDetailView(generics.RetrieveUpdateDestroyAPIView):
     parser_classes = [JSONParser, MultiPartParser, FormParser]
 
     def get_queryset(self):
-        return ChannelPost.objects.filter(channel__slug="internal-analysis").select_related("author")
+        return ChannelPost.objects.filter(channel__slug="internal-analysis").select_related("author", "usage_guide_video_reference")
 
     def perform_update(self, serializer):
         with transaction.atomic():

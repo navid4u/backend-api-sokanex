@@ -69,6 +69,7 @@ class Notification(LevelRestrictedContent, models.Model):
     is_active = models.BooleanField(
         default=True,
     )
+    show_in_app = models.BooleanField(default=True)
 
     created_at = models.DateTimeField(
         auto_now_add=True,
@@ -320,3 +321,68 @@ class SMSAutomationDelivery(models.Model):
             models.Index(fields=("status", "scheduled_at"), name="sms_auto_status_due_idx"),
             models.Index(fields=("user", "-created_at"), name="sms_auto_user_time_idx"),
         ]
+
+
+class TrialJourneyDay(models.Model):
+    day = models.PositiveSmallIntegerField(unique=True)
+    text = models.CharField(max_length=500, blank=True)
+    is_active = models.BooleanField(default=False)
+    send_time_utc = models.TimeField(default=time(9, 0))
+    market = models.CharField(max_length=12, choices=SMSAutomationRule.Market.choices, default="ALL")
+    in_app_enabled = models.BooleanField(default=True)
+    push_enabled = models.BooleanField(default=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("day",)
+        constraints = [models.CheckConstraint(condition=models.Q(day__gte=1, day__lte=7), name="trial_journey_day_1_7")]
+
+
+class TrialJourneyActivation(models.Model):
+    id = models.PositiveSmallIntegerField(primary_key=True, default=1)
+    activated_at = models.DateTimeField()
+
+
+class TrialJourneyEnrollment(models.Model):
+    grant = models.OneToOneField(
+        "accounts.TrialGrant", on_delete=models.CASCADE, related_name="journey_enrollment",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+
+class TrialJourneyDispatch(models.Model):
+    class Channel(models.TextChoices):
+        SMS = "SMS", "SMS"
+        IN_APP = "IN_APP", "In-app"
+        PUSH = "PUSH", "Push"
+
+    enrollment = models.ForeignKey(
+        TrialJourneyEnrollment, on_delete=models.CASCADE, related_name="dispatches",
+    )
+    day = models.PositiveSmallIntegerField()
+    channel = models.CharField(max_length=8, choices=Channel.choices)
+    status = models.CharField(max_length=12, default="DISPATCHED")
+    notification = models.ForeignKey(
+        Notification, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="trial_journey_dispatches",
+    )
+    sms_delivery = models.ForeignKey(
+        SMSAutomationDelivery, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="trial_journey_dispatches",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(
+            fields=("enrollment", "day", "channel"), name="unique_trial_journey_channel_day",
+        )]
+
+
+class TrialJourneyConfigAudit(models.Model):
+    actor = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True,
+        related_name="trial_journey_config_audits",
+    )
+    before = models.JSONField(default=list)
+    after = models.JSONField(default=list)
+    created_at = models.DateTimeField(auto_now_add=True)

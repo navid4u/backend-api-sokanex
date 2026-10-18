@@ -15,6 +15,11 @@ class Course(LevelRestrictedContent):
         PUBLISHED = "PUBLISHED", "Published"
 
     title = models.CharField(max_length=250)
+    market = models.CharField(
+        max_length=12,
+        choices=(("internal", "Internal"), ("forex", "Forex"), ("crypto", "Crypto")),
+        blank=True, default="", db_index=True,
+    )
     slug = models.SlugField(
         max_length=280,
         unique=True,

@@ -119,6 +119,16 @@ class TrialCampaignPreviewInputSerializer(serializers.Serializer):
         return attrs
 
 
+class TrialAutoStartSettingsSerializer(serializers.Serializer):
+    auto_start_new_users = serializers.BooleanField()
+
+    def validate(self, attrs):
+        unexpected = set(self.initial_data) - {"auto_start_new_users"}
+        if unexpected:
+            raise serializers.ValidationError({key: "This field is not accepted." for key in sorted(unexpected)})
+        return attrs
+
+
 class TrialCampaignStartInputSerializer(TrialCampaignPreviewInputSerializer):
     expected_eligible_count = serializers.IntegerField(min_value=1)
     expected_candidate_digest = serializers.RegexField(r"^[a-f0-9]{64}$")

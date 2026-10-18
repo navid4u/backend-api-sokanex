@@ -263,6 +263,9 @@ class UserSerializer(serializers.ModelSerializer):
             and obj.has_platform_permission(User.Permission.CONTENT_MANAGE)
         )
         return {
+            "can_manage_sms_automation": bool(
+                obj.is_superuser or obj.role == User.Role.SUPER_ADMIN
+            ),
             "can_manage_market_access": (
                 market_access_v2_enabled() and user_can_manage_market_access(obj)
             ),
@@ -359,6 +362,7 @@ class CustomTokenObtainPairSerializer(
 
 
 class RegisterSerializer(serializers.ModelSerializer):
+    invite_token = serializers.CharField(required=False, allow_blank=True, write_only=True)
     username = serializers.CharField(required=False, allow_blank=True, max_length=30)
     email = serializers.EmailField(required=False, allow_blank=True)
     phone = serializers.CharField(required=False, allow_blank=True)
@@ -384,6 +388,7 @@ class RegisterSerializer(serializers.ModelSerializer):
             "password_confirm",
             "first_name",
             "last_name",
+            "invite_token",
             "role",
             "access_level",
         )
@@ -394,6 +399,7 @@ class RegisterSerializer(serializers.ModelSerializer):
         )
 
     def create(self, validated_data):
+        invite_token = validated_data.pop("invite_token", "")
         validated_data.pop("password_confirm", None)
         phone = validated_data.get("phone") or None
         username = validated_data.get("username") or phone
@@ -410,6 +416,10 @@ class RegisterSerializer(serializers.ModelSerializer):
                     access_level=User.AccessLevel.LEVEL_1,
                 )
                 UserProfile.objects.create(user=user)
+                from .invitations import attribute_new_user
+                attribute_new_user(user=user, token=invite_token)
+                from .market_trial import start_new_user_trial
+                start_new_user_trial(user)
                 ActivityService.record(
                     user,
                     UserActivity.Type.REGISTER,
@@ -1492,7 +1502,7 @@ class OTPVerifySerializer(OTPRequestSerializer):
 
 
 class RegistrationOTPRequestSerializer(OTPRequestSerializer):
-    pass
+    invite_token = serializers.CharField(required=False, allow_blank=True)
 
 
 class RegistrationOTPVerifySerializer(RegistrationOTPRequestSerializer):

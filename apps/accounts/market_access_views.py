@@ -28,8 +28,12 @@ from .market_access_serializers import (
     TrialCampaignPreviewResponseSerializer,
     TrialCampaignStartInputSerializer,
     TrialCampaignStartResponseSerializer,
+    TrialAutoStartSettingsSerializer,
 )
-from .market_trial import preview_trial_campaign, start_trial_campaign
+from .market_trial import (
+    auto_start_settings_payload, preview_trial_campaign, start_trial_campaign,
+    update_auto_start_settings,
+)
 from .market_access_requests import submit_market_access_request, review_market_access_request
 from .models import MarketAccessRequest, User
 from .market_access_serializers import (
@@ -195,6 +199,24 @@ class MarketTrialCampaignStartView(APIView):
             TrialCampaignStartResponseSerializer(result).data,
             status=status.HTTP_201_CREATED,
         )
+
+
+@method_decorator(never_cache, name="dispatch")
+class TrialAutoStartSettingsView(APIView):
+    permission_classes = [IsAuthenticated, CanStartMarketTrialCampaign, MarketAccessV2Enabled]
+
+    @extend_schema(responses={200: TrialAutoStartSettingsSerializer})
+    def get(self, request):
+        return Response(auto_start_settings_payload())
+
+    @extend_schema(request=TrialAutoStartSettingsSerializer, responses={200: TrialAutoStartSettingsSerializer})
+    def patch(self, request):
+        incoming = TrialAutoStartSettingsSerializer(data=request.data)
+        incoming.is_valid(raise_exception=True)
+        return Response(update_auto_start_settings(
+            actor=request.user,
+            auto_start_new_users=incoming.validated_data["auto_start_new_users"],
+        ))
 
 
 @method_decorator(never_cache, name="dispatch")

@@ -68,7 +68,7 @@ class VIPSignalPostSerializer(serializers.ModelSerializer):
         else:
             snapshot = obj.reply_snapshot or {}
             text = snapshot.get("text") or None
-            media_type = None
+            media_type = snapshot.get("media_type") if snapshot.get("media_type") in ("image", "video", "audio") else None
         return {
             "id": parent.pk if visible else None,
             "text": text,

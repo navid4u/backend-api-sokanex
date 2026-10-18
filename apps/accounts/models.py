@@ -621,6 +621,10 @@ class OTPChallenge(models.Model):
     consumed_at = models.DateTimeField(null=True, blank=True)
     locked_at = models.DateTimeField(null=True, blank=True)
     sent_at = models.DateTimeField(null=True, blank=True, db_index=True)
+    invitation_link = models.ForeignKey(
+        "InvitationLink", on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="otp_challenges",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -977,6 +981,61 @@ class MarketAccessBaselineReset(models.Model):
     applied_at = models.DateTimeField(auto_now_add=True)
     normal_users = models.PositiveIntegerField()
     invalidated_trials = models.PositiveIntegerField()
+
+
+class InvitationLink(models.Model):
+    name = models.CharField(max_length=150)
+    token = models.CharField(max_length=64, unique=True, db_index=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True,
+        related_name="invitation_links_created",
+    )
+    is_active = models.BooleanField(default=True)
+    expires_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("-created_at", "-id")
+
+
+class InvitationRegistration(models.Model):
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
+        related_name="invitation_registration",
+    )
+    link = models.ForeignKey(
+        InvitationLink, on_delete=models.PROTECT, related_name="registrations",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        indexes = [models.Index(fields=("link", "created_at"), name="invite_reg_link_time_idx")]
+
+
+class TrialAutoStartSettings(models.Model):
+    """Singleton switch; changing it never backfills existing accounts."""
+
+    id = models.PositiveSmallIntegerField(primary_key=True, default=1)
+    auto_start_new_users = models.BooleanField(default=False)
+    campaign = models.ForeignKey(
+        TrialCampaign, on_delete=models.PROTECT, null=True, blank=True,
+        related_name="auto_start_settings",
+    )
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="trial_auto_start_settings_updates",
+    )
+    updated_at = models.DateTimeField(auto_now=True)
+
+
+class TrialAutoStartSettingsAudit(models.Model):
+    actor = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True,
+        related_name="trial_auto_start_settings_audits",
+    )
+    before = models.BooleanField()
+    after = models.BooleanField()
+    created_at = models.DateTimeField(auto_now_add=True)
 
 
 class UserAccessAudit(models.Model):

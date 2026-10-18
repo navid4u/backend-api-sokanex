@@ -10,12 +10,13 @@ from rest_framework.filters import (
 from rest_framework.permissions import (
     IsAuthenticated,
 )
+from django.utils import timezone
 
 from apps.accounts.models import User
-from common.permissions import IsEmployee
+from common.permissions import CanManageInternalAnalysis, IsEmployee
 
 from .filters import VideoFilter
-from .models import VideoCategory
+from .models import Video, VideoCategory
 from .serializers import (
     VideoCategorySerializer,
     VideoDetailSerializer,
@@ -133,7 +134,7 @@ class VideoManagementListView(
 
     permission_classes = [
         IsAuthenticated,
-        IsEmployee,
+        IsEmployee | CanManageInternalAnalysis,
     ]
 
     serializer_class = VideoListSerializer
@@ -159,7 +160,14 @@ class VideoManagementListView(
     ]
 
     def get_queryset(self):
-        return VideoService.all_videos()
+        queryset = VideoService.all_videos()
+        if not self.request.user.has_platform_permission(User.Permission.CONTENT_MANAGE):
+            # Analysis managers may choose published library media but cannot
+            # inspect private drafts belonging to the video team.
+            queryset = queryset.filter(
+                status=Video.Status.PUBLISHED, published_at__lte=timezone.now(),
+            )
+        return queryset
 
 
 class VideoDetailView(

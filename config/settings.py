@@ -373,6 +373,7 @@ REST_FRAMEWORK = {
         "frontend_logs": config("FRONTEND_LOG_THROTTLE_RATE", default="30/minute"),
         "content_ingestion": config("CONTENT_INGESTION_THROTTLE_RATE", default="60/minute"),
         "personality_submit": config("PERSONALITY_SUBMIT_THROTTLE_RATE", default="10/hour"),
+        "invitation_manage": config("INVITATION_MANAGE_THROTTLE_RATE", default="30/hour"),
     },
 }
 
@@ -483,6 +484,8 @@ SMS_AUTOMATION_SUPPORT_LINK = config(
     "SMS_AUTOMATION_SUPPORT_LINK", default="https://app.sokanex.com/support"
 )
 SMS_AUTOMATION_ENABLED = config("SMS_AUTOMATION_ENABLED", default=False, cast=bool)
+TRIAL_JOURNEY_ENABLED = config("TRIAL_JOURNEY_ENABLED", default=False, cast=bool)
+VIP_SIGNAL_RETENTION_ENABLED = config("VIP_SIGNAL_RETENTION_ENABLED", default=False, cast=bool)
 PAYMENT_PROVIDER_TIMEOUT_SECONDS = config("PAYMENT_PROVIDER_TIMEOUT_SECONDS", default=15, cast=int)
 PAYMENT_PROVIDER_RETRY_LIMIT = config("PAYMENT_PROVIDER_RETRY_LIMIT", default=1, cast=int)
 PAYMENT_CALLBACK_BASE_URL = config("PAYMENT_CALLBACK_BASE_URL", default="https://api.sokanex.com")

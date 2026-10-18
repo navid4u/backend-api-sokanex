@@ -6,6 +6,7 @@ from .market_access_views import (
     MarketAccessUserListView,
     MarketTrialCampaignPreviewView,
     MarketTrialCampaignStartView,
+    TrialAutoStartSettingsView,
     MyMarketPreferencesView,
     MyMarketAccessRequestView,
     MarketAccessRequestManagementView,
@@ -55,15 +56,21 @@ from .views import (
     PremiumTrialActivationView,
     GoldRenewalRequestView,
 )
+from .admin_extensions import AdminUserAssetHoldingsView
+from .invitation_views import InvitationLinkListCreateView, InvitationRegistrationListView
 
 
 urlpatterns = [
+    path("admin/invitation-links/", InvitationLinkListCreateView.as_view(), name="invitation-links"),
+    path("admin/invitation-links/<int:pk>/registrations/", InvitationRegistrationListView.as_view(), name="invitation-link-registrations"),
+    path("admin/users/<int:user_id>/asset-holdings/", AdminUserAssetHoldingsView.as_view(), name="admin-user-asset-holdings"),
     path("market-access/requests/", MyMarketAccessRequestView.as_view(), name="my-market-access-requests-v2"),
     path("admin/market-access/requests/", MarketAccessRequestManagementView.as_view(), name="market-access-requests-v2"),
     path("admin/market-access/requests/<int:pk>/review/", MarketAccessRequestReviewView.as_view(), name="market-access-request-review-v2"),
     path("admin/market-access/content-policy/", ContentSectionPolicyView.as_view(), name="market-access-content-policy"),
     path("admin/market-access/trial-campaigns/preview/", MarketTrialCampaignPreviewView.as_view(), name="market-trial-campaign-preview"),
     path("admin/market-access/trial-campaigns/", MarketTrialCampaignStartView.as_view(), name="market-trial-campaign-start"),
+    path("admin/market-access/trial-settings/", TrialAutoStartSettingsView.as_view(), name="market-trial-auto-settings"),
     path("admin/market-access/users/", MarketAccessUserListView.as_view(), name="market-access-user-list"),
     path("admin/market-access/users/<int:pk>/", MarketAccessUserDetailView.as_view(), name="market-access-user-detail"),
     path("admin/crm-syncs/", CrmContactSyncListView.as_view(), name="crm-sync-list"),

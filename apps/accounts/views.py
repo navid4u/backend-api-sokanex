@@ -469,12 +469,17 @@ class RegistrationOTPRequestView(generics.GenericAPIView):
     def post(self, request):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        OTPService.request_code(
+        challenge = OTPService.request_code(
             serializer.validated_data["phone"],
             request,
             purpose=OTPChallenge.Purpose.REGISTRATION_LOGIN,
             cooldown_seconds=60,
         )
+        from .invitations import active_invitation
+        invitation = active_invitation(serializer.validated_data.get("invite_token"))
+        if invitation is not None:
+            challenge.invitation_link = invitation
+            challenge.save(update_fields=("invitation_link",))
         return Response({
             "success": True,
             "message": "کد تأیید ارسال شد.",
@@ -532,7 +537,8 @@ class RegistrationOTPVerifyView(generics.GenericAPIView):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         user, created = OTPService.verify_registration_login(
-            serializer.validated_data["phone"], serializer.validated_data["code"]
+            serializer.validated_data["phone"], serializer.validated_data["code"],
+            invite_token=serializer.validated_data.get("invite_token"),
         )
         session = issue_login_tokens(user, request, record_login=not created)
         if created:

@@ -47,8 +47,9 @@ class ChannelPost(models.Model):
         DOLLAR = "DOLLAR", "دلار"
         GOLD = "GOLD", "طلا"
         STOCK = "STOCK", "بورس ایران"
-        FOREX = "FOREX", "فارکس"
         HOUSING = "HOUSING", "مسکن"
+        CAR = "CAR", "خودرو"
+        FOREX = "FOREX", "فارکس"  # Historical data stays readable; hidden from new UI.
 
     class Source(models.TextChoices):
         LEGACY = "LEGACY", "سامانه داخلی"
@@ -87,6 +88,10 @@ class ChannelPost(models.Model):
         upload_to=secure_usage_guide_video_upload,
         blank=True,
         null=True,
+    )
+    usage_guide_video_reference = models.ForeignKey(
+        "videos.Video", on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="internal_analysis_usage_guides",
     )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

@@ -12,6 +12,7 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from apps.accounts.models import PlatformRole, User
+from apps.videos.models import Video
 from .models import Channel, ChannelPost
 
 
@@ -125,6 +126,47 @@ class InternalAnalysisAPITests(APITestCase):
         self.assertEqual(put.status_code, status.HTTP_200_OK)
         self.assertEqual(self.client.delete(detail_url).status_code, status.HTTP_204_NO_CONTENT)
         self.assertFalse(ChannelPost.objects.filter(pk=post_id).exists())
+
+    def test_car_scope_and_library_usage_video_reference(self):
+        video = Video.objects.create(
+            title="How to use", external_url="https://example.org/how-to-use.mp4",
+            status=Video.Status.PUBLISHED, published_at=timezone.now(), author=self.admin,
+        )
+        self.authenticate(self.admin)
+        created = self.client.post(self.manage_url, {
+            "title": "Car market", "body": "Analysis", "scope": "CAR",
+            "status": "PUBLISHED", "usage_guide_video_id": video.pk,
+        }, format="json")
+        self.assertEqual(created.status_code, 201)
+        self.assertEqual(created.data["usage_guide_video_id"], video.pk)
+        self.assertEqual(created.data["usage_guide_video"], video.external_url)
+        detail_url = reverse("internal-analysis-manage-detail", args=[created.data["id"]])
+        self.assertEqual(self.client.get(detail_url).data["usage_guide_video_id"], video.pk)
+        updated = self.client.patch(detail_url, {"title": "Car updated"}, format="json")
+        self.assertEqual(updated.data["usage_guide_video_id"], video.pk)
+        self.assertTrue(Video.objects.filter(pk=video.pk).exists())
+
+    def test_analysis_manager_can_select_published_video_without_seeing_drafts(self):
+        published = Video.objects.create(
+            title="Public guide", external_url="https://example.org/guide.mp4",
+            status=Video.Status.PUBLISHED, published_at=timezone.now(), author=self.admin,
+        )
+        draft = Video.objects.create(
+            title="Private draft", external_url="https://example.org/private.mp4",
+            status=Video.Status.DRAFT, author=self.admin,
+        )
+        self.authenticate(self.manager)
+        listing = self.client.get(reverse("video-management-list"))
+        self.assertEqual(listing.status_code, 200)
+        ids = [item["id"] for item in listing.data["results"]]
+        self.assertIn(published.pk, ids)
+        self.assertNotIn(draft.pk, ids)
+        created = self.client.post(self.manage_url, {
+            "title": "Manager guide", "body": "Body", "scope": "CAR",
+            "usage_guide_video_id": published.pk,
+        }, format="json")
+        self.assertEqual(created.status_code, 201)
+        self.assertEqual(created.data["usage_guide_video"], published.external_url)
 
     def test_legacy_create_and_public_response_have_empty_opportunity_details(self):
         self.authenticate(self.manager)

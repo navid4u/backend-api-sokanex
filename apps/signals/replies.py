@@ -1,8 +1,10 @@
+from django.conf import settings
 from django.db import transaction
 from django.utils.html import strip_tags
 from rest_framework.exceptions import APIException, ValidationError
 
-from .models import VIPSignalPost
+from .models import VIPChannelRetention, VIPSignalPost
+from .retention import prune_vip_channel
 
 
 class VIPReplyConflict(APIException):
@@ -63,6 +65,9 @@ def _connect_waiting_replies(parent):
 
 @transaction.atomic
 def ingest_vip_post(channel, values):
+    # Serialize every ingest in a channel, including posts without external_id.
+    # The lock rows are created by migration 0009 before retention is enabled.
+    retention = VIPChannelRetention.objects.select_for_update().get(channel=channel)
     values = dict(values)
     external_id = values.pop("external_id", None)
     incoming_reply_id = values.pop("reply_to_external_id", None)
@@ -121,4 +126,6 @@ def ingest_vip_post(channel, values):
     else:
         post, created = VIPSignalPost.objects.create(**defaults), True
     _connect_waiting_replies(post)
+    if created and retention.activated_at and settings.VIP_SIGNAL_RETENTION_ENABLED:
+        prune_vip_channel(channel)
     return post, created

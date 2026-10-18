@@ -48,6 +48,10 @@ class SMSRuleSerializer(serializers.ModelSerializer):
         return value
 
     def validate(self, attrs):
+        from .models import TrialJourneyActivation
+        if (self.instance and self.instance.event in (SMSAutomationRule.Event.TRIAL, SMSAutomationRule.Event.WELCOME)
+                and attrs.get("enabled") is True and TrialJourneyActivation.objects.filter(pk=1).exists()):
+            raise serializers.ValidationError({"enabled": "The canonical trial journey owns this event."})
         if self.instance and self.instance.event == SMSAutomationRule.Event.TRIAL:
             if attrs.get("trial_day", self.instance.trial_day) is None:
                 raise serializers.ValidationError({"trial_day": "روز آزمایشی الزامی است."})

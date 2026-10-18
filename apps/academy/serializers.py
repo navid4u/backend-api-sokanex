@@ -4,6 +4,7 @@ from pathlib import Path
 
 from common.content_access import AllowedLevelsSerializerMixin
 from common.validators import validate_image_upload, validate_video_upload
+from apps.accounts.market_access import market_access_v2_enabled, resolve_market_access
 
 from .models import (
     Course, CourseEnrollment, CourseSession, SessionProgress,
@@ -60,6 +61,7 @@ class CourseListSerializer(
         fields = (
             "id",
             "title",
+            "market",
             "slug",
             "description",
             "short_description",
@@ -108,6 +110,8 @@ class CourseListSerializer(
         enrolled = obj.enrollments.filter(user=user).exists()
         purchased = obj.purchases.filter(user=user).exists()
         can_access = manages or (enrolled and (obj.is_free or purchased))
+        if market_access_v2_enabled() and not manages:
+            can_access = can_access and obj.market in resolve_market_access(user).effective_markets
         return enrolled, purchased, can_access
 
     def get_is_enrolled(self, obj) -> bool:
@@ -140,6 +144,7 @@ class CourseWriteSerializer(
         fields = (
             "id",
             "title",
+            "market",
             "slug",
             "description",
             "short_description",
@@ -189,6 +194,8 @@ class CourseWriteSerializer(
 
     def validate(self, attrs):
         attrs = super().validate(attrs)
+        if market_access_v2_enabled() and not attrs.get("market", getattr(self.instance, "market", "")):
+            raise serializers.ValidationError({"market": "Select the course market before publishing in V2."})
         is_free = attrs.get("is_free", getattr(self.instance, "is_free", True))
         price = attrs.get("price", getattr(self.instance, "price", 0))
         if is_free and price:

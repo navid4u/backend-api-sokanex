@@ -389,7 +389,7 @@ class VIPSignalChannelTests(APITestCase):
         self.assertEqual(reply.status_code, 201, reply.data)
         self.assertIsNone(reply.data["reply_preview"]["id"])
         self.assertEqual(reply.data["reply_preview"]["text"], "نقل قول")
-        self.assertIsNone(reply.data["reply_preview"]["media_type"])
+        self.assertEqual(reply.data["reply_preview"]["media_type"], "image")
         self.assertFalse(reply.data["reply_preview"]["available"])
         self.assertNotIn("WAITING_REPLY_CONTRACT", str(reply.data))
         self.assertTrue(VIPSignalPost.objects.get(pk=reply.data["id"]).is_active)

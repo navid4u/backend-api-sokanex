@@ -463,6 +463,15 @@ class DashboardAPITests(APITestCase):
         self.assertEqual(len(data["recent_internal_analysis"]), 3)
         self.assertEqual([p["id"] for p in data["vip_signal_previews"]], sorted([p["id"] for p in data["vip_signal_previews"]], reverse=True))
 
+    @override_settings(MARKET_ACCESS_V2_ENABLED=True)
+    def test_busy_crypto_channel_does_not_hide_forex_preview(self):
+        for index in range(8):
+            VIPSignalPost.objects.create(channel="CRYPTO", text=f"Crypto {index}")
+        VIPSignalPost.objects.create(channel="FOREX", text="Forex post")
+        self.authenticate(self.customer)
+        data = self.client.get(self.dashboard_url).data["data"]
+        self.assertEqual({item["channel"] for item in data["vip_signal_previews"]}, {"CRYPTO", "FOREX"})
+
     def test_inactive_internal_channel_is_not_previewed(self):
         self._make_internal_post("GOLD", "Hidden", "Private")
         Channel.objects.filter(slug="internal-analysis").update(is_active=False)

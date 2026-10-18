@@ -20,7 +20,18 @@ def _public_excerpt(value):
 
 
 def _vip_previews(user):
-    posts = VIPSignalPost.objects.filter(is_active=True).order_by("-published_at", "-id")[:4]
+    # Reserve room for each channel so a busy CRYPTO feed cannot hide FOREX.
+    posts = []
+    for channel in (VIPSignalPost.Channel.CRYPTO, VIPSignalPost.Channel.FOREX):
+        posts.extend(VIPSignalPost.objects.filter(
+            channel=channel, is_active=True,
+        ).order_by("-published_at", "-created_at", "-id")[:2])
+    if len(posts) < 4:
+        selected_ids = {post.pk for post in posts}
+        posts.extend(VIPSignalPost.objects.filter(is_active=True).exclude(
+            pk__in=selected_ids,
+        ).order_by("-published_at", "-created_at", "-id")[:4 - len(posts)])
+    posts.sort(key=lambda post: (post.published_at, post.created_at, post.pk), reverse=True)
     result = []
     for post in posts:
         can_view = can_view_vip_market(user, post.channel.lower())
@@ -43,7 +54,8 @@ def _internal_previews(user):
         channel__slug="internal-analysis", channel__is_active=True,
         status=ChannelPost.Status.PUBLISHED,
         scope__in=(ChannelPost.Scope.DOLLAR, ChannelPost.Scope.GOLD,
-                   ChannelPost.Scope.STOCK, ChannelPost.Scope.HOUSING),
+                   ChannelPost.Scope.STOCK, ChannelPost.Scope.HOUSING,
+                   ChannelPost.Scope.CAR),
         published_at__lte=timezone.now(),
     ).order_by("-published_at", "-id")[:3]
     return [{
@@ -80,7 +92,12 @@ class DashboardService:
         visible_signals = VIPSignalPost.objects.filter(is_active=True)
         allowed_channels = [market.upper() for market in ("crypto", "forex") if can_view_vip_market(user, market)]
         visible_signals = visible_signals.filter(channel__in=allowed_channels)
-        recent_signals = visible_signals[:5]
+        recent_signals = []
+        for channel in allowed_channels:
+            recent_signals.extend(visible_signals.filter(channel=channel).order_by(
+                "-published_at", "-created_at", "-id",
+            )[:3])
+        recent_signals.sort(key=lambda post: (post.published_at, post.created_at, post.pk), reverse=True)
 
         wallet = WalletService.get_wallet(user)
         broker = BrokerConnection.objects.filter(user=user).first()
