@@ -90,6 +90,7 @@ class MyMarketPreferencesView(APIView):
 @extend_schema_view(get=extend_schema(parameters=[
     OpenApiParameter("membership_tier", str, required=False, enum=["LEVEL_1", "BASIC", "PRO", "GOLD"]),
     OpenApiParameter("is_elite", bool, required=False),
+    OpenApiParameter("ordering", str, required=False, enum=["created_at", "-created_at", "date_joined", "-date_joined"]),
 ]))
 @method_decorator(never_cache, name="dispatch")
 class MarketAccessUserListView(generics.ListAPIView):
@@ -102,9 +103,18 @@ class MarketAccessUserListView(generics.ListAPIView):
 
     def get_queryset(self):
         params = self.request.query_params
-        unexpected = set(params) - {"page", "page_size", "search", "membership_tier", "is_elite"}
+        unexpected = set(params) - {"page", "page_size", "search", "membership_tier", "is_elite", "ordering"}
         if unexpected:
             raise ValidationError({field: "Unknown filter." for field in sorted(unexpected)})
+        ordering = params.get("ordering") or "-created_at"
+        ordering_fields = {
+            "created_at": ("date_joined", "pk"),
+            "-created_at": ("-date_joined", "-pk"),
+            "date_joined": ("date_joined", "pk"),
+            "-date_joined": ("-date_joined", "-pk"),
+        }.get(ordering)
+        if ordering_fields is None:
+            raise ValidationError({"ordering": "Use created_at or -created_at."})
         tier = params.get("membership_tier")
         if tier is not None and tier not in ("LEVEL_1", "BASIC", "PRO", "GOLD"):
             raise ValidationError({"membership_tier": "Invalid membership tier."})
@@ -131,9 +141,7 @@ class MarketAccessUserListView(generics.ListAPIView):
                     Q(market_access_profile__is_elite=False)
                     | Q(market_access_profile__isnull=True)
                 )
-        return with_market_access_relations(
-            queryset.order_by("-date_joined", "-pk")
-        )
+        return with_market_access_relations(queryset.order_by(*ordering_fields))
 
 
 @method_decorator(never_cache, name="dispatch")

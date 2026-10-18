@@ -1,7 +1,10 @@
+from datetime import timedelta
+from unittest.mock import patch
+
 from django.test import override_settings
+from django.utils import timezone
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.test import APITestCase
-from unittest.mock import patch
 
 from .market_access_admin import update_user_market_access
 from .models import User, UserAccessAudit, UserMarketGrant, UserMarketPreference
@@ -57,6 +60,26 @@ class MarketAccessAdminAPITests(APITestCase):
         self.assertEqual(response.data["count"], 1)
         self.assertEqual(len(response.data["results"]), 1)
         self.assertEqual(response.data["results"][0]["id"], self.user.pk)
+
+    def test_admin_list_accepts_created_at_ordering_used_by_admin_panel(self):
+        older = User.objects.create_user(username="order-older")
+        newer = User.objects.create_user(username="order-newer")
+        now = timezone.now()
+        User.objects.filter(pk=older.pk).update(date_joined=now - timedelta(days=2))
+        User.objects.filter(pk=newer.pk).update(date_joined=now - timedelta(days=1))
+        self.client.force_authenticate(self.admin)
+
+        newest = self.client.get(self.list_url, {"search": "order-", "ordering": "-created_at", "page_size": 1})
+        self.assertEqual(newest.status_code, 200)
+        self.assertEqual(newest.data["count"], 2)
+        self.assertEqual(newest.data["results"][0]["id"], newer.pk)
+        oldest = self.client.get(self.list_url, {"search": "order-", "ordering": "created_at", "page_size": 1})
+        self.assertEqual(oldest.status_code, 200)
+        self.assertEqual(oldest.data["results"][0]["id"], older.pk)
+        second_page = self.client.get(self.list_url, {"search": "order-", "ordering": "-created_at", "page_size": 1, "page": 2})
+        self.assertEqual(second_page.status_code, 200)
+        self.assertEqual(second_page.data["results"][0]["id"], older.pk)
+        self.assertEqual(self.client.get(self.list_url, {"ordering": "password"}).status_code, 400)
 
     def test_tier_and_elite_filters_apply_before_pagination(self):
         second = User.objects.create_user(username="v2-second", email="second@example.com")
