@@ -8,6 +8,8 @@ from rest_framework.exceptions import APIException, PermissionDenied, Validation
 from .market_access import MARKETS, market_access_v2_enabled, resolve_market_access, user_can_manage_market_access
 from .market_access_admin import update_user_market_access
 from .models import MarketAccessRequest, User, UserAccessProfile, UserMarketGrant, UserMarketPreference
+from apps.activity.models import UserActivity
+from apps.activity.services import ActivityService
 
 
 class MarketAccessRequestConflict(APIException):
@@ -68,6 +70,7 @@ def submit_market_access_request(*, user, requested_tier, message=""):
         requested_markets=selected,
         message=message.strip(),
     )
+    ActivityService.record(target, UserActivity.Type.MARKET_ACCESS_REQUEST, "Market access requested")
     return request, True
 
 

@@ -24,7 +24,7 @@ from rest_framework import (
     serializers,
     status,
 )
-from rest_framework.filters import SearchFilter
+from rest_framework.filters import OrderingFilter, SearchFilter
 from rest_framework.parsers import (
     FormParser,
     JSONParser,
@@ -817,6 +817,7 @@ class UserListView(
     filter_backends = [
         DjangoFilterBackend,
         SearchFilter,
+        OrderingFilter,
     ]
 
     filterset_class = UserFilter
@@ -827,6 +828,9 @@ class UserListView(
         "first_name",
         "last_name",
     ]
+
+    ordering_fields = ["created_at", "date_joined"]
+    ordering = ["-created_at", "-id"]
 
     def get_serializer_class(self):
         if self.request.method == "POST":

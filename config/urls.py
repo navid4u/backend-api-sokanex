@@ -14,6 +14,7 @@ from apps.accounts.views import (
     CrmIntegrationHealthView,
 )
 from apps.accounts.jwt import DeviceAwareTokenRefreshView
+from apps.activity.views import AdminAnalyticsOverviewView
 
 from .views import (
     health_check,
@@ -81,6 +82,11 @@ urlpatterns = [
     path(
         "api/dashboard/",
         include("apps.dashboard.urls"),
+    ),
+    path(
+        "api/accounts/admin/analytics/overview/",
+        AdminAnalyticsOverviewView.as_view(),
+        name="admin-analytics-overview",
     ),
 
     path(

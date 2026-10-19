@@ -7,6 +7,7 @@ from apps.notifications.services import NotificationService
 from apps.chat.services import ChatService
 from apps.livestream.services import LiveEventService
 from apps.accounts.models import BrokerConnection
+from django.conf import settings
 from apps.accounts.market_access import can_view_vip_market, market_access_payload, market_access_v2_enabled, user_can_manage_market_access
 from apps.content_channels.models import ChannelPost
 from django.utils import timezone
@@ -174,6 +175,8 @@ class DashboardService:
             "premium_subscription": WalletService.premium_subscription(user),
 
             "market_access_v2": access_state,
+
+            "analytics_tracking": {"enabled": bool(settings.ANALYTICS_PAGE_VIEW_TRACKING_ENABLED)},
 
             "special_role": access_state.get("special_role"),
 

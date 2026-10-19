@@ -164,6 +164,8 @@ class DashboardSerializer(
 
     market_access_v2 = serializers.DictField()
 
+    analytics_tracking = serializers.DictField()
+
     special_role = serializers.CharField(allow_null=True)
 
     personality_result = FinancialPersonalityResultSerializer(allow_null=True)

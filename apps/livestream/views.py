@@ -23,6 +23,8 @@ from channels.layers import get_channel_layer
 from common.serializers import EmptySerializer
 
 from apps.accounts.models import User
+from apps.activity.models import UserActivity
+from apps.activity.services import ActivityService
 from common.permissions import IsEmployee
 
 from .filters import LiveEventFilter
@@ -286,7 +288,9 @@ class LiveJoinView(APIView):
                 {"detail": state.get_status_message(event), "join_opens_at": state.get_join_opens_at(event)},
                 status=status.HTTP_403_FORBIDDEN,
             )
-        presence, _ = LivePresence.objects.update_or_create(event=event, user=request.user, defaults={"left_at": None})
+        presence, created = LivePresence.objects.update_or_create(event=event, user=request.user, defaults={"left_at": None})
+        if created:
+            ActivityService.record(request.user, UserActivity.Type.LIVE_JOIN, "Live joined")
         return Response({
             "event": event.slug,
             "join_url": state.get_join_url(event),

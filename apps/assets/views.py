@@ -9,6 +9,8 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from common.pagination import DefaultPagination
+from apps.activity.models import UserActivity
+from apps.activity.services import ActivityService
 
 from .models import AssetCatalogItem, AssetCategory, UserAssetHolding
 from .serializers import (
@@ -93,6 +95,8 @@ class UserAssetHoldingListCreateView(generics.ListCreateAPIView):
                 asset=asset,
                 defaults=defaults,
             )
+            if created:
+                ActivityService.record(request.user, UserActivity.Type.ASSET_ADDED, "Asset holding added")
         output = self.get_serializer(holding)
         return Response(
             output.data,

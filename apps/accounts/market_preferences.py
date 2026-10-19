@@ -6,6 +6,8 @@ from rest_framework.exceptions import PermissionDenied, ValidationError
 
 from .market_access import MARKETS, market_access_v2_enabled, with_market_access_relations
 from .models import User, UserAccessAudit, UserAccessProfile, UserMarketPreference
+from apps.activity.models import UserActivity
+from apps.activity.services import ActivityService
 
 
 @transaction.atomic
@@ -47,4 +49,5 @@ def update_market_preferences(*, user, selected_markets):
         before={"selected_markets": sorted(previous), "confirmed": was_confirmed},
         after={"selected_markets": sorted(requested), "confirmed": True},
     )
+    ActivityService.record(target, UserActivity.Type.MARKET_PREFERENCES_UPDATE, "Market preferences updated")
     return with_market_access_relations(User.objects.filter(pk=target.pk)).get()

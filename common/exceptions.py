@@ -100,7 +100,13 @@ def custom_exception_handler(
 
     request = context.get("request")
     request_path = getattr(request, "path", "")
-    expected_user_input_error = request_path.startswith("/api/accounts/auth/otp/")
+    expected_user_input_error = (
+        request_path.startswith("/api/accounts/auth/otp/")
+        or (
+            request_path == "/api/activity/page-views/"
+            and response.status_code < 500
+        )
+    )
     if expected_user_input_error:
         request._observability_skip = True
         underlying_request = getattr(request, "_request", None)

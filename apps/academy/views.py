@@ -298,14 +298,8 @@ class EnrollCourseView(APIView):
         enrollment, created = CourseEnrollment.objects.get_or_create(
             user=request.user, course=course
         )
-        ActivityService.record(
-            request.user,
-            UserActivity.Type.COURSE_VIEW,
-            "Course enrollment" if created else "Course opened",
-            target_type="course",
-            target_id=course.pk,
-            target_url=f"/academy/courses/{course.slug}",
-        )
+        if created:
+            ActivityService.record(request.user, UserActivity.Type.COURSE_ENROLL, "Course enrollment")
         return Response(CourseEnrollmentSerializer(enrollment, context={"request": request}).data)
 
 

@@ -1,0 +1,11 @@
+[Unit]
+Description=Run Sokanex page-view retention daily
+
+[Timer]
+OnCalendar=daily
+Persistent=true
+RandomizedDelaySec=20m
+Unit=sokanex-page-view-retention.service
+
+[Install]
+WantedBy=timers.target
