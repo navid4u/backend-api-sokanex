@@ -30,8 +30,20 @@ class Command(BaseCommand):
             "legacy_enabled_rules": SMSAutomationRule.objects.filter(
                 event__in=("TRIAL", "WELCOME"), enabled=True,
             ).count(),
+            "trial_enabled_rules_to_disable": SMSAutomationRule.objects.filter(
+                event="TRIAL", enabled=True,
+            ).count(),
+            "welcome_enabled_rules_to_keep": SMSAutomationRule.objects.filter(
+                event="WELCOME", enabled=True,
+            ).count(),
             "legacy_pending_deliveries": SMSAutomationDelivery.objects.filter(
                 event__in=("TRIAL", "WELCOME"), status="PENDING",
+            ).count(),
+            "trial_pending_deliveries_to_skip": SMSAutomationDelivery.objects.filter(
+                event="TRIAL", status="PENDING",
+            ).count(),
+            "welcome_pending_deliveries_to_keep": SMSAutomationDelivery.objects.filter(
+                event="WELCOME", status="PENDING",
             ).count(),
             "v2_enabled": market_access_v2_enabled(),
             "journey_kill_switch_enabled": settings.TRIAL_JOURNEY_ENABLED,
@@ -42,9 +54,11 @@ class Command(BaseCommand):
             if not ready or not market_access_v2_enabled() or not settings.TRIAL_JOURNEY_ENABLED:
                 raise CommandError("Seven days, Market Access V2 and TRIAL_JOURNEY_ENABLED are required.")
             with transaction.atomic():
-                SMSAutomationRule.objects.filter(event__in=("TRIAL", "WELCOME")).update(enabled=False)
+                # Existing and future registrations without a journey enrollment
+                # still need their independent welcome message.
+                SMSAutomationRule.objects.filter(event="TRIAL").update(enabled=False)
                 SMSAutomationDelivery.objects.filter(
-                    event__in=("TRIAL", "WELCOME"), status="PENDING",
+                    event="TRIAL", status="PENDING",
                 ).update(status="SKIPPED", failure_code="REPLACED_BY_TRIAL_JOURNEY")
                 activation, _ = TrialJourneyActivation.objects.get_or_create(
                     pk=1, defaults={"activated_at": timezone.now()},

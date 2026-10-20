@@ -23,14 +23,14 @@ python manage.py shell -c "from apps.academy.models import Course; from apps.con
 
 ## فعال‌سازی جداگانهٔ مسیر هفت‌روزه
 
-`GET /api/notifications/sms-automation/journey/` باید ۷ روز seedشده نشان دهد؛ `PUT` فقط برای سوپرادمین است. روزهای ۲ و ۶ پیش‌فرض خاموش‌اند. تنظیم متن/ساعت به‌تنهایی ارسال را روشن نمی‌کند. پس از backup و بررسی قوانین و provider، سوییچ `TRIAL_JOURNEY_ENABLED=True` را فقط در worker مربوطه بگذارید و فرمان زیر را ابتدا بدون flag برای dry-run و سپس با تأیید صریح اجرا کنید:
+`GET /api/notifications/sms-automation/journey/` باید ۷ روز seedشده نشان دهد؛ `PUT` فقط برای سوپرادمین است. روزهای ۲ و ۶ پیش‌فرض خاموش‌اند. تنظیم متن/ساعت به‌تنهایی ارسال را روشن نمی‌کند. پس از backup و بررسی متن، بازار، قوانین و provider، سوییچ `TRIAL_JOURNEY_ENABLED=True` را **هم در Gunicorn و هم در worker پیامک** بگذارید و Gunicorn را پیش از فعال‌سازی دیتابیس restart کنید؛ در غیر این صورت ممکن است Gunicorn پیام `WELCOME` و worker پیام روز اول Journey را برای یک کاربر دوبار صف کند. فرمان زیر را ابتدا بدون flag برای dry-run و سپس با تأیید صریح اجرا کنید:
 
 ```text
 python manage.py activate_trial_journey
 python manage.py activate_trial_journey --apply --confirm
 ```
 
-فقط TrialGrantهای جدید پس از `activated_at` وارد صف می‌شوند؛ تاریخچهٔ قبلی blast نمی‌شود. worker فعلی `process_sms_automation` صف journey را نیز پردازش می‌کند. برای production ابتدا mock/staging و سپس یک کاربر کنترل‌شده با provider واقعی را بررسی کنید. وضعیت `PENDING/SENDING/SENT/FAILED/SKIPPED` را جداگانه ببینید؛ `SENDING` مبهم را خودکار retry نکنید. برای توقف اضطراری `TRIAL_JOURNEY_ENABLED=False` بگذارید و worker را restart کنید.
+فقط TrialGrantهای جدید پس از `activated_at` وارد صف می‌شوند؛ تاریخچهٔ قبلی blast نمی‌شود. فرمان فعال‌سازی فقط Ruleهای قدیمی `TRIAL` و pendingهای همان رویداد را خاموش/رد می‌کند؛ Rule و pending مستقل `WELCOME` برای کاربرانی که وارد Journey نمی‌شوند باقی می‌مانند. worker فعلی `process_sms_automation` صف journey را نیز پردازش می‌کند. برای production ابتدا mock/staging و سپس یک کاربر کنترل‌شده با provider واقعی را بررسی کنید. وضعیت `PENDING/SENDING/SENT/FAILED/SKIPPED` را جداگانه ببینید؛ `SENDING` مبهم را خودکار retry نکنید. برای توقف اضطراری `TRIAL_JOURNEY_ENABLED=False` را در **هر دو سرویس** بگذارید، worker timer را متوقف کنید و Gunicorn را restart کنید؛ پیش از روشن‌کردن مجدد timer صف pending را بررسی کنید.
 
 نمونهٔ تنظیم غیرمحرمانهٔ systemd برای `sokanex-sms-automation.service`، فقط پس از approval:
 

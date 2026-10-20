@@ -1,5 +1,8 @@
+import json
 from datetime import timedelta
+from io import StringIO
 
+from django.core.management import call_command
 from django.test import override_settings
 from django.utils import timezone
 from rest_framework.test import APITestCase
@@ -7,7 +10,7 @@ from rest_framework.test import APITestCase
 from apps.accounts.models import TrialCampaign, TrialGrant, User
 
 from .models import (
-    Notification, SMSAutomationDelivery, TrialJourneyActivation,
+    Notification, SMSAutomationDelivery, SMSAutomationRule, TrialJourneyActivation,
     TrialJourneyDay, TrialJourneyDispatch, TrialJourneyEnrollment,
 )
 from .trial_journey import enroll_new_grants, queue_due_trial_journey, scheduled_at
@@ -72,3 +75,38 @@ class TrialJourneyTests(APITestCase):
         )
         rule = TrialJourneyDay.objects.get(day=7)
         self.assertGreaterEqual(scheduled_at(grant, rule), grant.ends_at)
+
+    @override_settings(TRIAL_JOURNEY_ENABLED=True)
+    def test_activation_preserves_welcome_rule_and_pending_welcome(self):
+        welcome = SMSAutomationRule.objects.get(slot="WELCOME", market="ALL")
+        welcome.enabled = True
+        welcome.save(update_fields=("enabled",))
+        trial = SMSAutomationRule.objects.get(slot="TRIAL_1", market="ALL")
+        trial.enabled = True
+        trial.save(update_fields=("enabled",))
+        now = timezone.now()
+        pending_welcome = SMSAutomationDelivery.objects.create(
+            user=self.user, rule=welcome, event_key="WELCOME:REGISTRATION:1",
+            event="WELCOME", phone=self.user.phone, text="Welcome", scheduled_at=now,
+        )
+        pending_trial = SMSAutomationDelivery.objects.create(
+            user=self.user, rule=trial, event_key="TRIAL:1:TRIAL_1",
+            event="TRIAL", phone=self.user.phone, text="Trial", scheduled_at=now,
+        )
+
+        output = StringIO()
+        call_command("activate_trial_journey", "--apply", "--confirm", stdout=output)
+        summary = json.loads(output.getvalue())
+
+        welcome.refresh_from_db()
+        trial.refresh_from_db()
+        pending_welcome.refresh_from_db()
+        pending_trial.refresh_from_db()
+        self.assertTrue(welcome.enabled)
+        self.assertFalse(trial.enabled)
+        self.assertEqual(pending_welcome.status, "PENDING")
+        self.assertEqual(pending_trial.status, "SKIPPED")
+        self.assertEqual(pending_trial.failure_code, "REPLACED_BY_TRIAL_JOURNEY")
+        self.assertTrue(TrialJourneyActivation.objects.filter(pk=1).exists())
+        self.assertEqual(summary["welcome_enabled_rules_to_keep"], 1)
+        self.assertEqual(summary["welcome_pending_deliveries_to_keep"], 1)
