@@ -254,7 +254,11 @@ def market_access_payload(user, *, at=None) -> dict:
         return {"enabled": False}
     state = resolve_market_access(user, at=at)
     trial = current_trial_grant(user)
-    historical_trial = trial or TrialGrant.objects.filter(user_id=user.pk).order_by("-started_at", "-pk").first()
+    all_grants = getattr(user, "_all_trial_grants_v2", None)
+    historical_trial = trial or (
+        (all_grants[0] if all_grants else None) if all_grants is not None
+        else TrialGrant.objects.filter(user_id=user.pk).order_by("-started_at", "-pk").first()
+    )
     trial_used = historical_trial is not None or user.gold_trial_started_at is not None
     now = at or timezone.now()
     trial_status = (

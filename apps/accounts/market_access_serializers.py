@@ -54,7 +54,7 @@ class UserMarketAccessReadSerializer(serializers.ModelSerializer):
         )
         decision = getattr(obj, "trial_auto_start_decision", None)
         if latest is None:
-            trial_status = "NOT_STARTED"
+            trial_status = "PREVIOUSLY_USED" if payload.get("trial_used") else "NOT_STARTED"
         elif latest.revoked_at or latest.invalidated_at:
             trial_status = "CANCELED"
         elif payload.get("trial_active"):
@@ -63,8 +63,8 @@ class UserMarketAccessReadSerializer(serializers.ModelSerializer):
             trial_status = "EXPIRED"
         payload.update({
             "trial_status": trial_status,
-            "trial_started_at": latest.started_at if latest else None,
-            "trial_ends_at": latest.ends_at if latest else None,
+            "trial_started_at": latest.started_at if latest else payload.get("trial_started_at"),
+            "trial_ends_at": latest.ends_at if latest else payload.get("trial_ends_at"),
             "trial_source": (latest.source or None) if latest else None,
             "trial_start_blocked_reason": (
                 decision.reason if decision and decision.reason != "STARTED" else None

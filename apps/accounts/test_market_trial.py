@@ -216,6 +216,20 @@ class MarketTrialCampaignTests(APITestCase):
         self.assertTrue(response.data["access"]["trial_used"])
         self.assertEqual(TrialGrant.objects.filter(user=self.user).count(), 1)
 
+    def test_legacy_trial_history_is_not_offered_again_in_admin_or_profile(self):
+        started_at = timezone.now() - timedelta(days=30)
+        User.objects.filter(pk=self.user.pk).update(gold_trial_started_at=started_at)
+        self.user.refresh_from_db()
+        self.assertFalse(eligible_trial_users().filter(pk=self.user.pk).exists())
+        admin_response = self.client.get(
+            "/api/accounts/admin/market-access/users/", {"search": self.user.username},
+        )
+        self.assertEqual(admin_response.status_code, 200)
+        access = admin_response.data["results"][0]["access"]
+        self.assertTrue(access["trial_used"])
+        self.assertEqual(access["trial_status"], "PREVIOUSLY_USED")
+        self.assertIsNotNone(access["trial_started_at"])
+
     def test_expiry_hides_and_revokes_grants_approved_during_trial(self):
         self.assertEqual(self.start(1).status_code, 201)
         grant = TrialGrant.objects.get(user=self.user)
