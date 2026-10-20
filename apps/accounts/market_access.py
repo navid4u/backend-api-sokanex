@@ -254,11 +254,14 @@ def market_access_payload(user, *, at=None) -> dict:
         return {"enabled": False}
     state = resolve_market_access(user, at=at)
     trial = current_trial_grant(user)
+    historical_trial = trial or TrialGrant.objects.filter(user_id=user.pk).order_by("-started_at", "-pk").first()
+    trial_used = historical_trial is not None or user.gold_trial_started_at is not None
     now = at or timezone.now()
     trial_status = (
         "NOT_APPLICABLE" if state.special_role else
         "ACTIVE" if state.trial_active else
-        "EXPIRED" if trial else "NOT_STARTED"
+        "EXPIRED" if trial else
+        "PREVIOUSLY_USED" if trial_used else "NOT_STARTED"
     )
     return {
         "enabled": True,
@@ -267,12 +270,12 @@ def market_access_payload(user, *, at=None) -> dict:
         "approved_markets": sorted(state.granted_markets),
         "effective_markets": sorted(state.effective_markets),
         "market_selection_confirmed": state.market_selection_confirmed,
-        "trial_used": trial is not None,
+        "trial_used": trial_used,
         "trial_active": state.trial_active,
         "trial_status": trial_status,
         "trial_days_remaining": max(0, ceil((trial.ends_at - now).total_seconds() / 86400))
         if state.trial_active else 0,
-        "trial_started_at": trial.started_at if trial else None,
+        "trial_started_at": historical_trial.started_at if historical_trial else user.gold_trial_started_at,
         "trial_ends_at": state.trial_ends_at,
         "is_elite": state.is_elite,
         "has_gold_features": state.has_gold_features,

@@ -36,7 +36,7 @@ class Command(BaseCommand):
         if options["apply"] and not options["confirm_trial_history_voided"]:
             raise CommandError(
                 "--apply requires --confirm-trial-history-voided: pre-reset V2 trials "
-                "will be invalidated for eligibility while their records remain stored."
+                "will be invalidated for active access while their lifetime-use records remain stored."
             )
         if options["apply"] and not market_access_v2_enabled():
             raise CommandError("Enable MARKET_ACCESS_V2_ENABLED before applying this reset.")
@@ -64,7 +64,7 @@ class Command(BaseCommand):
                 UserMarketGrant.objects.filter(user_id__in=user_ids, revoked_at__isnull=True)
                 .values_list("pk", "user_id")
             )
-            # Every pre-reset grant is voided for future eligibility, including expired ones.
+            # Invalidate active access while retaining lifetime-use history, including expired grants.
             trials = list(
                 TrialGrant.objects.filter(
                     user_id__in=user_ids, invalidated_at__isnull=True
@@ -84,7 +84,12 @@ class Command(BaseCommand):
                 | confirmed_ids
                 | elite_ids
             )
-            trial_used_ids = {user_id for _, user_id, _ in trials}
+            historical_trial_user_ids = set(TrialGrant.objects.filter(
+                user_id__in=user_ids,
+            ).values_list("user_id", flat=True))
+            legacy_trial_user_ids = set(normal_users.filter(
+                gold_trial_started_at__isnull=False,
+            ).values_list("pk", flat=True))
             active_trial_ids = set(
                 TrialGrant.objects.filter(
                     pk__in=[pk for pk, _, _ in trials], revoked_at__isnull=True,
@@ -104,14 +109,9 @@ class Command(BaseCommand):
                 "elite_flags_to_clear": len(elite_ids),
                 "users_to_audit": len(affected_ids),
                 "v2_trial_history_retained": TrialGrant.objects.filter(user_id__in=user_ids).count(),
-                "eligible_for_future_v2_trial_after_reset": (
-                    eligible_trial_users().count() if already_applied
-                    else normal_users.filter(is_active=True).count()
-                ),
-                "legacy_trial_history_ignored": normal_users.filter(
-                    gold_trial_started_at__isnull=False
-                ).count(),
-                "trial_policy": "Pre-reset V2 trials are retained but voided once; a future trial is lifetime-limited.",
+                "eligible_for_future_v2_trial_after_reset": eligible_trial_users().count(),
+                "legacy_trial_history_retained": len(legacy_trial_user_ids),
+                "trial_policy": "Any prior V2 TrialGrant, including invalidated history, or legacy trial start consumes the lifetime trial.",
             }
             if options["apply"]:
                 operation_id = uuid.uuid4()
@@ -151,7 +151,7 @@ class Command(BaseCommand):
                                 "membership_tier": "LEVEL_1",
                                 "market_selection_confirmed": False,
                                 "trial_active": False,
-                                "trial_used": False,
+                                "trial_used": user_id in historical_trial_user_ids or user_id in legacy_trial_user_ids,
                                 "reason": "V2_LEVEL_ONE_BASELINE",
                             },
                         )

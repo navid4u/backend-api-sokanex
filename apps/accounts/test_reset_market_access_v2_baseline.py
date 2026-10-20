@@ -48,8 +48,6 @@ class ResetMarketAccessV2BaselineTests(TestCase):
         )
         self.untried = User.objects.create_user(
             username="reset-untried", access_level=3,
-            gold_trial_started_at=timezone.now() - timedelta(days=8),
-            gold_trial_expires_at=timezone.now() - timedelta(days=1),
         )
         UserMarketPreference.objects.create(user=self.user, market="crypto")
         UserAccessProfile.objects.create(
@@ -79,8 +77,8 @@ class ResetMarketAccessV2BaselineTests(TestCase):
         self.assertEqual(preview["market_confirmations_to_reset"], 1)
         self.assertEqual(preview["pre_reset_v2_trials_to_invalidate"], 1)
         self.assertEqual(preview["v2_trial_history_retained"], 1)
-        self.assertEqual(preview["eligible_for_future_v2_trial_after_reset"], 2)
-        self.assertEqual(preview["legacy_trial_history_ignored"], 2)
+        self.assertEqual(preview["eligible_for_future_v2_trial_after_reset"], 1)
+        self.assertEqual(preview["legacy_trial_history_retained"], 1)
         self.assertFalse(UserAccessAudit.objects.exists())
         self.assertEqual(User.objects.get(pk=self.user.pk).access_level, 5)
         with self.assertRaises(CommandError):
@@ -112,7 +110,7 @@ class ResetMarketAccessV2BaselineTests(TestCase):
         self.assertFalse(state.market_selection_confirmed)
         self.assertFalse(state.trial_active)
         self.assertFalse(state.effective_markets)
-        self.assertTrue(eligible_trial_users().filter(pk=self.user.pk).exists())
+        self.assertFalse(eligible_trial_users().filter(pk=self.user.pk).exists())
         self.assertTrue(eligible_trial_users().filter(pk=self.untried.pk).exists())
         self.assertEqual(UserAccessAudit.objects.filter(action=UserAccessAudit.Action.LEGACY_RESET).count(), 2)
         client = APIClient()
@@ -125,27 +123,28 @@ class ResetMarketAccessV2BaselineTests(TestCase):
         self.assertEqual(profile.status_code, 200)
         self.assertEqual(profile.data["access_level"], 1)
         self.assertFalse(profile.data["market_access_v2"]["market_selection_confirmed"])
-        self.assertFalse(profile.data["market_access_v2"]["trial_used"])
+        self.assertTrue(profile.data["market_access_v2"]["trial_used"])
+        self.assertEqual(profile.data["market_access_v2"]["trial_status"], "PREVIOUSLY_USED")
         with self.assertRaises(CommandError):
             self._run(apply=True, confirm_trial_history_voided=True)
         self.assertEqual(UserAccessAudit.objects.filter(action=UserAccessAudit.Action.LEGACY_RESET).count(), 2)
         self.assertTrue(MarketAccessBaselineReset.objects.filter(pk="initial_v2_level_one_reset").exists())
 
-    def test_next_campaign_retrials_once_without_erasing_old_history(self):
+    def test_next_campaign_only_enrolls_never_tried_accounts(self):
         self._run(apply=True, confirm_trial_history_voided=True)
         preview = preview_trial_campaign(actor=self.superadmin)
-        self.assertEqual(preview["eligible_count"], 2)
+        self.assertEqual(preview["eligible_count"], 1)
         result = start_trial_campaign(
             actor=self.superadmin,
             expected_eligible_count=preview["eligible_count"],
             expected_candidate_digest=preview["candidate_digest"],
         )
-        self.assertEqual(result["granted_count"], 2)
+        self.assertEqual(result["granted_count"], 1)
         old_grant = TrialGrant.objects.get(user=self.user, campaign=self.campaign)
         self.assertIsNotNone(old_grant.invalidated_at)
-        current = TrialGrant.objects.get(user=self.user, invalidated_at__isnull=True)
-        self.assertNotEqual(current.pk, old_grant.pk)
-        self.assertTrue(resolve_market_access(self.user).trial_active)
+        self.assertFalse(TrialGrant.objects.filter(user=self.user, invalidated_at__isnull=True).exists())
+        current = TrialGrant.objects.get(user=self.untried, invalidated_at__isnull=True)
+        self.assertTrue(resolve_market_access(self.untried).trial_active)
         self.assertFalse(eligible_trial_users().filter(pk=self.user.pk).exists())
         self.assertEqual(preview_trial_campaign(actor=self.superadmin)["eligible_count"], 0)
         with self.assertRaises(CommandError):
@@ -164,7 +163,7 @@ class ResetMarketAccessV2BaselineTests(TestCase):
         expired.refresh_from_db()
         self.assertIsNotNone(expired.invalidated_at)
         self.assertIsNotNone(expired.revoked_at)
-        self.assertTrue(eligible_trial_users().filter(pk=self.untried.pk).exists())
+        self.assertFalse(eligible_trial_users().filter(pk=self.untried.pk).exists())
 
     def test_approved_legacy_request_save_cannot_regrant_level_five(self):
         self._run(apply=True, confirm_trial_history_voided=True)
@@ -190,7 +189,7 @@ class ResetMarketAccessV2BaselineTests(TestCase):
             )
         update_market_preferences(user=self.user, selected_markets=["crypto"])
         new_request, created = submit_market_access_request(
-            user=self.user, requested_tier=MarketAccessRequest.RequestedTier.ELITE
+            user=self.user, requested_tier=MarketAccessRequest.RequestedTier.GOLD
         )
         self.assertTrue(created)
         self.assertNotEqual(new_request.pk, old_request.pk)

@@ -44,17 +44,18 @@ def _registration_cutoff(registered_from):
 def eligible_trial_users(*, registered_from=None):
     """Level 1 means zero active V2 grants, never the legacy access_level.
 
-    Legacy Gold/trial dates and explicitly invalidated pre-reset grants are
-    ignored. The current TrialGrant is the lifetime-use marker for this era.
+    Every historical V2 TrialGrant, including one invalidated by the baseline
+    reset, consumes the one lifetime trial. Legacy trial-start history also
+    consumes it. This intentionally supersedes the old reset-era policy.
     Existing V2 market grants do not exclude someone: they are revoked when
     the trial starts, per the seven-day-only rollout policy.
     """
-    prior_trial = TrialGrant.objects.filter(user_id=OuterRef("pk"), invalidated_at__isnull=True)
+    prior_trial = TrialGrant.objects.filter(user_id=OuterRef("pk"))
     users = (
         User.objects.filter(is_active=True, is_superuser=False)
         .exclude(role__in=(User.Role.SUPER_ADMIN, User.Role.SUPPORT))
         .annotate(_has_v2_trial=Exists(prior_trial))
-        .filter(_has_v2_trial=False)
+        .filter(_has_v2_trial=False, gold_trial_started_at__isnull=True)
     )
     cutoff = _registration_cutoff(registered_from)
     if cutoff is not None:
@@ -183,7 +184,7 @@ def start_new_user_trial(user):
         reason = "PROTECTED_ROLE"
     elif setting.enabled_at and target.created_at < setting.enabled_at:
         reason = "EXISTING_ACCOUNT"
-    elif TrialGrant.objects.filter(user=target, invalidated_at__isnull=True).exists():
+    elif target.gold_trial_started_at or TrialGrant.objects.filter(user=target).exists():
         reason = "TRIAL_ALREADY_USED"
     elif UserMarketGrant.objects.filter(user=target, revoked_at__isnull=True).exists():
         reason = "EXISTING_GRANT"
@@ -222,7 +223,7 @@ def start_existing_user_trial(user):
         User.Role.SUPER_ADMIN, User.Role.SUPPORT,
     ):
         return None
-    if TrialGrant.objects.filter(user=target, invalidated_at__isnull=True).exists():
+    if target.gold_trial_started_at or TrialGrant.objects.filter(user=target).exists():
         return None
     setting = TrialAutoStartSettings.objects.select_for_update().filter(pk=1).first()
     if not setting or not setting.auto_start_new_users or not setting.campaign_id:

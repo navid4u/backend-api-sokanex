@@ -59,20 +59,25 @@ class MarketTrialCampaignTests(APITestCase):
             user=used, campaign=old_campaign,
             started_at=now - timedelta(days=8), ends_at=now - timedelta(days=1),
         )
+        invalidated_used = User.objects.create_user(username="trial-v2-invalidated-used")
+        TrialGrant.objects.create(
+            user=invalidated_used, campaign=old_campaign,
+            started_at=now - timedelta(days=8), ends_at=now - timedelta(days=1),
+            invalidated_at=now,
+        )
+        User.objects.create_user(
+            username="trial-v2-legacy-used", gold_trial_started_at=now - timedelta(days=20),
+        )
         response = self.preview()
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data["eligible_count"], 2)
         self.assertEqual(response.data["duration_days"], 7)
-        self.assertEqual(TrialGrant.objects.count(), 1)
+        self.assertEqual(TrialGrant.objects.count(), 2)
         self.assertFalse(UserAccessAudit.objects.exists())
 
     def test_superadmin_starts_exact_seven_day_trial_once_without_touching_legacy(self):
-        old_started = timezone.now() - timedelta(days=30)
-        old_ends = old_started + timedelta(days=7)
         User.objects.filter(pk=self.user.pk).update(
             access_level=User.AccessLevel.LEVEL_5,
-            gold_trial_started_at=old_started,
-            gold_trial_expires_at=old_ends,
         )
         self.assertEqual(self.preview().data["eligible_count"], 1)
         response = self.start(1)
@@ -90,8 +95,7 @@ class MarketTrialCampaignTests(APITestCase):
         )
         self.user.refresh_from_db()
         self.assertEqual(self.user.access_level, User.AccessLevel.LEVEL_5)
-        self.assertEqual(self.user.gold_trial_started_at, old_started)
-        self.assertEqual(self.user.gold_trial_expires_at, old_ends)
+        self.assertIsNone(self.user.gold_trial_started_at)
         state = resolve_market_access(self.user, at=grant.started_at + timedelta(seconds=1))
         self.assertEqual(state.membership_tier, "LEVEL_1")
         self.assertTrue(state.trial_active)
@@ -192,6 +196,24 @@ class MarketTrialCampaignTests(APITestCase):
         self.assertEqual(response.status_code, 200)
         self.assertFalse(response.data["started"])
         self.assertEqual(response.data["access"]["trial_status"], "EXPIRED")
+        self.assertEqual(TrialGrant.objects.filter(user=self.user).count(), 1)
+
+    @override_settings(TRIAL_EXISTING_LOGIN_ENABLED=True)
+    def test_invalidated_trial_still_consumes_lifetime_use(self):
+        update_auto_start_settings(actor=self.admin, auto_start_new_users=True)
+        old = TrialCampaign.objects.create(created_by=self.admin)
+        TrialGrant.objects.create(
+            user=self.user, campaign=old,
+            started_at=timezone.now() - timedelta(days=8),
+            ends_at=timezone.now() - timedelta(days=1),
+            invalidated_at=timezone.now(),
+        )
+        self.client.force_authenticate(self.user)
+        response = self.client.post("/api/accounts/market-access/trial/ensure/", {}, format="json")
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(response.data["started"])
+        self.assertEqual(response.data["access"]["trial_status"], "PREVIOUSLY_USED")
+        self.assertTrue(response.data["access"]["trial_used"])
         self.assertEqual(TrialGrant.objects.filter(user=self.user).count(), 1)
 
     def test_expiry_hides_and_revokes_grants_approved_during_trial(self):
