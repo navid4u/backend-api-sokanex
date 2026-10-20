@@ -7,7 +7,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.exceptions import ValidationError
-from django.db.models import Count, Q
+from django.db.models import Count, Prefetch, Q
 from django.utils.decorators import method_decorator
 from django.views.decorators.cache import never_cache
 
@@ -35,7 +35,17 @@ from .market_trial import (
     update_auto_start_settings,
 )
 from .market_access_requests import submit_market_access_request, review_market_access_request
-from .models import MarketAccessRequest, User
+from .models import MarketAccessRequest, TrialGrant, User
+
+
+def _with_trial_admin_diagnostics(queryset):
+    return with_market_access_relations(queryset).select_related(
+        "trial_auto_start_decision",
+    ).prefetch_related(Prefetch(
+        "trial_grants_v2",
+        queryset=TrialGrant.objects.order_by("-started_at", "-pk"),
+        to_attr="_all_trial_grants_v2",
+    ))
 from .market_access_serializers import (
     MarketAccessRequestCreateSerializer,
     MarketAccessRequestReadSerializer,
@@ -141,7 +151,7 @@ class MarketAccessUserListView(generics.ListAPIView):
                     Q(market_access_profile__is_elite=False)
                     | Q(market_access_profile__isnull=True)
                 )
-        return with_market_access_relations(queryset.order_by(*ordering_fields))
+        return _with_trial_admin_diagnostics(queryset.order_by(*ordering_fields))
 
 
 @method_decorator(never_cache, name="dispatch")
@@ -152,7 +162,7 @@ class MarketAccessUserDetailView(generics.RetrieveAPIView):
     serializer_class = UserMarketAccessReadSerializer
 
     def get_queryset(self):
-        return with_market_access_relations(User.objects.all())
+        return _with_trial_admin_diagnostics(User.objects.all())
 
     @extend_schema(
         request=UserMarketAccessUpdateSerializer,

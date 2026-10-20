@@ -224,8 +224,6 @@ class OTPService:
                                 user=user, token=invite_token,
                                 fallback_link=challenge.invitation_link,
                             )
-                            from .market_trial import start_new_user_trial
-                            start_new_user_trial(user)
                             created = True
                     except IntegrityError:
                         user = User.objects.select_for_update().filter(phone=phone).first()

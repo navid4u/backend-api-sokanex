@@ -13,7 +13,7 @@ from rest_framework.exceptions import APIException, PermissionDenied
 from .market_access import market_access_v2_enabled
 from .models import (
     TrialAutoStartSettings, TrialAutoStartSettingsAudit, TrialCampaign,
-    TrialGrant, User, UserAccessAudit, UserMarketGrant,
+    TrialGrant, TrialAutoStartDecision, User, UserAccessAudit, UserMarketGrant,
 )
 
 
@@ -76,15 +76,16 @@ def update_auto_start_settings(*, actor, auto_start_new_users):
     setting, _ = TrialAutoStartSettings.objects.select_for_update().get_or_create(pk=1)
     previous = setting.auto_start_new_users
     if previous != auto_start_new_users:
-        if auto_start_new_users and setting.campaign_id is None:
+        if auto_start_new_users:
             now = timezone.now()
+            setting.enabled_at = now
             setting.campaign = TrialCampaign.objects.create(
                 created_by=actor, duration_days=7,
                 status=TrialCampaign.Status.APPLIED, applied_at=now,
             )
         setting.auto_start_new_users = auto_start_new_users
         setting.updated_by = actor
-        setting.save(update_fields=("auto_start_new_users", "campaign", "updated_by", "updated_at"))
+        setting.save(update_fields=("auto_start_new_users", "enabled_at", "campaign", "updated_by", "updated_at"))
         TrialAutoStartSettingsAudit.objects.create(
             actor=actor, before=previous, after=auto_start_new_users,
         )
@@ -98,7 +99,7 @@ def _create_trial_grants(*, user_ids, campaign, started_at, actor, source):
     """
     ends_at = started_at + timedelta(days=7)
     TrialGrant.objects.bulk_create(
-        (TrialGrant(user_id=user_id, campaign=campaign, started_at=started_at, ends_at=ends_at)
+        (TrialGrant(user_id=user_id, campaign=campaign, started_at=started_at, ends_at=ends_at, source=source)
          for user_id in user_ids),
         batch_size=500,
     )
@@ -123,24 +124,75 @@ def _create_trial_grants(*, user_ids, campaign, started_at, actor, source):
 
 @transaction.atomic
 def start_new_user_trial(user):
-    """Best called inside registration's transaction; never from repeat login."""
-    if not market_access_v2_enabled():
+    """Decide once at the first successful new-account session, inside its transaction."""
+    target = User.objects.select_for_update().get(pk=user.pk)
+    decision = TrialAutoStartDecision.objects.filter(user=target).select_related("grant").first()
+    if decision:
         return None
     setting = TrialAutoStartSettings.objects.select_for_update().filter(pk=1).first()
-    if not setting or not setting.auto_start_new_users or not setting.campaign_id:
-        return None
-    target = User.objects.select_for_update().get(pk=user.pk)
-    if (not target.is_active or target.is_superuser
-            or target.role in (User.Role.SUPER_ADMIN, User.Role.SUPPORT)
-            or TrialGrant.objects.filter(user=target, invalidated_at__isnull=True).exists()
-            or UserMarketGrant.objects.filter(user=target, revoked_at__isnull=True).exists()):
+    if not market_access_v2_enabled():
+        reason = "V2_DISABLED"
+    elif not setting or not setting.auto_start_new_users or not setting.campaign_id:
+        reason = "AUTO_START_DISABLED"
+    elif not target.is_active:
+        reason = "USER_INACTIVE"
+    elif target.is_superuser or target.role in (User.Role.SUPER_ADMIN, User.Role.SUPPORT):
+        reason = "PROTECTED_ROLE"
+    elif setting.enabled_at and target.created_at < setting.enabled_at:
+        reason = "EXISTING_ACCOUNT"
+    elif TrialGrant.objects.filter(user=target, invalidated_at__isnull=True).exists():
+        reason = "TRIAL_ALREADY_USED"
+    elif UserMarketGrant.objects.filter(user=target, revoked_at__isnull=True).exists():
+        reason = "EXISTING_GRANT"
+    else:
+        reason = None
+    if reason:
+        TrialAutoStartDecision.objects.create(user=target, reason=reason)
+        UserAccessAudit.objects.create(
+            user=target, subject_user_id=target.pk, actor=None,
+            action=UserAccessAudit.Action.TRIAL_AUTO_START_SKIPPED,
+            before={}, after={"reason": reason}, operation_id=uuid.uuid4(),
+        )
         return None
     started_at = timezone.now()
     _create_trial_grants(
         user_ids=(target.pk,), campaign=setting.campaign,
-        started_at=started_at, actor=None, source="AUTO_SIGNUP",
+        started_at=started_at, actor=None, source="AUTO_NEW_USER",
     )
-    return TrialGrant.objects.get(user=target, invalidated_at__isnull=True)
+    grant = TrialGrant.objects.get(user=target, invalidated_at__isnull=True)
+    TrialAutoStartDecision.objects.create(user=target, grant=grant, reason="STARTED")
+    return grant
+
+
+def audit_expired_trials(*, limit=200, now=None):
+    """Record real expiry once; V2 access itself is resolved from server time."""
+    if not market_access_v2_enabled():
+        return 0
+    now = now or timezone.now()
+    grant_ids = list(TrialGrant.objects.filter(
+        invalidated_at__isnull=True, revoked_at__isnull=True,
+        expiry_audited_at__isnull=True, ends_at__lte=now,
+    ).order_by("ends_at", "pk").values_list("pk", flat=True)[:limit])
+    count = 0
+    for grant_id in grant_ids:
+        with transaction.atomic():
+            grant = TrialGrant.objects.select_for_update().filter(
+                pk=grant_id, invalidated_at__isnull=True, revoked_at__isnull=True,
+                expiry_audited_at__isnull=True, ends_at__lte=now,
+            ).first()
+            if grant is None:
+                continue
+            UserAccessAudit.objects.create(
+                user_id=grant.user_id, subject_user_id=grant.user_id, actor=None,
+                action=UserAccessAudit.Action.TRIAL_EXPIRED,
+                before={"trial_active": True, "grant_id": grant.pk},
+                after={"trial_active": False, "grant_id": grant.pk},
+                operation_id=uuid.uuid4(),
+            )
+            grant.expiry_audited_at = now
+            grant.save(update_fields=("expiry_audited_at",))
+            count += 1
+    return count
 
 
 def preview_trial_campaign(*, actor, registered_from=None):

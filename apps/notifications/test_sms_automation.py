@@ -113,11 +113,15 @@ class SMSAutomationTests(TestCase):
         rule.enabled = True
         rule.save()
         with self.captureOnCommitCallbacks(execute=True):
-            newcomer = User.objects.create_user(
-                username="new-sms-user", password="Pass123456!", phone="09123456780",
-            )
+            response = self.client.post("/api/accounts/register/", {
+                "username": "new-sms-user", "phone": "09123456780",
+                "first_name": "New", "last_name": "Member",
+                "password": "Pass123456!", "password_confirm": "Pass123456!",
+            }, format="json")
+        self.assertIn(response.status_code, (200, 201))
+        newcomer = User.objects.get(username="new-sms-user")
         self.assertTrue(SMSAutomationDelivery.objects.filter(
-            user=newcomer, event_key="WELCOME:REGISTRATION", status="PENDING",
+            user=newcomer, event_key=f"WELCOME:REGISTRATION:{newcomer.pk}", status="PENDING",
         ).exists())
 
     def test_trial_days_queue_once_and_skip_after_market_activation(self):
@@ -309,8 +313,51 @@ class SMSAutomationTests(TestCase):
         rule.enabled = True
         rule.save()
         queue_event(self.user.pk, "WELCOME", "WELCOME:REGISTRATION")
-        self.assertFalse(SMSAutomationDelivery.objects.exists())
+        self.assertEqual(SMSAutomationDelivery.objects.get().status, "SKIPPED")
+        self.assertEqual(SMSAutomationDelivery.objects.get().failure_code, "AUTOMATION_DISABLED")
         self.assertEqual(send_pending(), 0)
         self.assertEqual(self.client.post(
             "/api/notifications/sms-automation/broadcasts/send/", {}, format="json",
         ).status_code, 409)
+
+    def test_legacy_expiry_message_waits_for_exact_trial_end(self):
+        rule = SMSAutomationRule.objects.get(slot="TRIAL_7", market="ALL")
+        rule.enabled = True
+        rule.send_time_utc = timezone.datetime.min.time()
+        rule.save(update_fields=("enabled", "send_time_utc"))
+        now = timezone.now()
+        campaign = TrialCampaign.objects.create(created_by=self.admin, status="APPLIED")
+        grant = TrialGrant.objects.create(
+            user=self.user, campaign=campaign,
+            started_at=now - timedelta(days=7), ends_at=now,
+        )
+        self.assertEqual(queue_due_trial_messages(now=now - timedelta(seconds=1)), 0)
+        self.assertEqual(queue_due_trial_messages(now=now), 1)
+        delivery = SMSAutomationDelivery.objects.get(event_key=f"TRIAL:{grant.pk}:TRIAL_7")
+        self.assertGreaterEqual(delivery.scheduled_at, grant.ends_at)
+        with patch("apps.notifications.sms_automation.PayamitoSMSService.send", return_value={"message_id": "stub"}):
+            self.assertEqual(send_pending(), 1)
+        self.assertEqual(delivery.user.pk, self.user.pk)
+
+    def test_delivery_filters_ordering_and_error_snapshot(self):
+        now = timezone.now()
+        for index, status in enumerate(("PENDING", "FAILED", "SENT")):
+            delivery = SMSAutomationDelivery.objects.create(
+                user=self.user, event_key=f"REPORT:{index}", event="TEST",
+                phone="09123456789", text=f"snapshot {index}", status=status,
+                scheduled_at=now, sent_at=now if status == "SENT" else None,
+                failure_code="STUB_FAILURE" if status == "FAILED" else "",
+            )
+            SMSAutomationDelivery.objects.filter(pk=delivery.pk).update(
+                created_at=now + timedelta(minutes=index),
+            )
+        url = "/api/notifications/sms-automation/deliveries/"
+        response = self.client.get(url, {"user_id": self.user.pk, "page_size": 2, "ordering": "-created_at"})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["count"], 3)
+        self.assertEqual(len(response.data["results"]), 2)
+        self.assertEqual(response.data["results"][0]["rendered_text"], "snapshot 2")
+        failed = self.client.get(url, {"user_id": self.user.pk, "status": "FAILED", "ordering": "-sent_at"})
+        self.assertEqual(failed.data["count"], 1)
+        self.assertEqual(failed.data["results"][0]["error_code"], "STUB_FAILURE")
+        self.assertEqual(self.client.get(url, {"ordering": "wrong"}).status_code, 400)

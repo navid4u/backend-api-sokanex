@@ -154,11 +154,38 @@ def _dispatch_channel(enrollment, rule, *, now, channel):
         return False
     if not journey_eligible(grant, rule.day, now=now):
         return False
+    from .sms_automation import _preferred_market
+    if rule.market != "ALL" and rule.market != _preferred_market(user):
+        if channel == TrialJourneyDispatch.Channel.SMS:
+            delivery, _ = SMSAutomationDelivery.objects.get_or_create(
+                user=user, event_key=f"JOURNEY:{grant.pk}:{rule.day}:SMS",
+                defaults={"event": "JOURNEY", "phone": _phone(user) or "", "text": "",
+                          "status": SMSAutomationDelivery.Status.SKIPPED,
+                          "failure_code": "MARKET_NOT_SELECTED",
+                          "scheduled_at": scheduled_at(grant, rule)},
+            )
+            TrialJourneyDispatch.objects.create(
+                enrollment=enrollment, day=rule.day, channel=channel,
+                status="SKIPPED", sms_delivery=delivery,
+            )
+        return False
     rendered = _render(rule.text, user, days_remaining=(0 if rule.day == 7 else 8 - rule.day),
                        market=rule.market if rule.market != "ALL" else None)
     if channel == TrialJourneyDispatch.Channel.SMS:
         phone = _phone(user)
-        if not phone or not settings.SMS_AUTOMATION_ENABLED:
+        provider_ready = all((settings.PAYAMITO_ENABLED, settings.PAYAMITO_USERNAME,
+                              settings.PAYAMITO_API_KEY, settings.PAYAMITO_FROM_NUMBER))
+        if not phone or not settings.SMS_AUTOMATION_ENABLED or not provider_ready:
+            reason = ("INVALID_OR_MISSING_PHONE" if not phone else
+                      "AUTOMATION_DISABLED" if not settings.SMS_AUTOMATION_ENABLED else
+                      "PROVIDER_NOT_CONFIGURED")
+            SMSAutomationDelivery.objects.get_or_create(
+                user=user, event_key=f"JOURNEY:{grant.pk}:{rule.day}:SMS",
+                defaults={"event": "JOURNEY", "phone": phone or "", "text": "",
+                          "status": SMSAutomationDelivery.Status.SKIPPED,
+                          "failure_code": reason,
+                          "scheduled_at": scheduled_at(grant, rule)},
+            )
             TrialJourneyDispatch.objects.create(enrollment=enrollment, day=rule.day,
                                                 channel=channel, status="SKIPPED")
             return False
@@ -199,6 +226,32 @@ def _dispatch_channel(enrollment, rule, *, now, channel):
                                             channel=channel, notification=notification)
         return True
     return False
+
+
+def queue_trial_day_one(grant_id):
+    """After-commit fast path; the periodic worker remains the durable recovery path."""
+    if not settings.TRIAL_JOURNEY_ENABLED or not market_access_v2_enabled():
+        return
+    try:
+        with transaction.atomic():
+            enrollment = TrialJourneyEnrollment.objects.select_related("grant__user").filter(
+                grant_id=grant_id,
+            ).first()
+            rule = TrialJourneyDay.objects.filter(day=1, is_active=True).first()
+            if not enrollment or not rule:
+                return
+            User.objects.select_for_update().get(pk=enrollment.grant.user_id)
+            now = timezone.now()
+            for channel, enabled in (
+                (TrialJourneyDispatch.Channel.SMS, True),
+                (TrialJourneyDispatch.Channel.IN_APP, rule.in_app_enabled),
+                (TrialJourneyDispatch.Channel.PUSH, rule.push_enabled),
+            ):
+                if enabled:
+                    with transaction.atomic():
+                        _dispatch_channel(enrollment, rule, now=now, channel=channel)
+    except Exception:
+        logger.exception("trial_day_one_queue_failed grant_id=%s", grant_id)
 
 
 def queue_due_trial_journey(*, now=None):

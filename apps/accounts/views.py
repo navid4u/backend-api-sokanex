@@ -536,11 +536,14 @@ class RegistrationOTPVerifyView(generics.GenericAPIView):
     def post(self, request):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        user, created = OTPService.verify_registration_login(
-            serializer.validated_data["phone"], serializer.validated_data["code"],
-            invite_token=serializer.validated_data.get("invite_token"),
-        )
-        session = issue_login_tokens(user, request, record_login=not created)
+        with transaction.atomic():
+            user, created = OTPService.verify_registration_login(
+                serializer.validated_data["phone"], serializer.validated_data["code"],
+                invite_token=serializer.validated_data.get("invite_token"),
+            )
+            session = issue_login_tokens(
+                user, request, record_login=not created, new_registration=created,
+            )
         if created:
             ActivityService.record(
                 user,

@@ -41,7 +41,11 @@ class TrialJourneyTests(APITestCase):
         self.assertEqual(invalid.status_code, 400)
         self.assertEqual(TrialJourneyDay.objects.get(day=2).text, "پیام روز دوم")
 
-    @override_settings(TRIAL_JOURNEY_ENABLED=True, SMS_AUTOMATION_ENABLED=True)
+    @override_settings(
+        TRIAL_JOURNEY_ENABLED=True, SMS_AUTOMATION_ENABLED=True,
+        PAYAMITO_ENABLED=True, PAYAMITO_USERNAME="stub-user",
+        PAYAMITO_API_KEY="stub-key", PAYAMITO_FROM_NUMBER="5000",
+    )
     def test_enrolled_trial_queues_one_sms_and_in_app_without_provider_call(self):
         now = timezone.now()
         TrialJourneyActivation.objects.create(pk=1, activated_at=now - timedelta(seconds=1))

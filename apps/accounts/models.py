@@ -965,6 +965,8 @@ class TrialGrant(models.Model):
     ends_at = models.DateTimeField()
     revoked_at = models.DateTimeField(null=True, blank=True)
     invalidated_at = models.DateTimeField(null=True, blank=True)
+    expiry_audited_at = models.DateTimeField(null=True, blank=True)
+    source = models.CharField(max_length=24, blank=True, default="")
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -1017,6 +1019,7 @@ class TrialAutoStartSettings(models.Model):
 
     id = models.PositiveSmallIntegerField(primary_key=True, default=1)
     auto_start_new_users = models.BooleanField(default=False)
+    enabled_at = models.DateTimeField(null=True, blank=True)
     campaign = models.ForeignKey(
         TrialCampaign, on_delete=models.PROTECT, null=True, blank=True,
         related_name="auto_start_settings",
@@ -1026,6 +1029,21 @@ class TrialAutoStartSettings(models.Model):
         related_name="trial_auto_start_settings_updates",
     )
     updated_at = models.DateTimeField(auto_now=True)
+
+
+class TrialAutoStartDecision(models.Model):
+    """One durable decision for a newly registered account's first session."""
+
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
+        related_name="trial_auto_start_decision",
+    )
+    grant = models.ForeignKey(
+        TrialGrant, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="auto_start_decisions",
+    )
+    reason = models.CharField(max_length=40)
+    created_at = models.DateTimeField(auto_now_add=True)
 
 
 class TrialAutoStartSettingsAudit(models.Model):
@@ -1045,6 +1063,8 @@ class UserAccessAudit(models.Model):
         MARKET_REVOKED = "MARKET_REVOKED", "Market revoked"
         ELITE_CHANGED = "ELITE_CHANGED", "Elite changed"
         TRIAL_STARTED = "TRIAL_STARTED", "Trial started"
+        TRIAL_AUTO_START_SKIPPED = "TRIAL_AUTO_START_SKIPPED", "Automatic trial not started"
+        TRIAL_EXPIRED = "TRIAL_EXPIRED", "Trial expired"
         LEGACY_RESET = "LEGACY_RESET", "Legacy access reset"
 
     user = models.ForeignKey(

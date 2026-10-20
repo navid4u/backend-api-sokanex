@@ -42,7 +42,35 @@ class UserMarketAccessReadSerializer(serializers.ModelSerializer):
 
     @extend_schema_field(serializers.DictField())
     def get_access(self, obj):
-        return market_access_payload(obj)
+        from .market_access import current_trial_grant
+        from .models import TrialGrant
+
+        payload = market_access_payload(obj)
+        trial = current_trial_grant(obj)
+        all_grants = getattr(obj, "_all_trial_grants_v2", None)
+        latest = trial or (
+            (all_grants[0] if all_grants else None) if all_grants is not None
+            else TrialGrant.objects.filter(user=obj).order_by("-started_at", "-pk").first()
+        )
+        decision = getattr(obj, "trial_auto_start_decision", None)
+        if latest is None:
+            trial_status = "NOT_STARTED"
+        elif latest.revoked_at or latest.invalidated_at:
+            trial_status = "CANCELED"
+        elif payload.get("trial_active"):
+            trial_status = "ACTIVE"
+        else:
+            trial_status = "EXPIRED"
+        payload.update({
+            "trial_status": trial_status,
+            "trial_started_at": latest.started_at if latest else None,
+            "trial_ends_at": latest.ends_at if latest else None,
+            "trial_source": (latest.source or None) if latest else None,
+            "trial_start_blocked_reason": (
+                decision.reason if decision and decision.reason != "STARTED" else None
+            ),
+        })
+        return payload
 
 
 class UserMarketAccessUpdateSerializer(serializers.Serializer):

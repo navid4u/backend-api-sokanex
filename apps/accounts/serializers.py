@@ -418,8 +418,6 @@ class RegisterSerializer(serializers.ModelSerializer):
                 UserProfile.objects.create(user=user)
                 from .invitations import attribute_new_user
                 attribute_new_user(user=user, token=invite_token)
-                from .market_trial import start_new_user_trial
-                start_new_user_trial(user)
                 ActivityService.record(
                     user,
                     UserActivity.Type.REGISTER,
@@ -428,7 +426,8 @@ class RegisterSerializer(serializers.ModelSerializer):
                 from .authentication import issue_login_tokens
 
                 self._issued_tokens = issue_login_tokens(
-                    user, self.context["request"], record_login=True
+                    user, self.context["request"], record_login=True,
+                    new_registration=True,
                 )
                 return user
         except IntegrityError as exc:

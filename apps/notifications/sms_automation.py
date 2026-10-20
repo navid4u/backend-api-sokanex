@@ -86,23 +86,47 @@ def _enabled_rules():
 def queue_event(user_id, slot, event_key):
     """Called after commit; an SMS configuration outage must not break login/signup."""
     try:
-        if not settings.SMS_AUTOMATION_ENABLED:
+        user = with_market_access_relations(User.objects.filter(pk=user_id)).first()
+        if not user:
             return
-        if slot == "WELCOME":
-            from .models import TrialJourneyActivation
-            if TrialJourneyActivation.objects.filter(pk=1).exists():
-                return
-        rules = _enabled_rules()
-        user = with_market_access_relations(User.objects.filter(pk=user_id, is_active=True)).first()
-        if not user or not _phone(user):
-            return
-        rule = _rule(rules, slot, user)
-        if not rule:
+        from .models import TrialJourneyActivation, TrialJourneyDay, TrialJourneyEnrollment
+        day_one = TrialJourneyDay.objects.filter(day=1, is_active=True).first()
+        journey_owns_welcome = (
+            slot == "WELCOME" and settings.TRIAL_JOURNEY_ENABLED
+            and TrialJourneyActivation.objects.filter(pk=1).exists()
+            and TrialJourneyEnrollment.objects.filter(grant__user_id=user_id).exists()
+            and day_one is not None
+            and (day_one.market == "ALL" or day_one.market == _preferred_market(user))
+        )
+        rule = _rule(_enabled_rules(), slot, user)
+        phone = _phone(user)
+        if not user.is_active:
+            reason = "USER_INACTIVE"
+        elif journey_owns_welcome:
+            reason = "JOURNEY_OWNS_WELCOME"
+        elif not settings.SMS_AUTOMATION_ENABLED:
+            reason = "AUTOMATION_DISABLED"
+        elif not all((settings.PAYAMITO_ENABLED, settings.PAYAMITO_USERNAME,
+                      settings.PAYAMITO_API_KEY, settings.PAYAMITO_FROM_NUMBER)):
+            reason = "PROVIDER_NOT_CONFIGURED"
+        elif not phone:
+            reason = "INVALID_OR_MISSING_PHONE"
+        elif not rule:
+            reason = "RULE_DISABLED_OR_MISSING"
+        else:
+            reason = None
+        if reason:
+            SMSAutomationDelivery.objects.get_or_create(
+                user=user, event_key=event_key,
+                defaults={"event": slot, "phone": phone or "", "text": "",
+                          "status": SMSAutomationDelivery.Status.SKIPPED,
+                          "failure_code": reason, "scheduled_at": timezone.now()},
+            )
             return
         SMSAutomationDelivery.objects.get_or_create(
             user=user, event_key=event_key,
             defaults={
-                "rule": rule, "event": rule.event, "phone": _phone(user),
+                "rule": rule, "event": rule.event, "phone": phone,
                 "text": _render(rule.text, user),
                 "scheduled_at": timezone.now() + timedelta(minutes=rule.delay_minutes),
             },
@@ -126,7 +150,7 @@ def queue_due_trial_messages(*, now=None):
     grants = (
         TrialGrant.objects.filter(
             invalidated_at__isnull=True, revoked_at__isnull=True,
-            started_at__lte=now, ends_at__gt=now, user__is_active=True
+            started_at__lte=now, ends_at__gte=now - timedelta(days=1), user__is_active=True
         )
         .select_related("user", "user__market_access_profile")
         .prefetch_related(
@@ -144,9 +168,11 @@ def queue_due_trial_messages(*, now=None):
             continue
         state = resolve_market_access(user, at=now)
         # A later paid/admin market grant replaces the trial SMS journey.
-        if state.granted_markets or not state.trial_active:
+        if state.granted_markets:
             continue
-        day = (now - grant.started_at).days + 1
+        day = 7 if now >= grant.ends_at else (now - grant.started_at).days + 1
+        if day < 7 and not state.trial_active:
+            continue
         for slot_no in range(1, 8):
             rule = _rule(rules, f"TRIAL_{slot_no}", user)
             if not rule or rule.trial_day != day:
@@ -154,8 +180,8 @@ def queue_due_trial_messages(*, now=None):
             send_date = (grant.started_at + timedelta(days=day - 1)).date()
             due = datetime.combine(send_date, rule.send_time_utc, tzinfo=dt_timezone.utc)
             due = max(due, grant.started_at + timedelta(days=day - 1))
-            # Day seven is sent before the exact expiry instant.
-            due = min(due, grant.ends_at - timedelta(minutes=1))
+            if day == 7:
+                due = max(due, grant.ends_at)
             if now < due:
                 continue
             _, created = SMSAutomationDelivery.objects.get_or_create(
@@ -191,7 +217,8 @@ def _still_eligible(delivery, *, now):
         if not grant or not delivery.event_key.startswith(f"TRIAL:{grant.pk}:"):
             return False
         state = resolve_market_access(user, at=now)
-        return state.trial_active and not state.granted_markets
+        is_expiry = delivery.event_key.endswith(":TRIAL_7")
+        return (now >= grant.ends_at if is_expiry else state.trial_active) and not state.granted_markets
     if delivery.broadcast_id:
         # Broadcast is a frozen, approved snapshot; avoid sending to deleted/disabled users.
         return True
@@ -218,7 +245,8 @@ def send_pending(*, limit=100):
             now = timezone.now()
             if not _still_eligible(delivery, now=now):
                 delivery.status = SMSAutomationDelivery.Status.SKIPPED
-                delivery.save(update_fields=("status", "updated_at"))
+                delivery.failure_code = "NO_LONGER_ELIGIBLE"
+                delivery.save(update_fields=("status", "failure_code", "updated_at"))
                 continue
             delivery.status = SMSAutomationDelivery.Status.SENDING
             delivery.claimed_at = now

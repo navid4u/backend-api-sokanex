@@ -49,7 +49,7 @@ class SMSRuleSerializer(serializers.ModelSerializer):
 
     def validate(self, attrs):
         from .models import TrialJourneyActivation
-        if (self.instance and self.instance.event in (SMSAutomationRule.Event.TRIAL, SMSAutomationRule.Event.WELCOME)
+        if (self.instance and self.instance.event == SMSAutomationRule.Event.TRIAL
                 and attrs.get("enabled") is True and TrialJourneyActivation.objects.filter(pk=1).exists()):
             raise serializers.ValidationError({"enabled": "The canonical trial journey owns this event."})
         if self.instance and self.instance.event == SMSAutomationRule.Event.TRIAL:
@@ -76,13 +76,18 @@ class SMSRuleSerializer(serializers.ModelSerializer):
 class SMSDeliverySerializer(serializers.ModelSerializer):
     username = serializers.CharField(source="user.username", read_only=True)
     rule_slot = serializers.CharField(source="rule.slot", read_only=True, allow_null=True)
+    rendered_text = serializers.CharField(source="text", read_only=True)
+    error_code = serializers.SerializerMethodField()
+
+    def get_error_code(self, obj):
+        return obj.failure_code or None
 
     class Meta:
         model = SMSAutomationDelivery
         fields = (
             "id", "user", "username", "phone", "event", "rule_slot", "broadcast",
-            "text", "status", "scheduled_at", "claimed_at", "sent_at",
-            "provider_message_id", "failure_code", "attempts", "created_at",
+            "text", "rendered_text", "status", "scheduled_at", "claimed_at", "sent_at",
+            "provider_message_id", "failure_code", "error_code", "attempts", "created_at",
         )
 
 
@@ -177,16 +182,29 @@ class SMSDeliveryListView(generics.ListAPIView):
     def get_queryset(self):
         qs = SMSAutomationDelivery.objects.select_related("user", "rule", "broadcast")
         params = self.request.query_params
-        if params.get("status") in SMSAutomationDelivery.Status.values:
+        if params.get("status"):
+            if params["status"] not in SMSAutomationDelivery.Status.values:
+                raise serializers.ValidationError({"status": "Invalid status."})
             qs = qs.filter(status=params["status"])
         if params.get("event"):
             qs = qs.filter(event=params["event"][:20])
-        if params.get("user_id", "").isdigit():
+        if params.get("user_id"):
+            if not params["user_id"].isdigit():
+                raise serializers.ValidationError({"user_id": "Use a numeric user ID."})
             qs = qs.filter(user_id=int(params["user_id"]))
         if params.get("search"):
             term = params["search"][:80]
             qs = qs.filter(Q(user__username__icontains=term) | Q(phone__icontains=term))
-        return qs
+        ordering = params.get("ordering", "-created_at")
+        choices = {
+            "created_at": ("created_at", "id"),
+            "-created_at": ("-created_at", "-id"),
+            "sent_at": ("sent_at", "id"),
+            "-sent_at": ("-sent_at", "-id"),
+        }
+        if ordering not in choices:
+            raise serializers.ValidationError({"ordering": "Invalid ordering."})
+        return qs.order_by(*choices[ordering])
 
 
 class SMSAutomationStatusView(APIView):

@@ -2,6 +2,7 @@ import hashlib
 import uuid
 from datetime import UTC, datetime, timedelta
 
+from django.db import transaction
 from django.utils import timezone
 from rest_framework_simplejwt.authentication import JWTAuthentication
 from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken, OutstandingToken
@@ -25,7 +26,7 @@ class PremiumStateJWTAuthentication(JWTAuthentication):
         return result
 
 
-def issue_login_tokens(user, request, refresh_value=None, record_login=True):
+def issue_login_tokens(user, request, refresh_value=None, record_login=True, new_registration=False):
     from .services import PremiumAccessService
 
     PremiumAccessService.refresh_user_state(user)
@@ -86,5 +87,19 @@ def issue_login_tokens(user, request, refresh_value=None, record_login=True):
             target_type="device",
             target_id=device.pk,
             ip_address=ip_address,
+        )
+    if new_registration:
+        from .market_trial import start_new_user_trial
+        from apps.notifications.sms_automation import queue_event
+
+        grant = start_new_user_trial(user)
+        if grant is not None:
+            from apps.notifications.trial_journey import queue_trial_day_one
+
+            transaction.on_commit(lambda grant_id=grant.pk: queue_trial_day_one(grant_id))
+        transaction.on_commit(
+            lambda user_id=user.pk: queue_event(
+                user_id, "WELCOME", f"WELCOME:REGISTRATION:{user_id}",
+            )
         )
     return {"access": access_value, "refresh": refresh_value, "device_id": device_id}
