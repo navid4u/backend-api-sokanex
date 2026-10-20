@@ -2,9 +2,10 @@
 
 from dataclasses import dataclass
 from datetime import datetime
+from math import ceil
 
 from django.conf import settings
-from django.db.models import Exists, OuterRef, Prefetch, Q
+from django.db.models import Exists, F, OuterRef, Prefetch, Q, Subquery
 from django.utils import timezone
 
 from .models import PlatformRole, TrialGrant, User, UserMarketGrant
@@ -96,10 +97,12 @@ def resolve_market_access(user, *, at=None) -> MarketAccessState:
         for preference in user.market_preferences_v2.all()
         if preference.market in MARKETS
     )
+    expired_trial = bool(trial and trial.revoked_at is None and trial.ends_at <= at)
     granted = frozenset(
         grant.market
         for grant in user.market_grants_v2.all()
         if grant.revoked_at is None and grant.market in MARKETS
+        and (not expired_trial or grant.granted_at >= trial.ends_at)
     )
     trial_active = bool(trial and trial.revoked_at is None and trial.started_at <= at < trial.ends_at)
     tier = TIER_BY_MARKET_COUNT[len(granted)]
@@ -111,7 +114,14 @@ def resolve_market_access(user, *, at=None) -> MarketAccessState:
         market_selection_confirmed=bool(profile and profile.market_selection_confirmed_at),
         trial_active=trial_active,
         trial_ends_at=trial.ends_at if trial and trial.revoked_at is None else None,
-        is_elite=bool(profile and profile.is_elite),
+        is_elite=bool(
+            profile and profile.is_elite and (
+                not expired_trial or (
+                    profile.elite_updated_at is not None
+                    and profile.elite_updated_at >= trial.ends_at
+                )
+            )
+        ),
         has_gold_features=trial_active or tier == "GOLD",
         special_role=None,
     )
@@ -168,7 +178,15 @@ def users_with_basic_access(queryset, *, at=None):
         .values_list("id", "permissions")
         if User.Permission.CONTENT_VIEW_ALL in (permissions or [])
     ]
-    grants = UserMarketGrant.objects.filter(user_id=OuterRef("pk"), revoked_at__isnull=True)
+    expired_trial_end = TrialGrant.objects.filter(
+        user_id=OuterRef("user_id"), invalidated_at__isnull=True,
+        revoked_at__isnull=True, ends_at__lte=at,
+    ).values("ends_at")[:1]
+    grants = UserMarketGrant.objects.filter(
+        user_id=OuterRef("pk"), revoked_at__isnull=True,
+    ).alias(_expired_trial_end=Subquery(expired_trial_end)).filter(
+        Q(_expired_trial_end__isnull=True) | Q(granted_at__gte=F("_expired_trial_end"))
+    )
     trials = TrialGrant.objects.filter(
         user_id=OuterRef("pk"), invalidated_at__isnull=True,
         revoked_at__isnull=True, started_at__lte=at, ends_at__gt=at
@@ -185,12 +203,63 @@ def users_with_basic_access(queryset, *, at=None):
     )
 
 
+def users_with_vip_market_access(queryset, market, *, at=None):
+    """SQL counterpart of can_view_vip_market for notification fan-out."""
+    if market not in MARKETS:
+        return queryset.none()
+    if at is None:
+        at = timezone.now()
+    privileged_role_ids = [
+        role_id for role_id, permissions in PlatformRole.objects.filter(is_active=True)
+        .values_list("id", "permissions")
+        if User.Permission.CONTENT_VIEW_ALL in (permissions or [])
+    ]
+    privileged = (
+        Q(is_superuser=True) | Q(is_staff=True)
+        | Q(role__in=(User.Role.SUPER_ADMIN, User.Role.SUPPORT,
+                     User.Role.ADMIN, User.Role.EMPLOYEE))
+        | Q(custom_role_id__in=privileged_role_ids)
+    )
+    if not market_access_v2_enabled():
+        return queryset.filter(
+            privileged
+            | Q(access_level=User.AccessLevel.LEVEL_3,
+                gold_permanent_granted_at__isnull=False)
+            | Q(access_level=User.AccessLevel.LEVEL_5,
+                gold_trial_expires_at__gt=at)
+            | Q(access_level=User.AccessLevel.LEVEL_5,
+                gold_trial_expires_at__isnull=True)
+        )
+    expired_trial_end = TrialGrant.objects.filter(
+        user_id=OuterRef("user_id"), invalidated_at__isnull=True,
+        revoked_at__isnull=True, ends_at__lte=at,
+    ).values("ends_at")[:1]
+    grants = UserMarketGrant.objects.filter(
+        user_id=OuterRef("pk"), market=market, revoked_at__isnull=True,
+    ).alias(_expired_trial_end=Subquery(expired_trial_end)).filter(
+        Q(_expired_trial_end__isnull=True) | Q(granted_at__gte=F("_expired_trial_end"))
+    )
+    trials = TrialGrant.objects.filter(
+        user_id=OuterRef("pk"), invalidated_at__isnull=True,
+        revoked_at__isnull=True, started_at__lte=at, ends_at__gt=at,
+    )
+    return queryset.alias(
+        _vip_market_grant=Exists(grants), _vip_market_trial=Exists(trials),
+    ).filter(privileged | Q(_vip_market_grant=True) | Q(_vip_market_trial=True))
+
+
 def market_access_payload(user, *, at=None) -> dict:
     """Additive client-facing state; never claim V2 is live while gated off."""
     if not market_access_v2_enabled():
         return {"enabled": False}
     state = resolve_market_access(user, at=at)
     trial = current_trial_grant(user)
+    now = at or timezone.now()
+    trial_status = (
+        "NOT_APPLICABLE" if state.special_role else
+        "ACTIVE" if state.trial_active else
+        "EXPIRED" if trial else "NOT_STARTED"
+    )
     return {
         "enabled": True,
         "membership_tier": state.membership_tier,
@@ -200,6 +269,9 @@ def market_access_payload(user, *, at=None) -> dict:
         "market_selection_confirmed": state.market_selection_confirmed,
         "trial_used": trial is not None,
         "trial_active": state.trial_active,
+        "trial_status": trial_status,
+        "trial_days_remaining": max(0, ceil((trial.ends_at - now).total_seconds() / 86400))
+        if state.trial_active else 0,
         "trial_started_at": trial.started_at if trial else None,
         "trial_ends_at": state.trial_ends_at,
         "is_elite": state.is_elite,

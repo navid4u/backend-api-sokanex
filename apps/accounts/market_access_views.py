@@ -1,13 +1,14 @@
 """New, gated administrator APIs for market membership management."""
 
-from drf_spectacular.utils import OpenApiParameter, extend_schema, extend_schema_view
-from rest_framework import generics, status
+from drf_spectacular.utils import OpenApiParameter, extend_schema, extend_schema_view, inline_serializer
+from rest_framework import generics, serializers, status
 from rest_framework.filters import SearchFilter
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.exceptions import ValidationError
 from django.db.models import Count, Prefetch, Q
+from django.conf import settings
 from django.utils.decorators import method_decorator
 from django.views.decorators.cache import never_cache
 
@@ -31,11 +32,13 @@ from .market_access_serializers import (
     TrialAutoStartSettingsSerializer,
 )
 from .market_trial import (
-    auto_start_settings_payload, preview_trial_campaign, start_trial_campaign,
+    auto_start_settings_payload, eligible_trial_users, preview_trial_campaign,
+    start_existing_user_trial, start_trial_campaign,
     update_auto_start_settings,
 )
 from .market_access_requests import submit_market_access_request, review_market_access_request
 from .models import MarketAccessRequest, TrialGrant, User
+from common.pagination import DefaultPagination
 
 
 def _with_trial_admin_diagnostics(queryset):
@@ -195,6 +198,62 @@ class MarketTrialCampaignPreviewView(APIView):
             registered_from=incoming.validated_data.get("registered_from"),
         )
         return Response(TrialCampaignPreviewResponseSerializer(result).data)
+
+
+@method_decorator(never_cache, name="dispatch")
+class MarketTrialEligibleUsersView(generics.ListAPIView):
+    """Paginated people behind the preview count; the digest remains opaque."""
+
+    permission_classes = [IsAuthenticated, CanStartMarketTrialCampaign, MarketAccessV2Enabled]
+    serializer_class = UserMarketAccessReadSerializer
+    pagination_class = DefaultPagination
+    filter_backends = [SearchFilter]
+    search_fields = ["username", "first_name", "last_name", "phone", "email"]
+
+    def get_queryset(self):
+        unexpected = set(self.request.query_params) - {
+            "registered_from", "search", "page", "page_size",
+        }
+        if unexpected:
+            raise ValidationError({field: "Unknown filter." for field in sorted(unexpected)})
+        values = {}
+        if "registered_from" in self.request.query_params:
+            values["registered_from"] = self.request.query_params["registered_from"]
+        incoming = TrialCampaignPreviewInputSerializer(data=values)
+        incoming.is_valid(raise_exception=True)
+        return _with_trial_admin_diagnostics(
+            eligible_trial_users(
+                registered_from=incoming.validated_data.get("registered_from"),
+            ).order_by("pk")
+        )
+
+
+@method_decorator(never_cache, name="dispatch")
+class MyTrialEnsureView(APIView):
+    """Idempotent app-entry hook for users who kept an existing JWT session."""
+
+    permission_classes = [IsAuthenticated, MarketAccessV2Enabled]
+
+    @extend_schema(responses={200: inline_serializer(
+        name="MyTrialEnsureResponse",
+        fields={
+            "started": serializers.BooleanField(),
+            "existing_user_auto_start_enabled": serializers.BooleanField(),
+            "access": MarketAccessStateSerializer(),
+        },
+    )})
+    def post(self, request):
+        grant = start_existing_user_trial(request.user)
+        if grant is not None:
+            from apps.notifications.trial_journey import queue_trial_day_one
+            from django.db import transaction
+
+            transaction.on_commit(lambda grant_id=grant.pk: queue_trial_day_one(grant_id))
+        return Response({
+            "started": grant is not None,
+            "existing_user_auto_start_enabled": settings.TRIAL_EXISTING_LOGIN_ENABLED,
+            "access": market_access_payload(request.user),
+        })
 
 
 class MarketTrialCampaignStartView(APIView):

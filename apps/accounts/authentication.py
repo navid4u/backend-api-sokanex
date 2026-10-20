@@ -30,6 +30,18 @@ def issue_login_tokens(user, request, refresh_value=None, record_login=True, new
     from .services import PremiumAccessService
 
     PremiumAccessService.refresh_user_state(user)
+    if new_registration:
+        from .market_trial import start_new_user_trial
+        grant = start_new_user_trial(user)
+    elif record_login:
+        from .market_trial import start_existing_user_trial
+        grant = start_existing_user_trial(user)
+    else:
+        grant = None
+    if grant is not None:
+        from apps.notifications.trial_journey import queue_trial_day_one
+
+        transaction.on_commit(lambda grant_id=grant.pk: queue_trial_day_one(grant_id))
     refresh = RefreshToken(refresh_value) if refresh_value else RefreshToken.for_user(user)
     refresh["access_level"] = user.access_level
     refresh["market_type"] = user.market_type
@@ -89,14 +101,7 @@ def issue_login_tokens(user, request, refresh_value=None, record_login=True, new
             ip_address=ip_address,
         )
     if new_registration:
-        from .market_trial import start_new_user_trial
         from apps.notifications.sms_automation import queue_event
-
-        grant = start_new_user_trial(user)
-        if grant is not None:
-            from apps.notifications.trial_journey import queue_trial_day_one
-
-            transaction.on_commit(lambda grant_id=grant.pk: queue_trial_day_one(grant_id))
         transaction.on_commit(
             lambda user_id=user.pk: queue_event(
                 user_id, "WELCOME", f"WELCOME:REGISTRATION:{user_id}",

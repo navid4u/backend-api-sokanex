@@ -6,8 +6,8 @@ from django.utils import timezone
 from rest_framework.test import APITestCase
 
 from .market_access import MARKETS, resolve_market_access
-from .market_trial import eligible_trial_users, start_trial_campaign, trial_candidate_digest
-from .models import TrialCampaign, TrialGrant, User, UserAccessAudit, UserMarketGrant
+from .market_trial import audit_expired_trials, eligible_trial_users, start_trial_campaign, trial_candidate_digest, update_auto_start_settings
+from .models import TrialCampaign, TrialGrant, User, UserAccessAudit, UserAccessProfile, UserMarketGrant
 from .services import LegacyGoldFlowDisabled, PremiumAccessService
 
 
@@ -45,7 +45,7 @@ class MarketTrialCampaignTests(APITestCase):
             format="json",
         )
 
-    def test_preview_is_read_only_and_excludes_special_inactive_granted_and_used(self):
+    def test_preview_is_read_only_and_excludes_special_inactive_and_used(self):
         User.objects.create_user(username="trial-v2-inactive", is_active=False)
         granted = User.objects.create_user(username="trial-v2-granted")
         UserMarketGrant.objects.create(
@@ -61,7 +61,7 @@ class MarketTrialCampaignTests(APITestCase):
         )
         response = self.preview()
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.data["eligible_count"], 1)
+        self.assertEqual(response.data["eligible_count"], 2)
         self.assertEqual(response.data["duration_days"], 7)
         self.assertEqual(TrialGrant.objects.count(), 1)
         self.assertFalse(UserAccessAudit.objects.exists())
@@ -126,10 +126,8 @@ class MarketTrialCampaignTests(APITestCase):
     def test_same_count_but_changed_cohort_is_rejected(self):
         original = self.preview().data
         replacement = User.objects.create_user(username="trial-v2-replacement")
-        UserMarketGrant.objects.create(
-            user=self.user, market=User.MarketType.FOREX,
-            source=UserMarketGrant.Source.ADMIN, granted_by=self.admin,
-        )
+        self.user.is_active = False
+        self.user.save(update_fields=("is_active",))
         response = self.client.post(
             self.start_url,
             {
@@ -142,6 +140,107 @@ class MarketTrialCampaignTests(APITestCase):
         self.assertEqual(response.status_code, 409)
         self.assertFalse(TrialGrant.objects.filter(user=replacement).exists())
         self.assertFalse(TrialCampaign.objects.exists())
+
+    def test_campaign_revokes_prior_market_grant_before_trial(self):
+        old = UserMarketGrant.objects.create(
+            user=self.user, market=User.MarketType.CRYPTO,
+            source=UserMarketGrant.Source.ADMIN, granted_by=self.admin,
+        )
+        self.assertEqual(self.preview().data["eligible_count"], 1)
+        self.assertEqual(self.start(1).status_code, 201)
+        old.refresh_from_db()
+        self.assertIsNotNone(old.revoked_at)
+        grant = TrialGrant.objects.get(user=self.user)
+        self.assertEqual(resolve_market_access(self.user, at=grant.ends_at).effective_markets, frozenset())
+
+    @override_settings(TRIAL_EXISTING_LOGIN_ENABLED=True)
+    def test_existing_user_ensure_is_one_time_and_revokes_approved_access(self):
+        update_auto_start_settings(actor=self.admin, auto_start_new_users=True)
+        market_grant = UserMarketGrant.objects.create(
+            user=self.user, market=User.MarketType.FOREX,
+            source=UserMarketGrant.Source.ADMIN, granted_by=self.admin,
+        )
+        UserAccessProfile.objects.create(user=self.user, is_elite=True)
+        self.client.force_authenticate(self.user)
+        first = self.client.post("/api/accounts/market-access/trial/ensure/", {}, format="json")
+        self.assertEqual(first.status_code, 200)
+        self.assertTrue(first.data["started"])
+        self.assertEqual(first.data["access"]["trial_status"], "ACTIVE")
+        self.assertEqual(first.data["access"]["trial_days_remaining"], 7)
+        grant = TrialGrant.objects.get(user=self.user)
+        self.assertEqual(grant.source, "AUTO_EXISTING_USER")
+        market_grant.refresh_from_db()
+        self.assertIsNotNone(market_grant.revoked_at)
+        self.assertFalse(UserAccessProfile.objects.get(user=self.user).is_elite)
+        second = self.client.post("/api/accounts/market-access/trial/ensure/", {}, format="json")
+        self.assertEqual(second.status_code, 200)
+        self.assertFalse(second.data["started"])
+        self.assertEqual(TrialGrant.objects.filter(user=self.user).count(), 1)
+        self.assertEqual(TrialGrant.objects.get(user=self.user).ends_at, grant.ends_at)
+
+    @override_settings(TRIAL_EXISTING_LOGIN_ENABLED=True)
+    def test_existing_user_with_prior_current_trial_is_not_reenrolled(self):
+        update_auto_start_settings(actor=self.admin, auto_start_new_users=True)
+        old = TrialCampaign.objects.create(created_by=self.admin)
+        TrialGrant.objects.create(
+            user=self.user, campaign=old,
+            started_at=timezone.now() - timedelta(days=8),
+            ends_at=timezone.now() - timedelta(days=1),
+        )
+        self.client.force_authenticate(self.user)
+        response = self.client.post("/api/accounts/market-access/trial/ensure/", {}, format="json")
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(response.data["started"])
+        self.assertEqual(response.data["access"]["trial_status"], "EXPIRED")
+        self.assertEqual(TrialGrant.objects.filter(user=self.user).count(), 1)
+
+    def test_expiry_hides_and_revokes_grants_approved_during_trial(self):
+        self.assertEqual(self.start(1).status_code, 201)
+        grant = TrialGrant.objects.get(user=self.user)
+        access_grant = UserMarketGrant.objects.create(
+            user=self.user, market=User.MarketType.CRYPTO,
+            source=UserMarketGrant.Source.ADMIN, granted_by=self.admin,
+            granted_at=grant.started_at + timedelta(days=1),
+        )
+        future = grant.ends_at + timedelta(seconds=1)
+        self.assertFalse(resolve_market_access(self.user, at=future).effective_markets)
+        self.assertEqual(audit_expired_trials(now=future), 1)
+        access_grant.refresh_from_db()
+        self.assertIsNotNone(access_grant.revoked_at)
+        self.assertEqual(audit_expired_trials(now=future), 0)
+
+    def test_eligible_people_have_paginated_list_not_digest_as_name(self):
+        self.assertEqual(self.preview().data["eligible_count"], 1)
+        response = self.client.get(
+            "/api/accounts/admin/market-access/trial-campaigns/eligible-users/",
+            {"page": 1, "page_size": 10},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["count"], 1)
+        self.assertEqual(response.data["results"][0]["username"], self.user.username)
+        self.client.force_authenticate(self.user)
+        self.assertEqual(self.client.get(
+            "/api/accounts/admin/market-access/trial-campaigns/eligible-users/"
+        ).status_code, 403)
+
+    @override_settings(TRIAL_EXISTING_LOGIN_ENABLED=True)
+    def test_existing_user_password_login_starts_trial_before_dashboard(self):
+        update_auto_start_settings(actor=self.admin, auto_start_new_users=True)
+        self.user.set_password("GoodPassword!987")
+        self.user.save(update_fields=("password",))
+        self.client.force_authenticate(user=None)
+        with self.captureOnCommitCallbacks(execute=True):
+            login = self.client.post(
+                "/api/token/",
+                {"username": self.user.username, "password": "GoodPassword!987"},
+                format="json",
+            )
+        self.assertEqual(login.status_code, 200, login.data)
+        self.assertEqual(TrialGrant.objects.filter(user=self.user).count(), 1)
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {login.data['access']}")
+        dashboard = self.client.get("/api/dashboard/")
+        self.assertEqual(dashboard.status_code, 200)
+        self.assertTrue(dashboard.data["data"]["market_access_v2"]["trial_active"])
 
     def test_registered_from_limits_candidates(self):
         older = User.objects.create_user(username="trial-v2-older")

@@ -18,7 +18,11 @@ from apps.accounts.models import TrialGrant, User
 from common.phone import normalize_iran_phone
 from common.sms import PayamitoSMSService, SMSProviderError
 
-from .models import SMSAutomationDelivery, SMSAutomationRule, SMSBroadcast
+from .models import (
+    Notification, SMSAutomationDelivery, SMSAutomationRule, SMSBroadcast,
+    TrialJourneyDispatch,
+)
+from .services import NotificationService
 
 logger = logging.getLogger(__name__)
 ALLOWED_VARIABLES = frozenset({
@@ -272,7 +276,45 @@ def send_pending(*, limit=100):
         delivery.save(update_fields=(
             "status", "sent_at", "provider_message_id", "failure_code", "updated_at",
         ))
+        if delivery.status == SMSAutomationDelivery.Status.SENT:
+            try:
+                ensure_sent_sms_notification(delivery)
+            except Exception:
+                # Provider acceptance is final; a notification failure must
+                # never make the SMS retryable or send a duplicate SMS.
+                logger.exception("sms_automation_notification_failed delivery_id=%s", delivery.pk)
     return sent
+
+
+def ensure_sent_sms_notification(delivery):
+    """Create a private in-app receipt for a delivered non-OTP SMS exactly once."""
+    if delivery.status != SMSAutomationDelivery.Status.SENT:
+        return None
+    if delivery.event == "JOURNEY":
+        existing = TrialJourneyDispatch.objects.filter(
+            sms_delivery=delivery, channel=TrialJourneyDispatch.Channel.SMS,
+        ).first()
+        if existing and TrialJourneyDispatch.objects.filter(
+            enrollment=existing.enrollment, day=existing.day,
+            channel=TrialJourneyDispatch.Channel.IN_APP,
+            notification__isnull=False,
+        ).exists():
+            return None
+    notification, created = Notification.objects.get_or_create(
+        source_key=f"SMS_DELIVERY:{delivery.pk}",
+        defaults={
+            "recipient_id": delivery.user_id,
+            "title": "پیامک سوکانکس",
+            "message": delivery.text,
+            "notification_type": Notification.Type.SYSTEM,
+            "show_in_app": True,
+            "send_sms": False,
+            "target_url": "/notifications",
+        },
+    )
+    if created and delivery.event != "JOURNEY":
+        NotificationService.queue_push(notification)
+    return notification
 
 
 def broadcast_candidates(*, tiers, market, diagnostics=None):

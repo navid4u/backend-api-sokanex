@@ -128,6 +128,8 @@ class MarketAccessStateSerializer(serializers.Serializer):
     market_selection_confirmed = serializers.BooleanField()
     trial_used = serializers.BooleanField()
     trial_active = serializers.BooleanField()
+    trial_status = serializers.CharField()
+    trial_days_remaining = serializers.IntegerField(min_value=0)
     trial_started_at = serializers.DateTimeField(allow_null=True)
     trial_ends_at = serializers.DateTimeField(allow_null=True)
     is_elite = serializers.BooleanField()

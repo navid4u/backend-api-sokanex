@@ -58,6 +58,10 @@ class Notification(LevelRestrictedContent, models.Model):
         blank=True,
     )
 
+    # Server-created event identity and VIP market scope. Never client-editable.
+    source_key = models.CharField(max_length=120, null=True, blank=True, unique=True)
+    market_scope = models.CharField(max_length=12, blank=True, default="")
+
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,

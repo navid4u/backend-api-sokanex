@@ -14,8 +14,12 @@ from apps.accounts.models import (
 )
 from common.sms import SMSProviderError
 
-from .models import SMSAutomationDelivery, SMSAutomationRule, SMSBroadcast
-from .sms_automation import queue_due_trial_messages, queue_event, send_pending
+from .models import (
+    Notification, SMSAutomationDelivery, SMSAutomationRule, SMSBroadcast,
+    TrialJourneyDispatch, TrialJourneyEnrollment,
+)
+from .services import NotificationService
+from .sms_automation import ensure_sent_sms_notification, queue_due_trial_messages, queue_event, send_pending
 
 
 @override_settings(
@@ -107,6 +111,13 @@ class SMSAutomationTests(TestCase):
         self.assertNotIn(SMSBroadcast._meta.db_table, claim_sql)
         self.assertIn("علی", send.call_args.args[1])
         self.assertEqual(SMSAutomationDelivery.objects.get().status, "SENT")
+        delivery = SMSAutomationDelivery.objects.get()
+        notification = Notification.objects.get(source_key=f"SMS_DELIVERY:{delivery.pk}")
+        self.assertEqual(notification.recipient_id, self.user.pk)
+        self.assertEqual(notification.message, delivery.text)
+        self.assertTrue(NotificationService.visible_notifications(self.user).filter(pk=notification.pk).exists())
+        ensure_sent_sms_notification(delivery)
+        self.assertEqual(Notification.objects.filter(source_key=notification.source_key).count(), 1)
 
     def test_new_registration_triggers_welcome_without_a_second_api_call(self):
         rule = SMSAutomationRule.objects.get(slot="WELCOME", market="ALL")
@@ -306,6 +317,32 @@ class SMSAutomationTests(TestCase):
         delivery = SMSAutomationDelivery.objects.get()
         self.assertEqual(delivery.status, "FAILED")
         self.assertEqual(delivery.failure_code, "TEST_FAIL")
+        self.assertFalse(Notification.objects.filter(source_key=f"SMS_DELIVERY:{delivery.pk}").exists())
+
+    def test_journey_sms_reuses_existing_in_app_message(self):
+        now = timezone.now()
+        campaign = TrialCampaign.objects.create(created_by=self.admin)
+        grant = TrialGrant.objects.create(
+            user=self.user, campaign=campaign,
+            started_at=now, ends_at=now + timedelta(days=7),
+        )
+        enrollment = TrialJourneyEnrollment.objects.create(grant=grant)
+        delivery = SMSAutomationDelivery.objects.create(
+            user=self.user, event="JOURNEY", event_key="JOURNEY:TEST:1",
+            phone=self.user.phone, text="پیام روز اول", scheduled_at=now,
+            status="SENT", sent_at=now,
+        )
+        existing = Notification.objects.create(
+            recipient=self.user, title="سوکانکس", message="پیام روز اول",
+        )
+        TrialJourneyDispatch.objects.create(
+            enrollment=enrollment, day=1, channel="SMS", sms_delivery=delivery,
+        )
+        TrialJourneyDispatch.objects.create(
+            enrollment=enrollment, day=1, channel="IN_APP", notification=existing,
+        )
+        self.assertIsNone(ensure_sent_sms_notification(delivery))
+        self.assertEqual(Notification.objects.filter(recipient=self.user).count(), 1)
 
     @override_settings(SMS_AUTOMATION_ENABLED=False)
     def test_global_kill_switch_does_not_queue_or_send(self):

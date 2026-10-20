@@ -5,7 +5,8 @@ import hashlib
 from datetime import datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
-from django.db import transaction
+from django.conf import settings
+from django.db import models, transaction
 from django.db.models import Exists, OuterRef
 from django.utils import timezone
 from rest_framework.exceptions import APIException, PermissionDenied
@@ -13,7 +14,8 @@ from rest_framework.exceptions import APIException, PermissionDenied
 from .market_access import market_access_v2_enabled
 from .models import (
     TrialAutoStartSettings, TrialAutoStartSettingsAudit, TrialCampaign,
-    TrialGrant, TrialAutoStartDecision, User, UserAccessAudit, UserMarketGrant,
+    TrialGrant, TrialAutoStartDecision, User, UserAccessAudit, UserAccessProfile,
+    UserMarketGrant,
 )
 
 
@@ -44,14 +46,15 @@ def eligible_trial_users(*, registered_from=None):
 
     Legacy Gold/trial dates and explicitly invalidated pre-reset grants are
     ignored. The current TrialGrant is the lifetime-use marker for this era.
+    Existing V2 market grants do not exclude someone: they are revoked when
+    the trial starts, per the seven-day-only rollout policy.
     """
-    grants = UserMarketGrant.objects.filter(user_id=OuterRef("pk"), revoked_at__isnull=True)
     prior_trial = TrialGrant.objects.filter(user_id=OuterRef("pk"), invalidated_at__isnull=True)
     users = (
         User.objects.filter(is_active=True, is_superuser=False)
         .exclude(role__in=(User.Role.SUPER_ADMIN, User.Role.SUPPORT))
-        .annotate(_has_active_market_grant=Exists(grants), _has_v2_trial=Exists(prior_trial))
-        .filter(_has_active_market_grant=False, _has_v2_trial=False)
+        .annotate(_has_v2_trial=Exists(prior_trial))
+        .filter(_has_v2_trial=False)
     )
     cutoff = _registration_cutoff(registered_from)
     if cutoff is not None:
@@ -122,6 +125,46 @@ def _create_trial_grants(*, user_ids, campaign, started_at, actor, source):
     return ends_at
 
 
+def _revoke_pretrial_access(*, user_ids, at, actor, reason, granted_before=None):
+    """Remove normal-user grants before a trial or at its end, with audit."""
+    operation_id = uuid.uuid4()
+    grants = UserMarketGrant.objects.select_for_update().filter(
+        user_id__in=user_ids, revoked_at__isnull=True,
+    )
+    if granted_before is not None:
+        grants = grants.filter(granted_at__lt=granted_before)
+    for grant in grants.order_by("user_id", "pk"):
+        grant.revoked_at = max(at, grant.granted_at)
+        grant.revoked_by = actor
+        grant.save(update_fields=("revoked_at", "revoked_by"))
+        UserAccessAudit.objects.create(
+            user_id=grant.user_id, subject_user_id=grant.user_id, actor=actor,
+            action=UserAccessAudit.Action.MARKET_REVOKED,
+            before={"market": grant.market, "active": True, "grant_id": grant.pk},
+            after={"market": grant.market, "active": False, "reason": reason},
+            operation_id=operation_id,
+        )
+    profiles = UserAccessProfile.objects.select_for_update().filter(
+        user_id__in=user_ids, is_elite=True,
+    )
+    if granted_before is not None:
+        profiles = profiles.filter(
+            models.Q(elite_updated_at__isnull=True) | models.Q(elite_updated_at__lt=granted_before)
+        )
+    for profile in profiles.order_by("user_id"):
+        profile.is_elite = False
+        profile.elite_updated_at = at
+        profile.elite_updated_by = actor
+        profile.save(update_fields=("is_elite", "elite_updated_at", "elite_updated_by"))
+        UserAccessAudit.objects.create(
+            user_id=profile.user_id, subject_user_id=profile.user_id, actor=actor,
+            action=UserAccessAudit.Action.ELITE_CHANGED,
+            before={"is_elite": True},
+            after={"is_elite": False, "reason": reason},
+            operation_id=operation_id,
+        )
+
+
 @transaction.atomic
 def start_new_user_trial(user):
     """Decide once at the first successful new-account session, inside its transaction."""
@@ -164,6 +207,43 @@ def start_new_user_trial(user):
     return grant
 
 
+@transaction.atomic
+def start_existing_user_trial(user):
+    """Start one unused trial on a returning user's successful app entry.
+
+    The rollout flag is deliberately separate from the registration switch.
+    Previously approved market grants are revoked *before* the trial starts,
+    so expiration never has to undo a later administrator approval.
+    """
+    if not market_access_v2_enabled() or not settings.TRIAL_EXISTING_LOGIN_ENABLED:
+        return None
+    target = User.objects.select_for_update().get(pk=user.pk)
+    if not target.is_active or target.is_superuser or target.role in (
+        User.Role.SUPER_ADMIN, User.Role.SUPPORT,
+    ):
+        return None
+    if TrialGrant.objects.filter(user=target, invalidated_at__isnull=True).exists():
+        return None
+    setting = TrialAutoStartSettings.objects.select_for_update().filter(pk=1).first()
+    if not setting or not setting.auto_start_new_users or not setting.campaign_id:
+        return None
+
+    now = timezone.now()
+    _revoke_pretrial_access(
+        user_ids=(target.pk,), at=now, actor=None,
+        reason="AUTO_EXISTING_USER_TRIAL",
+    )
+    _create_trial_grants(
+        user_ids=(target.pk,), campaign=setting.campaign,
+        started_at=now, actor=None, source="AUTO_EXISTING_USER",
+    )
+    grant = TrialGrant.objects.get(user=target, invalidated_at__isnull=True)
+    TrialAutoStartDecision.objects.update_or_create(
+        user=target, defaults={"grant": grant, "reason": "STARTED"},
+    )
+    return grant
+
+
 def audit_expired_trials(*, limit=200, now=None):
     """Record real expiry once; V2 access itself is resolved from server time."""
     if not market_access_v2_enabled():
@@ -182,6 +262,13 @@ def audit_expired_trials(*, limit=200, now=None):
             ).first()
             if grant is None:
                 continue
+            # An access grant approved during a running trial must not survive
+            # its end. A fresh approval *after* ends_at remains untouched.
+            _revoke_pretrial_access(
+                user_ids=(grant.user_id,), at=now, actor=None,
+                reason="TRIAL_EXPIRED",
+                granted_before=grant.ends_at,
+            )
             UserAccessAudit.objects.create(
                 user_id=grant.user_id, subject_user_id=grant.user_id, actor=None,
                 action=UserAccessAudit.Action.TRIAL_EXPIRED,
@@ -248,6 +335,9 @@ def start_trial_campaign(*, actor, registered_from=None, expected_eligible_count
 
     now = timezone.now()
     duration_days = 7
+    _revoke_pretrial_access(
+        user_ids=user_ids, at=now, actor=actor, reason="ADMIN_TRIAL_CAMPAIGN",
+    )
     campaign = TrialCampaign.objects.create(
         created_by=actor,
         created_from=_registration_cutoff(registered_from),

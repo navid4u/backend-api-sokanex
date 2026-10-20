@@ -23,7 +23,10 @@ from .models import (
     WebPushSubscription,
 )
 from apps.accounts.models import User
-from apps.accounts.market_access import has_basic_access, market_access_v2_enabled, users_with_basic_access
+from apps.accounts.market_access import (
+    can_view_vip_market, has_basic_access, market_access_v2_enabled,
+    users_with_basic_access, users_with_vip_market_access,
+)
 from common.sms import PayamitoSMSService, SMSProviderError, render_sms_template
 from common.phone import normalize_iran_phone
 
@@ -114,8 +117,10 @@ class NotificationService:
                 **{f"allowed_level_{user.effective_access_level}": True}
             )
 
+        visible_markets = [market for market in ("crypto", "forex") if can_view_vip_market(user, market)]
         return (
             Notification.objects.filter(audience, is_active=True, show_in_app=True)
+            .filter(Q(market_scope="") | Q(market_scope__in=visible_markets))
             .filter(level_filter)
             .filter(Q(expires_at__isnull=True) | Q(expires_at__gt=timezone.now()))
             .select_related("created_by")
@@ -196,6 +201,8 @@ class NotificationService:
     @staticmethod
     def audience_users(notification):
         queryset = User.objects.filter(is_active=True)
+        if notification.market_scope:
+            queryset = users_with_vip_market_access(queryset, notification.market_scope)
         if notification.recipient_id:
             return queryset.filter(pk=notification.recipient_id)
         if notification.target_role:

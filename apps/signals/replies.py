@@ -1,3 +1,5 @@
+import logging
+
 from django.conf import settings
 from django.db import transaction
 from django.utils.html import strip_tags
@@ -5,6 +7,40 @@ from rest_framework.exceptions import APIException, ValidationError
 
 from .models import VIPChannelRetention, VIPSignalPost
 from .retention import prune_vip_channel
+
+logger = logging.getLogger(__name__)
+
+
+def _announce_new_vip_post(post_id):
+    """Public metadata only; market-scoped visibility is enforced on reads/push."""
+    from apps.notifications.models import Notification
+    from apps.notifications.services import NotificationService
+
+    post = VIPSignalPost.objects.filter(pk=post_id, is_active=True).first()
+    if post is None:
+        return
+    notification, created = Notification.objects.get_or_create(
+        source_key=f"VIP_SIGNAL:{post.pk}",
+        defaults={
+            "title": "سیگنال جدید سوکانکس",
+            "message": "پست جدید در کانال VIP کریپتو منتشر شد." if post.channel == "CRYPTO"
+                       else "پست جدید در کانال VIP فارکس منتشر شد.",
+            "notification_type": Notification.Type.SIGNAL,
+            "market_scope": post.channel.lower(),
+            "target_url": "/signals",
+            "show_in_app": True,
+            "send_sms": False,
+        },
+    )
+    if created:
+        NotificationService.queue_push(notification)
+
+
+def _announce_new_vip_post_safely(post_id):
+    try:
+        _announce_new_vip_post(post_id)
+    except Exception:
+        logger.exception("vip_signal_notification_failed post_id=%s", post_id)
 
 
 class VIPReplyConflict(APIException):
@@ -128,4 +164,6 @@ def ingest_vip_post(channel, values):
     _connect_waiting_replies(post)
     if created and retention.activated_at and settings.VIP_SIGNAL_RETENTION_ENABLED:
         prune_vip_channel(channel)
+    if created:
+        transaction.on_commit(lambda post_id=post.pk: _announce_new_vip_post_safely(post_id))
     return post, created

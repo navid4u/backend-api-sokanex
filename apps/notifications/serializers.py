@@ -29,6 +29,7 @@ class NotificationSerializer(AllowedLevelsSerializerMixin,
             "title",
             "message",
             "notification_type",
+            "market_scope",
             "priority",
             "action_label",
             "allowed_levels",
@@ -53,6 +54,7 @@ class NotificationSerializer(AllowedLevelsSerializerMixin,
             "created_at",
             "updated_at",
             "sms_summary",
+            "market_scope",
         )
 
     def get_sms_summary(self, obj) -> dict:
