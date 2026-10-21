@@ -48,7 +48,7 @@ class PayamitoSMSServiceTests(SimpleTestCase):
         }).encode("utf-8")
         urlopen.return_value.__enter__.return_value = response
 
-        with self.assertLogs("django.request", level="WARNING") as logs:
+        with self.assertLogs("common.sms", level="WARNING") as logs:
             with self.assertRaises(SMSProviderError) as context:
                 PayamitoSMSService.send("09121234567", "test")
 

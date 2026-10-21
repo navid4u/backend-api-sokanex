@@ -16,7 +16,7 @@ from common.sms import PayamitoSMSService, SMSProviderError, render_sms_template
 from .models import OTPChallenge, User, UserProfile
 
 
-logger = logging.getLogger("django.request")
+logger = logging.getLogger(__name__)
 
 
 class OTPProviderError(APIException):

@@ -7,7 +7,7 @@ from urllib.request import Request, urlopen
 from django.conf import settings
 
 
-logger = logging.getLogger("django.request")
+logger = logging.getLogger(__name__)
 
 
 def _safe_provider_value(value, limit=200):

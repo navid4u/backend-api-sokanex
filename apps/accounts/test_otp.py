@@ -8,6 +8,7 @@ from rest_framework.test import APIClient
 
 from apps.activity.models import UserActivity
 from common.phone import normalize_iran_phone
+from common.sms import SMSProviderError
 
 from .models import OTPChallenge, UserDevice, UserProfile
 from .otp import OTPProviderError
@@ -79,6 +80,20 @@ class OTPAuthenticationTests(TestCase):
         retried = self.client.post("/api/accounts/auth/otp/request/", payload)
         self.assertEqual(retried.status_code, 200)
         self.assertIsNotNone(OTPChallenge.objects.get().sent_at)
+
+    @patch("apps.accounts.otp.PayamitoSMSService.send")
+    def test_provider_failure_logs_safe_code_on_application_logger(self, send_sms):
+        send_sms.side_effect = SMSProviderError(
+            "Provider rejected message", provider_code="SMS_PROVIDER_INSUFFICIENT_CREDIT"
+        )
+        with self.assertLogs("apps.accounts.otp", level="WARNING") as logs:
+            response = self.client.post(
+                "/api/accounts/auth/otp/request/", {"phone": "09121234567"}
+            )
+        self.assertEqual(response.status_code, 503)
+        self.assertIn("provider_code=SMS_PROVIDER_INSUFFICIENT_CREDIT", " ".join(logs.output))
+        self.assertNotIn("09121234567", " ".join(logs.output))
+        self.assertFalse(OTPChallenge.objects.exists())
 
     def test_username_password_registration_preserves_username_and_returns_tokens(self):
         response = self.client.post("/api/accounts/register/", {
