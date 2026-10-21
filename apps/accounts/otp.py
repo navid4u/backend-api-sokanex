@@ -151,7 +151,7 @@ class OTPService:
         return challenge
 
     @classmethod
-    def verify_registration_login(cls, phone, code, *, invite_token=None):
+    def verify_registration_login(cls, phone, code, *, invite_token=None, first_name="", last_name=""):
         invalid = False
         account_error = None
         user = None
@@ -211,6 +211,8 @@ class OTPService:
                             user = User.objects.create(
                                 username=phone,
                                 phone=phone,
+                                first_name=first_name,
+                                last_name=last_name,
                                 role=User.Role.USER,
                                 access_level=User.AccessLevel.LEVEL_1,
                                 is_active=True,

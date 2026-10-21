@@ -528,7 +528,7 @@ class RegistrationOTPVerifyView(generics.GenericAPIView):
         examples=[
             OpenApiExample(
                 "Verify registration OTP",
-                value={"phone": "09121234567", "code": "1234"},
+                value={"phone": "09121234567", "code": "1234", "first_name": "علی", "last_name": "احمدی"},
                 request_only=True,
             ),
         ],
@@ -540,6 +540,8 @@ class RegistrationOTPVerifyView(generics.GenericAPIView):
             user, created = OTPService.verify_registration_login(
                 serializer.validated_data["phone"], serializer.validated_data["code"],
                 invite_token=serializer.validated_data.get("invite_token"),
+                first_name=serializer.validated_data.get("first_name", ""),
+                last_name=serializer.validated_data.get("last_name", ""),
             )
             session = issue_login_tokens(
                 user, request, record_login=not created, new_registration=created,

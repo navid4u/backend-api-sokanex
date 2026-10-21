@@ -1506,6 +1506,10 @@ class RegistrationOTPRequestSerializer(OTPRequestSerializer):
 
 class RegistrationOTPVerifySerializer(RegistrationOTPRequestSerializer):
     code = serializers.RegexField(r"^\d{4}$", error_messages={"invalid": "کد باید چهار رقم باشد."})
+    # Optional for existing clients. A new registration can provide its name
+    # before the trial day-one message is queued on transaction commit.
+    first_name = serializers.CharField(required=False, max_length=150, trim_whitespace=True)
+    last_name = serializers.CharField(required=False, max_length=150, trim_whitespace=True)
 
 
 class RegistrationOTPUserSerializer(serializers.ModelSerializer):

@@ -75,6 +75,7 @@ class SMSRuleSerializer(serializers.ModelSerializer):
 
 class SMSDeliverySerializer(serializers.ModelSerializer):
     username = serializers.CharField(source="user.username", read_only=True)
+    user_full_name = serializers.SerializerMethodField()
     rule_slot = serializers.CharField(source="rule.slot", read_only=True, allow_null=True)
     rendered_text = serializers.CharField(source="text", read_only=True)
     error_code = serializers.SerializerMethodField()
@@ -82,10 +83,13 @@ class SMSDeliverySerializer(serializers.ModelSerializer):
     def get_error_code(self, obj):
         return obj.failure_code or None
 
+    def get_user_full_name(self, obj):
+        return obj.user.get_full_name().strip() or None
+
     class Meta:
         model = SMSAutomationDelivery
         fields = (
-            "id", "user", "username", "phone", "event", "rule_slot", "broadcast",
+            "id", "user", "username", "user_full_name", "phone", "event", "rule_slot", "broadcast",
             "text", "rendered_text", "status", "scheduled_at", "claimed_at", "sent_at",
             "provider_message_id", "failure_code", "error_code", "attempts", "created_at",
         )

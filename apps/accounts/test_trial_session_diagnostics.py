@@ -1,4 +1,5 @@
 from datetime import timedelta
+from unittest.mock import patch
 
 from django.core.cache import cache
 from django.test import override_settings
@@ -147,3 +148,31 @@ class TrialSessionDiagnosticsTests(APITestCase):
         self.assertEqual(sum(item.status == "PENDING" for item in deliveries), 1)
         self.assertEqual(sum(item.failure_code == "JOURNEY_OWNS_WELCOME" for item in deliveries), 1)
         self.assertEqual(deliveries[0].user_id, user.pk)
+        self.assertIn("New عزیز", next(item.text for item in deliveries if item.status == "PENDING"))
+
+    @override_settings(TRIAL_JOURNEY_ENABLED=True)
+    def test_phone_signup_name_is_used_in_day_one_sms(self):
+        TrialJourneyActivation.objects.create(pk=1, activated_at=timezone.now())
+        update_auto_start_settings(actor=self.admin, auto_start_new_users=True)
+        day_one = TrialJourneyDay.objects.get(day=1)
+        day_one.is_active = True
+        day_one.market = "ALL"
+        day_one.text = "{first_name} عزیز، خوش آمدید!"
+        day_one.save(update_fields=("is_active", "market", "text"))
+        with patch("apps.accounts.otp.secrets.randbelow", return_value=4839), patch(
+            "apps.accounts.otp.PayamitoService.send_otp"
+        ):
+            requested = self.client.post(
+                "/api/accounts/auth/registration/request/", {"phone": "09121112239"},
+            )
+        self.assertEqual(requested.status_code, 200)
+        with self.captureOnCommitCallbacks(execute=True):
+            verified = self.client.post(
+                "/api/accounts/auth/registration/verify/",
+                {"phone": "09121112239", "code": "4839", "first_name": "مینا", "last_name": "احمدی"},
+            )
+        self.assertEqual(verified.status_code, 200)
+        user = User.objects.get(phone="09121112239")
+        delivery = SMSAutomationDelivery.objects.get(user=user, event="JOURNEY")
+        self.assertEqual(delivery.status, "PENDING")
+        self.assertEqual(delivery.text, "مینا عزیز، خوش آمدید!")

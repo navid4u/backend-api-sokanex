@@ -19,7 +19,7 @@ from .models import (
     TrialJourneyDispatch, TrialJourneyEnrollment,
 )
 from .services import NotificationService
-from .sms_automation import ensure_sent_sms_notification, queue_due_trial_messages, queue_event, send_pending
+from .sms_automation import _render, ensure_sent_sms_notification, queue_due_trial_messages, queue_event, send_pending
 
 
 @override_settings(
@@ -118,6 +118,12 @@ class SMSAutomationTests(TestCase):
         self.assertTrue(NotificationService.visible_notifications(self.user).filter(pk=notification.pk).exists())
         ensure_sent_sms_notification(delivery)
         self.assertEqual(Notification.objects.filter(source_key=notification.source_key).count(), 1)
+
+    def test_missing_name_never_produces_a_blank_greeting(self):
+        self.user.first_name = ""
+        self.user.last_name = ""
+        self.user.save(update_fields=("first_name", "last_name"))
+        self.assertEqual(_render("{first_name} عزیز، خوش آمدید!", self.user), "کاربر عزیز، خوش آمدید!")
 
     def test_new_registration_triggers_welcome_without_a_second_api_call(self):
         rule = SMSAutomationRule.objects.get(slot="WELCOME", market="ALL")
@@ -394,6 +400,7 @@ class SMSAutomationTests(TestCase):
         self.assertEqual(response.data["count"], 3)
         self.assertEqual(len(response.data["results"]), 2)
         self.assertEqual(response.data["results"][0]["rendered_text"], "snapshot 2")
+        self.assertEqual(response.data["results"][0]["user_full_name"], "علی")
         failed = self.client.get(url, {"user_id": self.user.pk, "status": "FAILED", "ordering": "-sent_at"})
         self.assertEqual(failed.data["count"], 1)
         self.assertEqual(failed.data["results"][0]["error_code"], "STUB_FAILURE")

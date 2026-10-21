@@ -66,6 +66,30 @@ class RegistrationOTPTests(TestCase):
         self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {verified.data['access']}")
         self.assertEqual(self.client.get("/api/dashboard/").status_code, 200)
 
+    def test_new_phone_can_supply_name_before_trial_messages_are_queued(self):
+        self.request_code()
+        response = self.client.post(
+            "/api/accounts/auth/registration/verify/",
+            {"phone": "09121234567", "code": "4839", "first_name": "  علی  ", "last_name": " احمدی "},
+        )
+        self.assertEqual(response.status_code, 200)
+        user = User.objects.get(phone="09121234567")
+        self.assertEqual((user.first_name, user.last_name), ("علی", "احمدی"))
+        self.assertEqual(response.data["user"]["first_name"], "علی")
+
+    def test_existing_phone_cannot_overwrite_name_during_login(self):
+        user = User.objects.create_user(
+            username="09121234567", phone="09121234567", first_name="ثبت‌شده",
+        )
+        self.request_code()
+        response = self.client.post(
+            "/api/accounts/auth/registration/verify/",
+            {"phone": "09121234567", "code": "4839", "first_name": "نام دیگر"},
+        )
+        self.assertEqual(response.status_code, 200)
+        user.refresh_from_db()
+        self.assertEqual(user.first_name, "ثبت‌شده")
+
     @override_settings(CRM_ENABLED=True, CRM_API_KEY="wrong-key")
     @patch("apps.accounts.crm.request.urlopen")
     def test_otp_verify_is_fail_open_and_never_calls_crm_http(self, urlopen):

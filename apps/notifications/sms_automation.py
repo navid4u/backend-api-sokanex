@@ -71,8 +71,8 @@ def _rule(rules, slot, user):
 def _render(text, user, *, days_remaining=0, market=None):
     state = resolve_market_access(user) if market_access_v2_enabled() else None
     result = validate_template(text).format(
-        first_name=user.first_name or "",
-        last_name=user.last_name or "",
+        first_name=(user.first_name or "").strip() or "کاربر",
+        last_name=(user.last_name or "").strip(),
         days_remaining=days_remaining,
         support_link=settings.SMS_AUTOMATION_SUPPORT_LINK,
         membership_tier=state.membership_tier if state else f"LEVEL_{user.access_level}",
