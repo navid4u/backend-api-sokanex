@@ -7,7 +7,6 @@ from rest_framework import status
 from rest_framework.throttling import SimpleRateThrottle
 from drf_spectacular.utils import OpenApiParameter, extend_schema, inline_serializer
 from rest_framework import serializers
-from django.conf import settings
 from django.db import transaction
 from django.db.models import F
 from django.utils import timezone
@@ -19,6 +18,7 @@ from common.permissions import IsSuperAdmin
 from .analytics import PERIODS, TEHRAN, overview
 from .models import PageViewDailyAggregate, PageViewEvent, PageViewReceipt, UserActivity
 from .serializers import PageViewIngestSerializer, UserActivitySerializer
+from .tracking import page_view_tracking_enabled
 
 
 class RecentActivityListView(generics.ListAPIView):
@@ -62,7 +62,7 @@ class PageViewRequestThrottle(SimpleRateThrottle):
     rate = "60/min"
 
     def get_cache_key(self, request, view):
-        if not settings.ANALYTICS_PAGE_VIEW_TRACKING_ENABLED:
+        if not page_view_tracking_enabled():
             return None
         return self.cache_format % {"scope": self.scope, "ident": request.user.pk}
 
@@ -78,7 +78,7 @@ class PageViewIngestView(APIView):
                    202: inline_serializer(name="PageViewDisabledResponse", fields={"enabled": serializers.BooleanField()})},
     )
     def post(self, request):
-        if not settings.ANALYTICS_PAGE_VIEW_TRACKING_ENABLED:
+        if not page_view_tracking_enabled():
             return Response({"enabled": False}, status=status.HTTP_202_ACCEPTED)
         incoming = PageViewIngestSerializer(data=request.data)
         incoming.is_valid(raise_exception=True)

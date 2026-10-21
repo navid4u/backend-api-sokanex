@@ -1337,17 +1337,22 @@ class ProfileUpdateSerializer(
         )
 
 
-    def _validate_name(self, value, label):
+    def _validate_name(self, value, label, field):
         value = value.strip()
+        # Older accounts may not have completed their name yet. A partial
+        # profile form that echoes those blank values must not block adding a
+        # phone; clearing an already saved name remains invalid.
+        if not value and self.instance and not (getattr(self.instance, field) or "").strip():
+            return value
         if len(value) < 2:
             raise serializers.ValidationError(f"{label} باید حداقل ۲ کاراکتر باشد.")
         return value
 
     def validate_first_name(self, value):
-        return self._validate_name(value, "نام")
+        return self._validate_name(value, "نام", "first_name")
 
     def validate_last_name(self, value):
-        return self._validate_name(value, "نام خانوادگی")
+        return self._validate_name(value, "نام خانوادگی", "last_name")
 
 
 class PremiumPurchaseSerializer(serializers.Serializer):

@@ -12,7 +12,7 @@ from django.utils import timezone
 from apps.accounts.market_access import MARKETS, market_access_v2_enabled
 from apps.accounts.models import User, UserMarketGrant
 
-from .models import PageViewDailyAggregate, UserActivity
+from .models import PageViewDailyAggregate, PageViewEvent, UserActivity
 
 
 TEHRAN = ZoneInfo("Asia/Tehran")
@@ -117,8 +117,12 @@ def overview(period="6m", *, now=None):
         raise ValueError("Invalid period")
     injected_clock = now is not None
     v2 = market_access_v2_enabled()
-    cache_key = f"admin:analytics:v1:{period}:{int(v2)}"
+    # LocMemCache is process-local in installations without Redis. Including
+    # the latest committed event ID makes every worker miss its stale snapshot
+    # after a new page view without relying on cross-process cache.delete().
     if not injected_clock:
+        latest_page_view_id = PageViewEvent.objects.order_by("-pk").values_list("pk", flat=True).first()
+        cache_key = f"admin:analytics:v2:{period}:{int(v2)}:{latest_page_view_id or 0}"
         cached = cache.get(cache_key)
         if cached is not None:
             return cached

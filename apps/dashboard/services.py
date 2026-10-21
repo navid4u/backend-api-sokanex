@@ -7,9 +7,9 @@ from apps.notifications.services import NotificationService
 from apps.chat.services import ChatService
 from apps.livestream.services import LiveEventService
 from apps.accounts.models import BrokerConnection
-from django.conf import settings
 from apps.accounts.market_access import can_view_vip_market, market_access_payload, market_access_v2_enabled, user_can_manage_market_access
 from apps.content_channels.models import ChannelPost
+from apps.activity.tracking import page_view_tracking_enabled
 from django.utils import timezone
 from django.utils.html import strip_tags
 from html import unescape
@@ -176,7 +176,7 @@ class DashboardService:
 
             "market_access_v2": access_state,
 
-            "analytics_tracking": {"enabled": bool(settings.ANALYTICS_PAGE_VIEW_TRACKING_ENABLED)},
+            "analytics_tracking": {"enabled": page_view_tracking_enabled()},
 
             "special_role": access_state.get("special_role"),
 

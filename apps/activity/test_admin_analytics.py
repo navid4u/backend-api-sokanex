@@ -1,6 +1,7 @@
 from datetime import date, datetime, timedelta, timezone as utc_timezone
 from io import StringIO
 from uuid import uuid4
+from unittest.mock import patch
 
 from django.core.cache import cache
 from django.core.management import call_command
@@ -15,6 +16,7 @@ from apps.observability.models import LogEvent
 
 from .analytics import TEHRAN, gregorian_to_jalali, overview
 from .models import PageViewDailyAggregate, PageViewEvent, PageViewReceipt, UserActivity
+from .tracking import SCHEMA_READY_CACHE_KEY
 
 
 @override_settings(CRM_ENABLED=False)
@@ -92,7 +94,10 @@ class AdminAnalyticsTests(APITestCase):
             self.assertEqual(self.client.post(self.views_url, payload, format="json").status_code, 201)
             self.assertEqual(self.client.post(self.views_url, payload, format="json").status_code, 200)
             self.assertEqual(self.client.post(self.views_url, {**payload, "path": "/academy"}, format="json").status_code, 400)
-            for bad in ("/login", "/admin", "/signals?token=secret", "/articles/private-slug"):
+            for bad in (
+                "/login", "/register", "/admin", "/admin-panel", "/support",
+                "/support-panel", "/signals?token=secret", "/articles/private-slug",
+            ):
                 self.assertEqual(self.client.post(self.views_url, self.event(bad), format="json").status_code, 400)
             self.assertEqual(self.client.post(self.views_url, {**self.event(), "user_id": self.admin.pk}, format="json").status_code, 400)
             self.assertFalse(LogEvent.objects.filter(path=self.views_url).exists())
@@ -107,6 +112,41 @@ class AdminAnalyticsTests(APITestCase):
         self.assertEqual(snapshot["page_views"]["total_views"], 4)
         self.assertEqual(snapshot["page_views"]["unique_users"], 2)
         self.assertEqual(snapshot["page_views"]["results"][0]["unique_users"], 2)
+
+    @override_settings(ANALYTICS_PAGE_VIEW_TRACKING_ENABLED=True)
+    def test_real_page_view_pipeline_refreshes_cached_six_month_report(self):
+        self.client.force_authenticate(self.admin)
+        before = self.client.get(self.overview_url, {"period": "6m"})
+        self.assertEqual(before.status_code, 200)
+        self.assertEqual(before.data["page_views"], {
+            "total_views": 0, "unique_users": 0, "results": [],
+        })
+        self.client.force_authenticate(self.user)
+        self.assertTrue(self.client.get("/api/dashboard/").data["data"]["analytics_tracking"]["enabled"])
+        payload = self.event("/signals")
+        self.assertEqual(self.client.post(self.views_url, payload, format="json").status_code, 201)
+        self.assertEqual(self.client.post(self.views_url, payload, format="json").status_code, 200)
+        self.assertEqual(PageViewEvent.objects.filter(event_id=payload["event_id"]).count(), 1)
+        self.assertEqual(PageViewReceipt.objects.filter(event_id=payload["event_id"]).count(), 1)
+        self.assertEqual(PageViewDailyAggregate.objects.get(user=self.user, path="/signals").views, 1)
+        self.client.force_authenticate(self.admin)
+        after = self.client.get(self.overview_url, {"period": "6m"})
+        self.assertEqual(after.status_code, 200)
+        self.assertEqual(after.data["page_views"], {
+            "total_views": 1,
+            "unique_users": 1,
+            "results": [{"path": "/signals", "views": 1, "unique_users": 1}],
+        })
+        self.assertFalse(after.data["metadata"]["page_view_history_backfilled"])
+
+    @override_settings(ANALYTICS_PAGE_VIEW_TRACKING_ENABLED=True)
+    def test_dashboard_and_ingest_remain_disabled_without_page_view_tables(self):
+        cache.delete(SCHEMA_READY_CACHE_KEY)
+        self.client.force_authenticate(self.user)
+        with patch("apps.activity.tracking.connection.introspection.table_names", return_value=[]):
+            self.assertFalse(self.client.get("/api/dashboard/").data["data"]["analytics_tracking"]["enabled"])
+            self.assertEqual(self.client.post(self.views_url, self.event(), format="json").status_code, 202)
+        self.assertFalse(PageViewEvent.objects.exists())
 
     @override_settings(ANALYTICS_PAGE_VIEW_TRACKING_ENABLED=True)
     def test_exact_per_user_rate_limit_and_anonymous_rejection(self):
