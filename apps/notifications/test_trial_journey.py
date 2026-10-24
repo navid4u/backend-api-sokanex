@@ -1,5 +1,5 @@
 import json
-from datetime import timedelta
+from datetime import time, timedelta
 from io import StringIO
 
 from django.core.management import call_command
@@ -13,6 +13,7 @@ from .models import (
     Notification, SMSAutomationDelivery, SMSAutomationRule, TrialJourneyActivation,
     TrialJourneyDay, TrialJourneyDispatch, TrialJourneyEnrollment,
 )
+from .sms_automation import queue_event
 from .trial_journey import enroll_new_grants, queue_due_trial_journey, scheduled_at
 
 
@@ -75,6 +76,68 @@ class TrialJourneyTests(APITestCase):
         )
         rule = TrialJourneyDay.objects.get(day=7)
         self.assertGreaterEqual(scheduled_at(grant, rule), grant.ends_at)
+
+    @override_settings(
+        TRIAL_JOURNEY_ENABLED=True, SMS_AUTOMATION_ENABLED=True,
+        PAYAMITO_ENABLED=True, PAYAMITO_USERNAME="stub-user",
+        PAYAMITO_API_KEY="stub-key", PAYAMITO_FROM_NUMBER="5000",
+    )
+    def test_market_specific_day_reaches_user_with_another_market(self):
+        now = timezone.now()
+        started_at = now - timedelta(days=2, seconds=2)
+        self.user.market_type = User.MarketType.CRYPTO
+        self.user.save(update_fields=("market_type",))
+        rule = TrialJourneyDay.objects.get(day=3)
+        rule.market = "forex"
+        rule.text = "Day three for everyone"
+        rule.send_time_utc = time(0, 0)
+        rule.save(update_fields=("market", "text", "send_time_utc"))
+        TrialJourneyActivation.objects.create(pk=1, activated_at=started_at - timedelta(seconds=1))
+        campaign = TrialCampaign.objects.create(created_by=self.admin)
+        grant = TrialGrant.objects.create(
+            user=self.user, campaign=campaign, started_at=started_at,
+            ends_at=started_at + timedelta(days=7),
+        )
+        enroll_new_grants(user_ids=[self.user.pk], campaign=campaign, started_at=started_at)
+
+        self.assertEqual(queue_due_trial_journey(now=now), 2)
+        delivery = SMSAutomationDelivery.objects.get(user=self.user, event="JOURNEY")
+        self.assertEqual(delivery.status, SMSAutomationDelivery.Status.PENDING)
+        self.assertEqual(delivery.text, rule.text)
+        self.assertEqual(delivery.failure_code, "")
+        self.assertTrue(TrialJourneyDispatch.objects.filter(
+            enrollment__grant=grant, day=3, channel="IN_APP", notification__isnull=False,
+        ).exists())
+        self.assertEqual(queue_due_trial_journey(now=now), 0)
+
+    @override_settings(
+        TRIAL_JOURNEY_ENABLED=True, SMS_AUTOMATION_ENABLED=True,
+        PAYAMITO_ENABLED=True, PAYAMITO_USERNAME="stub-user",
+        PAYAMITO_API_KEY="stub-key", PAYAMITO_FROM_NUMBER="5000",
+    )
+    def test_market_specific_day_one_owns_welcome_for_every_market(self):
+        now = timezone.now()
+        self.user.market_type = User.MarketType.CRYPTO
+        self.user.save(update_fields=("market_type",))
+        rule = TrialJourneyDay.objects.get(day=1)
+        rule.market = "forex"
+        rule.save(update_fields=("market",))
+        TrialJourneyActivation.objects.create(pk=1, activated_at=now - timedelta(seconds=1))
+        campaign = TrialCampaign.objects.create(created_by=self.admin)
+        TrialGrant.objects.create(
+            user=self.user, campaign=campaign, started_at=now,
+            ends_at=now + timedelta(days=7),
+        )
+        enroll_new_grants(user_ids=[self.user.pk], campaign=campaign, started_at=now)
+
+        queue_event(self.user.pk, "WELCOME", "WELCOME:REGISTRATION:market-agnostic")
+        welcome = SMSAutomationDelivery.objects.get(event="WELCOME", user=self.user)
+        self.assertEqual(welcome.status, SMSAutomationDelivery.Status.SKIPPED)
+        self.assertEqual(welcome.failure_code, "JOURNEY_OWNS_WELCOME")
+        self.assertEqual(queue_due_trial_journey(now=now + timedelta(seconds=2)), 2)
+        self.assertTrue(SMSAutomationDelivery.objects.filter(
+            user=self.user, event="JOURNEY", status="PENDING",
+        ).exists())
 
     @override_settings(TRIAL_JOURNEY_ENABLED=True)
     def test_activation_preserves_welcome_rule_and_pending_welcome(self):

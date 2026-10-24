@@ -154,21 +154,8 @@ def _dispatch_channel(enrollment, rule, *, now, channel):
         return False
     if not journey_eligible(grant, rule.day, now=now):
         return False
-    from .sms_automation import _preferred_market
-    if rule.market != "ALL" and rule.market != _preferred_market(user):
-        if channel == TrialJourneyDispatch.Channel.SMS:
-            delivery, _ = SMSAutomationDelivery.objects.get_or_create(
-                user=user, event_key=f"JOURNEY:{grant.pk}:{rule.day}:SMS",
-                defaults={"event": "JOURNEY", "phone": _phone(user) or "", "text": "",
-                          "status": SMSAutomationDelivery.Status.SKIPPED,
-                          "failure_code": "MARKET_NOT_SELECTED",
-                          "scheduled_at": scheduled_at(grant, rule)},
-            )
-            TrialJourneyDispatch.objects.create(
-                enrollment=enrollment, day=rule.day, channel=channel,
-                status="SKIPPED", sms_delivery=delivery,
-            )
-        return False
+    # A day's market labels its message, not the audience. Every enrolled user
+    # receives each active day regardless of their selected or preferred market.
     rendered = _render(rule.text, user, days_remaining=(0 if rule.day == 7 else 8 - rule.day),
                        market=rule.market if rule.market != "ALL" else None)
     if channel == TrialJourneyDispatch.Channel.SMS:

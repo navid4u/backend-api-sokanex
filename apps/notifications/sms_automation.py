@@ -100,7 +100,6 @@ def queue_event(user_id, slot, event_key):
             and TrialJourneyActivation.objects.filter(pk=1).exists()
             and TrialJourneyEnrollment.objects.filter(grant__user_id=user_id).exists()
             and day_one is not None
-            and (day_one.market == "ALL" or day_one.market == _preferred_market(user))
         )
         rule = _rule(_enabled_rules(), slot, user)
         phone = _phone(user)
