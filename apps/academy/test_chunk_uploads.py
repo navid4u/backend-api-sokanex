@@ -4,6 +4,7 @@ from tempfile import TemporaryDirectory
 from datetime import timedelta
 
 from django.core.management import call_command
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import override_settings
 from django.utils import timezone
 from rest_framework.test import APITestCase
@@ -189,3 +190,60 @@ class AcademyChunkUploadTests(APITestCase):
         session = CourseSession.objects.get(pk=good.data["id"])
         self.assertTrue(session.image.storage.exists(session.image.name))
         self.assertTrue(session.video_file.storage.exists(session.video_file.name))
+
+    def test_replace_existing_session_video_without_creating_second_session(self):
+        original = CourseSession.objects.create(
+            course=self.course, title="Old title", order=1,
+            video_file=SimpleUploadedFile("old.mp4", VIDEO, content_type="video/mp4"),
+        )
+        old_name = original.video_file.name
+        replacement = VIDEO + b"new-video"
+        upload_id = self.start(replacement)
+        self.assertEqual(self.chunk(upload_id, replacement).status_code, 200)
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.client.post(f"{self.root}{upload_id}/complete/", {
+                "session_id": original.pk, "title": "New title",
+            }, format="json")
+        self.assertEqual(response.status_code, 201, response.data)
+        self.assertEqual(response.data["id"], original.pk)
+        original.refresh_from_db()
+        self.assertEqual(original.title, "New title")
+        self.assertEqual(CourseSession.objects.count(), 1)
+        with original.video_file.open("rb") as file:
+            self.assertEqual(file.read(), replacement)
+        self.assertFalse(original.video_file.storage.exists(old_name))
+        retry = self.complete(upload_id, session_id=original.pk)
+        self.assertEqual(retry.status_code, 200, retry.data)
+        self.assertEqual(retry.data["id"], original.pk)
+
+    def test_replace_keeps_old_file_when_validation_fails_and_scopes_target(self):
+        original = CourseSession.objects.create(
+            course=self.course, title="Keep me", order=1,
+            video_file=SimpleUploadedFile("keep.mp4", VIDEO, content_type="video/mp4"),
+        )
+        another = CourseSession.objects.create(course=self.other_course, title="Other", order=1)
+        old_name = original.video_file.name
+        upload_id = self.start(VIDEO)
+        self.assertEqual(self.chunk(upload_id, VIDEO).status_code, 200)
+        wrong_course = self.complete(upload_id, session_id=another.pk)
+        self.assertEqual(wrong_course.status_code, 404)
+        invalid = self.complete(upload_id, session_id=original.pk, order="not-an-integer")
+        self.assertEqual(invalid.status_code, 400)
+        original.refresh_from_db()
+        self.assertEqual(original.video_file.name, old_name)
+        self.assertTrue(original.video_file.storage.exists(old_name))
+        self.assertEqual(CourseSession.objects.count(), 2)
+        self.assertEqual(AcademyVideoUpload.objects.get(pk=upload_id).status, AcademyVideoUpload.Status.PENDING)
+
+    def test_replace_clears_legacy_video_url(self):
+        original = CourseSession.objects.create(
+            course=self.course, title="External video", order=1,
+            video_url="https://example.org/video.mp4",
+        )
+        upload_id = self.start(VIDEO)
+        self.assertEqual(self.chunk(upload_id, VIDEO).status_code, 200)
+        result = self.complete(upload_id, session_id=original.pk)
+        self.assertEqual(result.status_code, 201, result.data)
+        original.refresh_from_db()
+        self.assertEqual(original.video_url, "")
+        self.assertTrue(original.video_file)

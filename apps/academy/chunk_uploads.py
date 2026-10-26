@@ -23,7 +23,7 @@ from rest_framework.views import APIView
 from common.permissions import CanTeachAcademy
 from common.validators import ALLOWED_VIDEO_EXTENSIONS
 
-from .models import AcademyVideoUpload
+from .models import AcademyVideoUpload, CourseSession
 from .serializers import CourseSessionSerializer
 from .views import manageable_courses
 
@@ -257,9 +257,18 @@ class VideoUploadCompleteView(UploadBaseView):
 
     def post(self, request, slug, upload_id):
         course = self.get_course()
+        target_id = None
+        if "session_id" in request.data:
+            target = serializers.IntegerField(min_value=1)
+            try:
+                target_id = target.run_validation(request.data.get("session_id"))
+            except ValidationError as exc:
+                raise ValidationError({"session_id": exc.detail}) from exc
         with transaction.atomic():
             upload = self.get_upload(lock=True)
             if upload.status == AcademyVideoUpload.Status.COMPLETED and upload.session_id:
+                if target_id is not None and target_id != upload.session_id:
+                    raise UploadConflict({"code": "UPLOAD_ALREADY_COMPLETED", "session_id": upload.session_id})
                 return Response(CourseSessionSerializer(upload.session, context={"request": request}).data)
             self.assert_pending(upload)
             if upload.received_size != upload.expected_size:
@@ -269,6 +278,16 @@ class VideoUploadCompleteView(UploadBaseView):
                 raise UploadConflict({"code": "UPLOAD_FILE_MISSING", "detail": "Start a new upload."})
             if "video_file" in request.data or "audio_file" in request.data:
                 raise ValidationError({"video_file": "Video is supplied by the completed upload only."})
+            existing_session = None
+            old_file_name = ""
+            old_storage = None
+            if target_id is not None:
+                existing_session = get_object_or_404(
+                    CourseSession.objects.select_for_update(), pk=target_id, course=course,
+                )
+                if existing_session.video_file:
+                    old_file_name = existing_session.video_file.name
+                    old_storage = existing_session.video_file.storage
             if upload.expected_sha256:
                 digest = hashlib.sha256()
                 with path.open("rb") as file:
@@ -277,17 +296,33 @@ class VideoUploadCompleteView(UploadBaseView):
                 if digest.hexdigest() != upload.expected_sha256:
                     raise UploadConflict({"code": "CHECKSUM_MISMATCH", "detail": "Uploaded video differs from the original."})
             data = request.data.copy()
+            data.pop("session_id", None)
+            if existing_session is not None and "video_url" not in data:
+                # An existing external URL must not block replacing it with a file.
+                data["video_url"] = ""
             with path.open("rb") as source:
                 extension = Path(upload.filename).suffix.lower()
                 video = File(source, name=f"{upload.id.hex}{extension}")
                 video.content_type = VIDEO_CONTENT_TYPES[extension]
                 data["video_file"] = video
-                serializer = CourseSessionSerializer(data=data, context={"request": request, "view": self})
+                serializer = CourseSessionSerializer(
+                    existing_session, data=data, partial=existing_session is not None,
+                    context={"request": request, "view": self},
+                )
                 serializer.is_valid(raise_exception=True)
-                session = serializer.save(course=course)
+                session = serializer.save() if existing_session is not None else serializer.save(course=course)
             upload.session = session
             upload.status = AcademyVideoUpload.Status.COMPLETED
             upload.save(update_fields=["session", "status", "updated_at"])
+            if old_file_name and old_file_name != session.video_file.name:
+                def remove_previous_video():
+                    if not CourseSession.objects.filter(video_file=old_file_name).exists():
+                        try:
+                            old_storage.delete(old_file_name)
+                        except OSError:
+                            logger.warning("academy_previous_video_cleanup_failed session_id=%s", session.pk)
+
+                transaction.on_commit(remove_previous_video)
         try:
             remove_staging_file(upload)
         except OSError:
