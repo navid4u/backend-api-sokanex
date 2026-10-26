@@ -19,9 +19,17 @@ from .views import (
     CoursePurchaseView,
     CoursePurchaseStatusView,
 )
+from .chunk_uploads import (
+    VideoUploadStartView, VideoUploadStateView,
+    VideoUploadChunkView, VideoUploadCompleteView,
+)
 
 
 urlpatterns = [
+    path("courses/<str:slug>/session-video-uploads/", VideoUploadStartView.as_view(), name="academy-video-upload-start"),
+    path("courses/<str:slug>/session-video-uploads/<uuid:upload_id>/", VideoUploadStateView.as_view(), name="academy-video-upload-state"),
+    path("courses/<str:slug>/session-video-uploads/<uuid:upload_id>/chunk/", VideoUploadChunkView.as_view(), name="academy-video-upload-chunk"),
+    path("courses/<str:slug>/session-video-uploads/<uuid:upload_id>/complete/", VideoUploadCompleteView.as_view(), name="academy-video-upload-complete"),
     path("sessions/<int:pk>/media-ticket/", SessionMediaTicketView.as_view(), name="academy-media-ticket"),
     path("sessions/<int:pk>/media/", SessionMediaStreamView.as_view(), name="academy-media-stream"),
     path("sessions/<int:pk>/quiz/", SessionQuizView.as_view(), name="academy-session-quiz"),

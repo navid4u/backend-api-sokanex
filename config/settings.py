@@ -459,6 +459,10 @@ if "https://m.sokanex.com" not in CSRF_TRUSTED_ORIGINS:
 # React sends JWT in the Authorization header.
 CORS_ALLOW_CREDENTIALS = False
 
+from corsheaders.defaults import default_headers
+
+CORS_ALLOW_HEADERS = (*default_headers, "x-upload-offset")
+
 PAYAMITO_ENABLED = config("PAYAMITO_ENABLED", default=False, cast=bool)
 PAYAMITO_USERNAME = config("PAYAMITO_USERNAME", default="")
 PAYAMITO_API_KEY = config("PAYAMITO_API_KEY", default="")
@@ -593,6 +597,14 @@ DATA_UPLOAD_MAX_MEMORY_SIZE = config(
     "DATA_UPLOAD_MAX_MEMORY_SIZE",
     default=550 * 1024 * 1024,
     cast=int,
+)
+
+# Never serve in-progress academy videos from MEDIA_ROOT. The service account
+# creates this private (0700) directory on first chunk; completed files move
+# through the existing CourseSession.video_file storage path.
+ACADEMY_UPLOAD_STAGING_ROOT = config(
+    "ACADEMY_UPLOAD_STAGING_ROOT",
+    default=str(BASE_DIR.parent / "private-academy-uploads"),
 )
 
 

@@ -1,0 +1,12 @@
+[Unit]
+Description=Clean expired private Sokanex academy video uploads
+
+[Service]
+Type=oneshot
+User=tradingapp
+Group=tradingapp
+WorkingDirectory=/srv/trading-platform/backend
+EnvironmentFile=-/srv/trading-platform/backend/.env
+ExecStart=/srv/trading-platform/venv/bin/python manage.py cleanup_academy_video_uploads
+NoNewPrivileges=true
+UMask=0077

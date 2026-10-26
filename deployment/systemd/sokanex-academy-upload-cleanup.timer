@@ -1,0 +1,11 @@
+[Unit]
+Description=Clean Sokanex academy upload staging hourly
+
+[Timer]
+OnBootSec=15min
+OnUnitActiveSec=1h
+Persistent=true
+Unit=sokanex-academy-upload-cleanup.service
+
+[Install]
+WantedBy=timers.target

@@ -1,6 +1,7 @@
 from django.conf import settings
 from django.db import models
 from django.utils.text import slugify
+import uuid
 
 from common.content_access import LevelRestrictedContent
 
@@ -139,6 +140,34 @@ class CourseSession(models.Model):
 
     def __str__(self):
         return f"{self.course} - {self.order}. {self.title}"
+
+
+class AcademyVideoUpload(models.Model):
+    """Private, resumable staging for one course-session video."""
+
+    class Status(models.TextChoices):
+        PENDING = "PENDING", "Pending"
+        COMPLETED = "COMPLETED", "Completed"
+        EXPIRED = "EXPIRED", "Expired"
+        CANCELLED = "CANCELLED", "Cancelled"
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    course = models.ForeignKey(Course, on_delete=models.CASCADE, related_name="video_uploads")
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="academy_video_uploads")
+    client_upload_id = models.UUIDField(null=True, blank=True)
+    filename = models.CharField(max_length=200)
+    expected_size = models.PositiveBigIntegerField()
+    expected_sha256 = models.CharField(max_length=64, blank=True)
+    received_size = models.PositiveBigIntegerField(default=0)
+    status = models.CharField(max_length=12, choices=Status.choices, default=Status.PENDING)
+    expires_at = models.DateTimeField(db_index=True)
+    session = models.ForeignKey(CourseSession, on_delete=models.SET_NULL, null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        indexes = [models.Index(fields=["user", "status", "expires_at"], name="academy_vid_user_id_51ecda_idx")]
+        constraints = [models.UniqueConstraint(fields=["user", "client_upload_id"], name="academy_video_client_upload_unique")]
 
 
 class CourseEnrollment(models.Model):
