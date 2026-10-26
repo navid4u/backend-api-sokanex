@@ -90,6 +90,40 @@ class AcademyMultipartUploadTests(APITestCase):
         denied = self.client.post("/api/academy/courses/", {"title": "Denied"}, format="multipart")
         self.assertEqual(denied.status_code, 403)
 
+    def test_course_list_fields_accept_multipart_forms_and_reject_malformed_json(self):
+        course = Course.objects.create(title="List fields", instructor=self.teacher)
+        url = f"/api/academy/courses/{course.slug}/"
+
+        response = self.client.patch(url, {
+            "cover_image": png_file(),
+            "prerequisites": ["Read the guide", "Have an account"],
+            "learning_outcomes": '["Understand forex", "Read a chart"]',
+        }, format="multipart")
+        self.assertEqual(response.status_code, 200, response.data)
+        course.refresh_from_db()
+        self.assertEqual(course.prerequisites, ["Read the guide", "Have an account"])
+        self.assertEqual(course.learning_outcomes, ["Understand forex", "Read a chart"])
+
+        response = self.client.patch(url, {
+            "prerequisites": "",
+            "learning_outcomes": "Understand risk",
+        }, format="multipart")
+        self.assertEqual(response.status_code, 200, response.data)
+        course.refresh_from_db()
+        self.assertEqual(course.prerequisites, [])
+        self.assertEqual(course.learning_outcomes, ["Understand risk"])
+
+        invalid = self.client.patch(url, {"prerequisites": "[not-json"}, format="multipart")
+        self.assertEqual(invalid.status_code, 400)
+        self.assertIn("prerequisites", invalid.data["errors"])
+        course.refresh_from_db()
+        self.assertEqual(course.prerequisites, [])
+
+        response = self.client.patch(url, {"prerequisites": ["JSON item"]}, format="json")
+        self.assertEqual(response.status_code, 200, response.data)
+        course.refresh_from_db()
+        self.assertEqual(course.prerequisites, ["JSON item"])
+
     def test_disguised_video_is_rejected(self):
         course = Course.objects.create(title="Video validation", instructor=self.teacher)
         result = self.client.post(f"/api/academy/courses/{course.slug}/sessions/", {

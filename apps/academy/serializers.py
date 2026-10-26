@@ -1,3 +1,5 @@
+import json
+
 from rest_framework import serializers
 from rest_framework.fields import empty
 from pathlib import Path
@@ -18,6 +20,35 @@ class OmissionPreservingBooleanField(serializers.BooleanField):
     def get_value(self, dictionary):
         if self.field_name not in dictionary:
             return empty
+        return super().get_value(dictionary)
+
+
+class MultipartListJSONField(serializers.JSONField):
+    """Accept list fields from multipart forms without changing JSON requests."""
+
+    def get_value(self, dictionary):
+        if not hasattr(dictionary, "getlist"):
+            return super().get_value(dictionary)
+        if self.field_name not in dictionary:
+            return empty
+
+        values = dictionary.getlist(self.field_name)
+        if len(values) > 1:
+            return values
+
+        value = values[0].strip()
+        if not value:
+            return []
+        try:
+            parsed = json.loads(value)
+        except (TypeError, ValueError):
+            # A single plain-text item is also a valid form entry. Malformed
+            # JSON-shaped input must still fail validation instead of being saved.
+            if value.startswith(("[", "{")):
+                return super().get_value(dictionary)
+            return [value]
+        if isinstance(parsed, list):
+            return parsed
         return super().get_value(dictionary)
 
 
@@ -138,6 +169,8 @@ class CourseWriteSerializer(
     estimated_duration_minutes = serializers.IntegerField(required=False, allow_null=True, min_value=0)
     weekly_session_limit = serializers.IntegerField(required=False, allow_null=True, min_value=0)
     monthly_session_limit = serializers.IntegerField(required=False, allow_null=True, min_value=0)
+    prerequisites = MultipartListJSONField(required=False)
+    learning_outcomes = MultipartListJSONField(required=False)
 
     class Meta:
         model = Course
