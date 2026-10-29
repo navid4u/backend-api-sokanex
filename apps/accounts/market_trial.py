@@ -26,6 +26,11 @@ class TrialCampaignConflict(APIException):
     machine_code = "TRIAL_CAMPAIGN_CONFLICT"
 
 
+# This key is deliberately fixed: rerunning the operator command cannot grant
+# a second extra trial merely by changing a command-line value.
+ONE_TIME_ALL_USERS_RESTART_KEY = "all_normal_users_2026_10_29"
+
+
 def _require_superadmin(actor):
     if not market_access_v2_enabled() or not getattr(actor, "is_authenticated", False):
         raise PermissionDenied("Trial campaigns are unavailable.")
@@ -96,7 +101,7 @@ def update_auto_start_settings(*, actor, auto_start_new_users):
     return {"auto_start_new_users": setting.auto_start_new_users}
 
 
-def _create_trial_grants(*, user_ids, campaign, started_at, actor, source):
+def _create_trial_grants(*, user_ids, campaign, started_at, actor, source, prior_trial_used_ids=frozenset()):
     """One grant/audit writer shared by campaign and registration paths.
 
     The caller owns an atomic transaction and has locked the relevant users.
@@ -116,7 +121,7 @@ def _create_trial_grants(*, user_ids, campaign, started_at, actor, source):
         (UserAccessAudit(
             user_id=user_id, subject_user_id=user_id, actor=actor,
             action=UserAccessAudit.Action.TRIAL_STARTED,
-            before={"trial_active": False, "trial_used": False},
+            before={"trial_active": False, "trial_used": user_id in prior_trial_used_ids},
             after={"trial_active": True, "trial_used": True,
                    "campaign_id": campaign.pk, "source": source},
             operation_id=operation_id,
@@ -360,4 +365,116 @@ def start_trial_campaign(*, actor, registered_from=None, expected_eligible_count
         "started_at": now,
         "ends_at": ends_at,
         "granted_count": len(user_ids),
+    }
+
+
+def _restart_trial_candidates(*, at):
+    """The exceptional cohort includes all ordinary users except active trials.
+
+    In particular, expired and invalidated V2 trials and legacy trials do not
+    exclude an account from this ONE operation. Inactive accounts are retained
+    in the cohort, though notification delivery still requires an active user.
+    """
+    active_trial = TrialGrant.objects.filter(
+        user_id=OuterRef("pk"), invalidated_at__isnull=True,
+        revoked_at__isnull=True, started_at__lte=at, ends_at__gt=at,
+    )
+    return (
+        User.objects.filter(is_superuser=False)
+        .exclude(role__in=(User.Role.SUPER_ADMIN, User.Role.SUPPORT))
+        .annotate(_has_active_trial=Exists(active_trial))
+        .filter(_has_active_trial=False)
+    )
+
+
+def preview_all_users_trial_restart(*, actor):
+    """Read-only, PII-free preview of the fixed one-time bulk restart."""
+    _require_superadmin(actor)
+    now = timezone.now()
+    normal_users = User.objects.filter(is_superuser=False).exclude(
+        role__in=(User.Role.SUPER_ADMIN, User.Role.SUPPORT),
+    )
+    user_ids = list(_restart_trial_candidates(at=now).order_by("pk").values_list("pk", flat=True))
+    setting = TrialAutoStartSettings.objects.filter(pk=1).first()
+    from apps.notifications.models import TrialJourneyActivation, TrialJourneyDay
+    prior_grants = TrialGrant.objects.filter(user_id__in=user_ids)
+    return {
+        "operation_key": ONE_TIME_ALL_USERS_RESTART_KEY,
+        "already_applied": TrialCampaign.objects.filter(operation_key=ONE_TIME_ALL_USERS_RESTART_KEY).exists(),
+        "duration_days": 7,
+        "normal_users": normal_users.count(),
+        "active_trials_preserved": normal_users.count() - len(user_ids),
+        "eligible_count": len(user_ids),
+        "candidate_digest": trial_candidate_digest(user_ids),
+        "inactive_eligible_users": User.objects.filter(pk__in=user_ids, is_active=False).count(),
+        "current_trials_to_invalidate": prior_grants.filter(invalidated_at__isnull=True).count(),
+        "historical_v2_trial_users": prior_grants.values("user_id").distinct().count(),
+        "active_market_grants_to_revoke": UserMarketGrant.objects.filter(
+            user_id__in=user_ids, revoked_at__isnull=True,
+        ).count(),
+        "elite_flags_to_clear": UserAccessProfile.objects.filter(user_id__in=user_ids, is_elite=True).count(),
+        "auto_start_new_users": bool(setting and setting.auto_start_new_users and setting.campaign_id),
+        "journey_activated": TrialJourneyActivation.objects.filter(pk=1, activated_at__lte=now).exists(),
+        "journey_day_one_active": TrialJourneyDay.objects.filter(day=1, is_active=True).exists(),
+    }
+
+
+@transaction.atomic
+def restart_all_users_trial_once(*, actor, expected_eligible_count, expected_candidate_digest):
+    """Atomically replace old non-active grants with a new seven-day grant.
+
+    The fixed unique operation key prevents a second execution. The caller
+    must supply the current dry-run cohort fingerprint to avoid silent drift.
+    """
+    _require_superadmin(actor)
+    User.objects.order_by("pk").select_for_update().values_list("pk", flat=True).first()
+    existing = TrialCampaign.objects.filter(operation_key=ONE_TIME_ALL_USERS_RESTART_KEY).first()
+    if existing:
+        return {"already_applied": True, "campaign_id": existing.pk, "granted_count": existing.grants.count()}
+
+    now = timezone.now()
+    proposed_ids = list(_restart_trial_candidates(at=now).order_by("pk").values_list("pk", flat=True))
+    list(User.objects.filter(pk__in=proposed_ids).order_by("pk").select_for_update().values_list("pk", flat=True))
+    # Do not hold the hot registration-settings row during thousands of grant
+    # inserts: new registrations must keep using their existing auto-start.
+    setting = TrialAutoStartSettings.objects.filter(pk=1).first()
+    if not setting or not setting.auto_start_new_users or not setting.campaign_id:
+        raise TrialCampaignConflict("New-user trial auto-start must remain configured before applying this campaign.")
+    from apps.notifications.models import TrialJourneyActivation, TrialJourneyDay
+    if not TrialJourneyActivation.objects.filter(pk=1, activated_at__lte=now).exists() or not TrialJourneyDay.objects.filter(
+        day=1, is_active=True,
+    ).exists():
+        raise TrialCampaignConflict("Trial Journey activation and day-one scenario are required.")
+    user_ids = list(_restart_trial_candidates(at=now).order_by("pk").values_list("pk", flat=True))
+    if (not user_ids or len(user_ids) != expected_eligible_count
+            or trial_candidate_digest(user_ids) != expected_candidate_digest):
+        raise TrialCampaignConflict()
+
+    prior_trial_used_ids = set(TrialGrant.objects.filter(user_id__in=user_ids).values_list("user_id", flat=True))
+    prior_trial_used_ids.update(User.objects.filter(
+        pk__in=user_ids, gold_trial_started_at__isnull=False,
+    ).values_list("pk", flat=True))
+    old_grants = TrialGrant.objects.select_for_update().filter(
+        user_id__in=user_ids, invalidated_at__isnull=True,
+    )
+    invalidated_count = old_grants.update(invalidated_at=now)
+    _revoke_pretrial_access(
+        user_ids=user_ids, at=now, actor=actor, reason="ADMIN_ONE_TIME_TRIAL_RESTART",
+    )
+    campaign = TrialCampaign.objects.create(
+        created_by=actor, operation_key=ONE_TIME_ALL_USERS_RESTART_KEY,
+        duration_days=7, status=TrialCampaign.Status.PENDING,
+    )
+    ends_at = _create_trial_grants(
+        user_ids=user_ids, campaign=campaign, started_at=now,
+        actor=actor, source="ADMIN_RESTART_20261029",
+        prior_trial_used_ids=prior_trial_used_ids,
+    )
+    campaign.status = TrialCampaign.Status.APPLIED
+    campaign.applied_at = now
+    campaign.save(update_fields=("status", "applied_at"))
+    return {
+        "already_applied": False, "campaign_id": campaign.pk,
+        "granted_count": len(user_ids), "invalidated_old_grants": invalidated_count,
+        "started_at": now.isoformat(), "ends_at": ends_at.isoformat(),
     }

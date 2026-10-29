@@ -938,6 +938,8 @@ class TrialCampaign(models.Model):
         related_name="trial_campaigns_created_v2",
     )
     created_from = models.DateTimeField(null=True, blank=True)
+    # Set only for an explicitly approved, one-off campaign restart.
+    operation_key = models.CharField(max_length=64, null=True, blank=True, unique=True)
     duration_days = models.PositiveSmallIntegerField(default=7)
     status = models.CharField(max_length=12, choices=Status.choices, default=Status.PENDING)
     created_at = models.DateTimeField(auto_now_add=True)
