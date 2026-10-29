@@ -43,3 +43,19 @@ MARKET_ACCESS_V2_ENABLED=True /srv/trading-platform/venv/bin/python manage.py re
 ```
 
 قبل از روشن‌کردن تایمر، باید `old_pending_for_campaign=0` باشد. در صورت خطا یا اختلاف شمارش، **کارگر را روشن نکنید** و خروجی را بررسی کنید. بعد از تأیید نهایی مالک، تایمر را فعال کنید؛ `send_pending` حداکثر ۱۰۰ مورد در هر نوبت پنج‌دقیقه‌ای می‌فرستد. `SENT` به‌معنی پذیرش پیامیتو است، نه تأیید تحویل به گوشی. وضعیت `SENDING` بعد از قطع غیرمنتظره باید دستی بررسی شود و نباید کورکورانه retry شود.
+
+## اگر تایمر `active (elapsed)` و `Trigger: n/a` دارد
+
+نسخهٔ قدیمی تایمر با `OnBootSec` و `OnUnitActiveSec` پس از توقف و فعال‌سازی دوباره ممکن است نوبت بعدی نداشته باشد. فایل `deployment/systemd/sokanex-sms-automation.timer` اصلاح شده است: نخستین نوبت دو دقیقه بعد از فعال‌شدن تایمر و نوبت‌های بعدی پنج دقیقه بعد از پایان هر اجرای سرویس تعیین می‌شوند. این تغییر فقط زمان‌بندی را اصلاح می‌کند؛ ردیف‌های SMS و تاریخ Trial را دست‌کاری نمی‌کند.
+
+```bash
+cd /srv/trading-platform/backend
+git fetch origin backend-with-frontedits
+git merge --ff-only origin/backend-with-frontedits
+install -m 0644 deployment/systemd/sokanex-sms-automation.timer /etc/systemd/system/sokanex-sms-automation.timer
+systemctl daemon-reload
+systemctl restart sokanex-sms-automation.timer
+systemctl list-timers --all --no-pager | grep -F sokanex-sms-automation
+```
+
+ستون `NEXT` باید زمان واقعی داشته باشد، نه `n/a`. پس از نوبت بعد، `systemctl show sokanex-sms-automation.service -p Result -p ExecMainStatus --no-pager` و `journalctl -u sokanex-sms-automation.service --since "10 minutes ago" -n 20 --no-pager` را بررسی کنید. `Result=success` قدیمی، اجرای نوبت جدید را ثابت نمی‌کند.

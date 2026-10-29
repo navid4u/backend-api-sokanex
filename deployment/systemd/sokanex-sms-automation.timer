@@ -2,10 +2,11 @@
 Description=Run Sokanex SMS automation every five minutes
 
 [Timer]
-OnBootSec=2min
-OnUnitActiveSec=5min
+# Always schedule a fresh first run after the timer is (re)started.
+OnActiveSec=2min
+# Wait five minutes after each completed worker run before the next batch.
+OnUnitInactiveSec=5min
 AccuracySec=30s
-Persistent=true
 Unit=sokanex-sms-automation.service
 
 [Install]
