@@ -205,6 +205,9 @@ def _still_eligible(delivery, *, now):
         return False
     if delivery.rule_id and not delivery.rule.enabled:
         return False
+    if delivery.event == "JOURNEY_REISSUE":
+        from .trial_day_one_reissue import reissue_sms_eligible
+        return settings.TRIAL_JOURNEY_ENABLED and reissue_sms_eligible(delivery, now=now)
     if delivery.event == "JOURNEY":
         from .trial_journey import journey_sms_eligible
         return journey_sms_eligible(delivery, now=now)
