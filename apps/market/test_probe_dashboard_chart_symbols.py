@@ -32,3 +32,24 @@ class ChartProbeDiagnosticTests(SimpleTestCase):
         self.assertEqual(payload["passed"], 0)
         self.assertEqual(payload["total"], 10)
         self.assertEqual(payload["results"][0]["attempts"], [{"source": "test-provider", "code": "HTTP_429"}])
+
+    def test_single_symbol_alias_avoids_unrelated_provider_calls(self):
+        output = io.StringIO()
+        points = [
+            {"timestamp": "2026-11-02T10:00:00Z", "value": 100},
+            {"timestamp": "2026-11-02T11:00:00Z", "value": 101},
+        ]
+        with patch.object(MarketChartService, "_providers", return_value=(("test-provider", lambda *args: points),)) as providers:
+            call_command("probe_dashboard_chart_symbols", market="forex", symbol="XAGUSD",
+                         range_value="1d", stdout=output)
+        payload = json.loads(output.getvalue())
+        self.assertEqual(payload["total"], 1)
+        self.assertEqual(payload["passed"], 1)
+        self.assertEqual(payload["results"][0]["symbol"], "OANDA:XAGUSD")
+        providers.assert_called_once_with("forex", "OANDA:XAGUSD")
+
+    def test_invalid_single_symbol_is_rejected_before_provider_call(self):
+        with patch.object(MarketChartService, "_providers") as providers:
+            with self.assertRaises(CommandError):
+                call_command("probe_dashboard_chart_symbols", market="forex", symbol="OTHER:XAGUSD")
+        providers.assert_not_called()

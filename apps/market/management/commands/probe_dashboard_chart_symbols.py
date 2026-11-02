@@ -1,4 +1,5 @@
 import json
+import time
 from urllib.error import HTTPError, URLError
 
 from django.core.management.base import BaseCommand, CommandError
@@ -36,12 +37,27 @@ class Command(BaseCommand):
     def add_arguments(self, parser):
         parser.add_argument("--range", dest="range_value", choices=("1d", "5d"), default="1d")
         parser.add_argument("--market", choices=("crypto", "forex", "all"), default="all")
+        parser.add_argument("--symbol", help="Probe one allowed symbol (requires --market crypto or forex).")
+        parser.add_argument("--pause-seconds", type=float, default=0,
+                            help="Pause between symbols to respect provider rate limits (0 to 60 seconds).")
 
     def handle(self, *args, **options):
+        if not 0 <= options["pause_seconds"] <= 60:
+            raise CommandError("--pause-seconds must be between 0 and 60.")
+        if options["symbol"] and options["market"] == "all":
+            raise CommandError("--symbol requires --market crypto or forex.")
         markets = CHART_SYMBOLS if options["market"] == "all" else {options["market"]: CHART_SYMBOLS[options["market"]]}
+        if options["symbol"]:
+            market = options["market"]
+            symbol = MarketChartService._normalize_symbol(market, options["symbol"])
+            if symbol not in CHART_SYMBOLS[market]:
+                raise CommandError("The symbol is not in the dashboard allowlist.")
+            markets = {market: {symbol: CHART_SYMBOLS[market][symbol]}}
         results = []
         for market, symbols in markets.items():
             for symbol in symbols:
+                if results and options["pause_seconds"]:
+                    time.sleep(options["pause_seconds"])
                 result = {"market": market, "symbol": symbol, "range": options["range_value"], "ok": False}
                 attempts = []
                 for source, provider in MarketChartService._providers(market, symbol):
