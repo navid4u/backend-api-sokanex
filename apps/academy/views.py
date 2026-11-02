@@ -19,11 +19,12 @@ import os
 from common.serializers import EmptySerializer
 
 from apps.accounts.models import User
-from apps.accounts.market_access import market_access_v2_enabled, resolve_market_access
+from apps.accounts.market_access import market_access_v2_enabled
 from common.content_access import restrict_queryset_for_user
 from common.permissions import CanTeachAcademy
 
 from .models import Course, CourseEnrollment, CoursePurchase, CourseSession, SessionProgress, Quiz, QuizAttempt
+from .access import academy_markets, can_access_academy_market
 from .serializers import (
     CourseListSerializer,
     CourseSessionSerializer,
@@ -68,7 +69,7 @@ def visible_courses(user):
     if market_access_v2_enabled():
         # Unclassified legacy courses fail closed until an administrator
         # explicitly assigns their market. Legacy per-item flags stay stored.
-        return queryset.filter(market__in=resolve_market_access(user).effective_markets)
+        return queryset.filter(market__in=academy_markets(user))
     return restrict_queryset_for_user(queryset, user)
 
 
@@ -80,7 +81,7 @@ def assert_course_market_access(user, course):
         and user.has_platform_permission(User.Permission.ACADEMY_TEACH)
     ):
         return
-    if course.market not in resolve_market_access(user).effective_markets:
+    if not can_access_academy_market(user, course.market):
         raise PermissionDenied(detail={
             "code": "MARKET_ACCESS_REQUIRED",
             "market": course.market or None,
@@ -96,7 +97,9 @@ def session_lock_reason(session, user):
         purchased = CoursePurchase.objects.filter(user=user, course=session.course).exists()
         if not purchased or not enrollment:
             return "Purchase and enroll in this course to access its content."
-    elif not session.is_preview and not enrollment:
+    elif not session.is_preview and not enrollment and not (
+        market_access_v2_enabled() and can_access_academy_market(user, session.course.market)
+    ):
         return "Enroll in this course to access its content."
     if session.is_preview:
         return ""
@@ -374,7 +377,7 @@ class MyEnrollmentListView(generics.ListAPIView):
             return CourseEnrollment.objects.none()
         queryset = CourseEnrollment.objects.filter(user=self.request.user)
         if market_access_v2_enabled():
-            queryset = queryset.filter(course__market__in=resolve_market_access(self.request.user).effective_markets)
+            queryset = queryset.filter(course__market__in=academy_markets(self.request.user))
         return queryset.select_related("course", "course__instructor")
 
 
@@ -467,7 +470,7 @@ class MyQuizAttemptListView(generics.ListAPIView):
             return QuizAttempt.objects.none()
         queryset = QuizAttempt.objects.filter(quiz_id=self.kwargs["pk"], user=self.request.user)
         if market_access_v2_enabled():
-            queryset = queryset.filter(quiz__session__course__market__in=resolve_market_access(self.request.user).effective_markets)
+            queryset = queryset.filter(quiz__session__course__market__in=academy_markets(self.request.user))
         return queryset.select_related("quiz")
 
 

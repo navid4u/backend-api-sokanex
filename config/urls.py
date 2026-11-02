@@ -115,6 +115,7 @@ urlpatterns = [
         "api/brokers/",
         include("apps.brokers.urls"),
     ),
+    path("api/market-platforms/", include("apps.market_platforms.urls")),
     path(
         "api/livestream/",
         include("apps.livestream.urls"),

@@ -80,6 +80,7 @@ INSTALLED_APPS = [
     "apps.articles",
     "apps.videos",
     "apps.brokers",
+    "apps.market_platforms",
     "apps.chat",
     "apps.livestream",
     "apps.notifications",

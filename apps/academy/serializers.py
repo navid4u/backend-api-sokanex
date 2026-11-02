@@ -6,7 +6,8 @@ from pathlib import Path
 
 from common.content_access import AllowedLevelsSerializerMixin
 from common.validators import validate_image_upload, validate_video_upload
-from apps.accounts.market_access import market_access_v2_enabled, resolve_market_access
+from apps.accounts.market_access import market_access_v2_enabled
+from .access import can_access_academy_market
 
 from .models import (
     Course, CourseEnrollment, CourseSession, SessionProgress,
@@ -142,7 +143,8 @@ class CourseListSerializer(
         purchased = obj.purchases.filter(user=user).exists()
         can_access = manages or (enrolled and (obj.is_free or purchased))
         if market_access_v2_enabled() and not manages:
-            can_access = can_access and obj.market in resolve_market_access(user).effective_markets
+            market_ok = can_access_academy_market(user, obj.market)
+            can_access = market_ok and (can_access or obj.is_free)
         return enrolled, purchased, can_access
 
     def get_is_enrolled(self, obj) -> bool:
