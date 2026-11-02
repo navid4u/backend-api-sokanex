@@ -62,6 +62,15 @@ class MarketChartUnavailable(Exception):
     code = "historical_series_unavailable"
 
 
+class MarketProviderResponseError(ValueError):
+    """A provider rejected a request; keep its raw response out of logs."""
+
+    def __init__(self, code=None):
+        value = str(code) if isinstance(code, int) or (isinstance(code, str) and code.isdecimal()) else "REJECTED"
+        self.safe_code = value[:6]
+        super().__init__("Provider rejected chart request.")
+
+
 def _request_json(url, headers=None):
     request = Request(
         url,
@@ -246,7 +255,7 @@ class MarketChartService:
             try:
                 payload = _request_json(url)
                 if payload.get("status") == "error":
-                    raise ValueError("Twelve Data returned an error.")
+                    raise MarketProviderResponseError(payload.get("code"))
                 return [
                     {"timestamp": row["datetime"], "value": row["close"]}
                     for row in payload.get("values", [])
