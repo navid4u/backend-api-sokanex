@@ -38,6 +38,7 @@ class DetailsField(serializers.JSONField):
 class PlatformReadSerializer(serializers.ModelSerializer):
     logo = serializers.SerializerMethodField()
     details = serializers.SerializerMethodField()
+    rating = serializers.DecimalField(max_digits=2, decimal_places=1, coerce_to_string=False, allow_null=True)
 
     class Meta:
         model = Platform

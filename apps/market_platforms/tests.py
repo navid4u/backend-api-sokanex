@@ -40,6 +40,7 @@ class MarketPlatformAPITests(APITestCase):
             self.assertEqual(response.status_code, 200)
             self.assertEqual(response.data["count"], 1)
             self.assertEqual(response.data["results"][0]["details"]["regulation"], "A")
+            self.assertNotIsInstance(response.data["results"][0]["rating"], str)
             self.assertEqual(self.client.get(f"/api/market-platforms/{self.broker.pk}/").status_code, 200)
         self.assertEqual(self.client.get("/api/market-platforms/fields/?platform_type=BROKER").data["count"], 10)
         self.assertEqual(self.client.get("/api/market-platforms/manage/").status_code, 403)
