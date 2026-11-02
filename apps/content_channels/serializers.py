@@ -1,4 +1,5 @@
 from rest_framework import serializers
+from decimal import Decimal
 
 from django.conf import settings
 from django.utils import timezone
@@ -156,6 +157,10 @@ class InternalAnalysisPostSerializer(UsageGuideReferenceMixin, serializers.Model
     author_name = serializers.SerializerMethodField()
     scope_display = serializers.CharField(source="get_scope_display", read_only=True)
     status_display = serializers.CharField(source="get_status_display", read_only=True)
+    entry_price_min = serializers.DecimalField(max_digits=24, decimal_places=8, min_value=Decimal("0"), allow_null=True, required=False)
+    entry_price_max = serializers.DecimalField(max_digits=24, decimal_places=8, min_value=Decimal("0"), allow_null=True, required=False)
+    take_profit = serializers.DecimalField(max_digits=24, decimal_places=8, min_value=Decimal("0"), allow_null=True, required=False)
+    stop_loss = serializers.DecimalField(max_digits=24, decimal_places=8, min_value=Decimal("0"), allow_null=True, required=False)
 
     class Meta:
         model = ChannelPost
@@ -164,6 +169,8 @@ class InternalAnalysisPostSerializer(UsageGuideReferenceMixin, serializers.Model
             "status_display", "image", "video", "audio", "cover", "is_pinned",
             "author", "author_name", "published_at", "views_count", "created_at",
             "updated_at", "source", "external_id",
+            "opportunity_status", "direction", "entry_price_min", "entry_price_max",
+            "take_profit", "stop_loss", "currency_label", "entry_warning",
             "external_url", "more_info_text", "more_info_video",
             "usage_guide_text", "usage_guide_video", "usage_guide_video_id",
         )
@@ -196,6 +203,9 @@ class InternalAnalysisPostSerializer(UsageGuideReferenceMixin, serializers.Model
     def validate_usage_guide_text(self, value):
         return strip_tags(value).replace("\x00", "").strip()
 
+    def validate_entry_warning(self, value):
+        return strip_tags(value).replace("\x00", "").strip() if value is not None else None
+
     def _validate_detail_video(self, value, label):
         if value is None:
             return value
@@ -220,6 +230,10 @@ class InternalAnalysisPostSerializer(UsageGuideReferenceMixin, serializers.Model
         return self._validate_detail_video(value, "ویدئوی راهنمای استفاده")
 
     def validate(self, attrs):
+        entry_min = attrs.get("entry_price_min", getattr(self.instance, "entry_price_min", None))
+        entry_max = attrs.get("entry_price_max", getattr(self.instance, "entry_price_max", None))
+        if entry_min is not None and entry_max is not None and entry_min > entry_max:
+            raise serializers.ValidationError({"entry_price_max": "Maximum entry price must not be below minimum."})
         attrs = self._validate_usage_guide_reference(attrs)
         status_value = attrs.get("status", getattr(self.instance, "status", ChannelPost.Status.PUBLISHED))
         published_at = attrs.get("published_at", getattr(self.instance, "published_at", None))

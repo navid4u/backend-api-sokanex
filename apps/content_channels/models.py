@@ -43,6 +43,16 @@ class ChannelMembership(models.Model):
 
 
 class ChannelPost(models.Model):
+    class OpportunityStatus(models.TextChoices):
+        ACTIVE = "ACTIVE", "Active"
+        PENDING = "PENDING", "Pending"
+        EXPIRED = "EXPIRED", "Expired"
+        CLOSED = "CLOSED", "Closed"
+
+    class Direction(models.TextChoices):
+        BUY = "BUY", "Buy"
+        SELL = "SELL", "Sell"
+
     class Scope(models.TextChoices):
         DOLLAR = "DOLLAR", "دلار"
         GOLD = "GOLD", "طلا"
@@ -74,6 +84,14 @@ class ChannelPost(models.Model):
     is_pinned = models.BooleanField(default=False)
     published_at = models.DateTimeField(null=True, blank=True, db_index=True)
     views_count = models.PositiveIntegerField(default=0)
+    opportunity_status = models.CharField(max_length=10, choices=OpportunityStatus.choices, null=True, blank=True)
+    direction = models.CharField(max_length=4, choices=Direction.choices, null=True, blank=True)
+    entry_price_min = models.DecimalField(max_digits=24, decimal_places=8, null=True, blank=True)
+    entry_price_max = models.DecimalField(max_digits=24, decimal_places=8, null=True, blank=True)
+    take_profit = models.DecimalField(max_digits=24, decimal_places=8, null=True, blank=True)
+    stop_loss = models.DecimalField(max_digits=24, decimal_places=8, null=True, blank=True)
+    currency_label = models.CharField(max_length=40, null=True, blank=True)
+    entry_warning = models.TextField(null=True, blank=True)
     source = models.CharField(max_length=20, choices=Source.choices, default=Source.LEGACY, db_index=True)
     external_id = models.CharField(max_length=150, null=True, blank=True, unique=True)
     external_url = models.URLField(max_length=1000, blank=True, default="")
@@ -98,3 +116,17 @@ class ChannelPost(models.Model):
 
     class Meta:
         ordering = ["-is_pinned", "-published_at", "-id"]
+        constraints = [
+            models.CheckConstraint(
+                condition=(
+                    (models.Q(entry_price_min__gte=0) | models.Q(entry_price_min__isnull=True))
+                    & (models.Q(entry_price_max__gte=0) | models.Q(entry_price_max__isnull=True))
+                    & (models.Q(take_profit__gte=0) | models.Q(take_profit__isnull=True))
+                    & (models.Q(stop_loss__gte=0) | models.Q(stop_loss__isnull=True))
+                    & (models.Q(entry_price_min__lte=models.F("entry_price_max"))
+                       | models.Q(entry_price_min__isnull=True)
+                       | models.Q(entry_price_max__isnull=True))
+                ),
+                name="internal_opportunity_valid_prices",
+            ),
+        ]

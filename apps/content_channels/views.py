@@ -148,6 +148,7 @@ class VIPSignalChannelView(ChannelPostListCreateView):
 @extend_schema_view(get=extend_schema(parameters=[
     OpenApiParameter("scope", str, required=False, enum=["DOLLAR", "GOLD", "STOCK", "HOUSING", "CAR", "FOREX"]),
     OpenApiParameter("source", str, required=False, enum=["LEGACY", "TELEGRAM_API"]),
+    OpenApiParameter("opportunity_status", str, required=False, enum=["ACTIVE", "PENDING", "EXPIRED", "CLOSED"]),
     OpenApiParameter("page", int, required=False),
     OpenApiParameter("page_size", int, required=False),
 ]))
@@ -180,6 +181,11 @@ class InternalAnalysisChannelView(generics.ListAPIView):
         source = self.request.query_params.get("source")
         if source:
             queryset = queryset.filter(source=source)
+        opportunity_status = self.request.query_params.get("opportunity_status")
+        if opportunity_status:
+            if opportunity_status not in ChannelPost.OpportunityStatus.values:
+                raise serializers.ValidationError({"opportunity_status": "Unknown opportunity status."})
+            queryset = queryset.filter(opportunity_status=opportunity_status)
         return queryset
 
 
@@ -270,9 +276,36 @@ class InternalAnalysisViewCountView(APIView):
 
 
 class ChannelPostDetailView(generics.RetrieveUpdateDestroyAPIView):
-    permission_classes = [IsAuthenticated, IsEmployee]
+    permission_classes = [IsAuthenticated]
     serializer_class = ChannelPostSerializer
     queryset = ChannelPost.objects.select_related("channel", "author", "signal")
+
+    def get_permissions(self):
+        if self.request.method == "GET":
+            return [IsAuthenticated()]
+        return [IsAuthenticated(), IsEmployee()]
+
+    def retrieve(self, request, *args, **kwargs):
+        post = self.get_object()
+        if post.channel.slug != "internal-analysis":
+            if not IsEmployee().has_permission(request, self):
+                from rest_framework.exceptions import PermissionDenied
+                raise PermissionDenied("Content management permission is required.")
+            return Response(self.get_serializer(post).data)
+        manager = CanManageInternalAnalysis().has_permission(request, self)
+        if not manager:
+            if not can_view_vip_market(request.user, "internal"):
+                from rest_framework.exceptions import PermissionDenied
+                raise PermissionDenied("Internal market access is required.")
+            if (post.status != ChannelPost.Status.PUBLISHED
+                    or not post.published_at or post.published_at > timezone.now()):
+                from rest_framework.exceptions import PermissionDenied
+                raise PermissionDenied("This analysis is not published.")
+            if (market_access_v2_enabled() and post.scope == ChannelPost.Scope.FOREX
+                    and not can_view_vip_market(request.user, "forex")):
+                from rest_framework.exceptions import PermissionDenied
+                raise PermissionDenied("Forex market access is required.")
+        return Response(InternalAnalysisPostSerializer(post, context=self.get_serializer_context()).data)
 
     def perform_update(self, serializer):
         post = serializer.save()

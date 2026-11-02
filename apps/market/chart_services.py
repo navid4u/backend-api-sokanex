@@ -23,14 +23,22 @@ CHART_SYMBOLS = {
         "BINANCE:XRPUSDT": {"coingecko": "ripple", "coinbase": "XRP-USD"},
         "BINANCE:BNBUSDT": {"coingecko": "binancecoin", "coinbase": "BNB-USD"},
         "BINANCE:DOGEUSDT": {"coingecko": "dogecoin", "coinbase": "DOGE-USD"},
+        "TRX": {"coingecko": "tron"},
+        "HYPE": {"coingecko": "hyperliquid"},
+        "ZEC": {"coingecko": "zcash"},
+        "SUI": {"coingecko": "sui"},
     },
     "forex": {
         "OANDA:XAUUSD": {"base": "XAU", "quote": "USD", "gold": True},
+        "OANDA:XAGUSD": {"base": "XAG", "quote": "USD", "provider_symbol": "XAG/USD"},
         "FX:EURUSD": {"base": "EUR", "quote": "USD"},
         "FX:GBPUSD": {"base": "GBP", "quote": "USD"},
         "FX:USDJPY": {"base": "USD", "quote": "JPY"},
         "FX:USDCHF": {"base": "USD", "quote": "CHF"},
         "FX:AUDUSD": {"base": "AUD", "quote": "USD"},
+        "FX:USDCAD": {"base": "USD", "quote": "CAD"},
+        "FX:NZDUSD": {"base": "NZD", "quote": "USD"},
+        "UKOIL": {"base": "XBR", "quote": "USD", "provider_symbol": "XBR/USD"},
     },
 }
 
@@ -40,7 +48,11 @@ FOREX_SYMBOL_ALIASES = {
     "USDJPY": "FX:USDJPY",
     "USDCHF": "FX:USDCHF",
     "AUDUSD": "FX:AUDUSD",
+    "USDCAD": "FX:USDCAD",
+    "NZDUSD": "FX:NZDUSD",
     "XAUUSD": "OANDA:XAUUSD",
+    "XAGUSD": "OANDA:XAGUSD",
+    "UKOIL": "UKOIL",
 }
 RANGE_DAYS = {"1d": 1, "5d": 5, "7d": 7, "30d": 30}
 COINBASE_GRANULARITY = {"1d": 3600, "5d": 3600, "7d": 21600, "30d": 86400}
@@ -84,7 +96,7 @@ class MarketChartService:
         if symbol not in CHART_SYMBOLS[market]:
             raise ValidationError({"symbol": "This symbol is not allowed for the selected market."})
         if range_value not in RANGE_DAYS:
-            raise ValidationError({"range": "Use 1d, 7d, or 30d."})
+            raise ValidationError({"range": "Use 1d, 5d, 7d, or 30d."})
         if interval and interval not in settings.MARKET_CHART_ALLOWED_INTERVALS:
             raise ValidationError({"interval": "Unsupported chart interval."})
 
@@ -150,8 +162,9 @@ class MarketChartService:
         normalized = (symbol or "").strip().upper()
         if market != "forex":
             return normalized
-        bare = normalized.split(":", 1)[-1]
-        return FOREX_SYMBOL_ALIASES.get(bare, normalized)
+        if ":" in normalized:
+            return normalized
+        return FOREX_SYMBOL_ALIASES.get(normalized, normalized)
 
     @staticmethod
     def _with_stale_state(payload, stale):
@@ -163,7 +176,7 @@ class MarketChartService:
         if not isinstance(points, list):
             return False
         if market == "forex":
-            return len(points) >= 24 and all(
+            return len(points) >= 2 and all(
                 isinstance(value, (int, float)) and math.isfinite(float(value))
                 for value in points
             )
@@ -172,7 +185,10 @@ class MarketChartService:
     @classmethod
     def _providers(cls, market, symbol):
         if market == "crypto":
-            return (("coingecko", cls._coingecko), ("coinbase", cls._coinbase))
+            providers = [("coingecko", cls._coingecko)]
+            if CHART_SYMBOLS[market][symbol].get("coinbase"):
+                providers.append(("coinbase", cls._coinbase))
+            return tuple(providers)
         fallbacks = (
             (("gold-provider", cls._configured_gold),)
             if CHART_SYMBOLS[market][symbol].get("gold")
@@ -194,7 +210,7 @@ class MarketChartService:
                 continue
             seen.add(timestamp)
             cleaned.append({"timestamp": timestamp, "value": value})
-        minimum = 24 if market == "forex" else 2
+        minimum = 2
         if len(cleaned) < minimum:
             raise ValueError("Provider returned no chart points.")
         first, last = cleaned[0]["value"], cleaned[-1]["value"]
@@ -214,7 +230,7 @@ class MarketChartService:
         if not settings.TWELVE_DATA_API_KEY:
             raise ValueError("Twelve Data is not configured.")
         metadata = CHART_SYMBOLS["forex"][symbol]
-        provider_symbol = f"{metadata['base']}/{metadata['quote']}"
+        provider_symbol = metadata.get("provider_symbol") or f"{metadata['base']}/{metadata['quote']}"
         interval_value = interval or "1h"
         output_size = min(120, max(24, RANGE_DAYS[range_value] * 24))
         params = {

@@ -85,12 +85,17 @@ class MarketScopedVIPTests(APITestCase):
         self.assertEqual(self.client.get("/api/signals/?channel=FOREX").status_code, 403)
         self.assertEqual(self.client.get(f"/api/signals/{self.forex.pk}/").status_code, 403)
         self.assertEqual(self.client.get("/api/channels/internal-analysis/").status_code, 403)
+        denied_detail = self.client.get(f"/api/channels/posts/{self.analysis.pk}/")
+        self.assertEqual(denied_detail.status_code, 403)
+        self.assertNotIn("Analysis private", str(denied_detail.data))
         previews = self.client.get("/api/dashboard/").data["data"]["vip_signal_previews"]
         self.assertEqual({p["channel"] for p in previews if p["can_view"]}, {"CRYPTO"})
         self.grant("internal")
         profile = self.client.get("/api/accounts/profile/").data["market_access_v2"]
         self.assertEqual(profile["membership_tier"], "PRO")
         self.assertEqual(self.client.get("/api/channels/internal-analysis/").status_code, 200)
+        self.assertEqual(self.client.get(f"/api/channels/posts/{self.analysis.pk}/").status_code, 200)
+        self.assertEqual(self.client.get(f"/api/channels/posts/{self.forex_analysis.pk}/").status_code, 403)
         self.assertEqual(self.client.get("/api/signals/?channel=FOREX").status_code, 403)
         internal = self.client.get("/api/channels/internal-analysis/").data["results"]
         self.assertEqual([item["id"] for item in internal], [self.analysis.pk])

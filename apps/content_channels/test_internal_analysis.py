@@ -77,6 +77,61 @@ class InternalAnalysisAPITests(APITestCase):
         self.assertEqual(response.data["count"], 1)
         self.assertEqual(response.data["results"][0]["id"], stock.id)
 
+    def test_structured_opportunity_round_trip_filter_and_detail(self):
+        self.authenticate(self.manager)
+        created = self.client.post(self.manage_url, {
+            "title": "Structured", "body": "Recorded body", "scope": "GOLD",
+            "opportunity_status": "ACTIVE", "direction": "BUY",
+            "entry_price_min": "25000000", "entry_price_max": "25550000",
+            "take_profit": "28500000", "stop_loss": "23400000",
+            "currency_label": "تومان", "entry_warning": "Only stored warning",
+        }, format="json")
+        self.assertEqual(created.status_code, 201, created.data)
+        post_id = created.data["id"]
+        self.authenticate(self.user)
+        listing = self.client.get(self.list_url, {"scope": "GOLD", "opportunity_status": "ACTIVE", "page_size": 1})
+        self.assertEqual(listing.status_code, 200, listing.data)
+        self.assertEqual(listing.data["count"], 1)
+        self.assertIn("next", listing.data)
+        row = listing.data["results"][0]
+        detail = self.client.get(reverse("channel-post-detail", args=[post_id]))
+        self.assertEqual(detail.status_code, 200, detail.data)
+        for field in ("opportunity_status", "direction", "entry_price_min", "entry_price_max",
+                      "take_profit", "stop_loss", "currency_label", "entry_warning", "views_count"):
+            self.assertEqual(row[field], detail.data[field])
+        self.assertEqual(row["entry_price_min"], "25000000.00000000")
+        self.assertEqual(row["views_count"], 0)
+
+    def test_old_post_nullable_fields_and_invalid_structured_values(self):
+        old = self.create_post()
+        self.authenticate(self.user)
+        row = self.client.get(self.list_url).data["results"][0]
+        self.assertEqual(row["id"], old.pk)
+        for field in ("opportunity_status", "direction", "entry_price_min", "entry_price_max",
+                      "take_profit", "stop_loss", "currency_label", "entry_warning"):
+            self.assertIsNone(row[field])
+        self.assertEqual(self.client.get(self.list_url, {"opportunity_status": "INVALID"}).status_code, 400)
+        self.authenticate(self.manager)
+        for values, field in (({"entry_price_min": "-1"}, "entry_price_min"),
+                              ({"entry_price_min": "10", "entry_price_max": "9"}, "entry_price_max"),
+                              ({"direction": "HOLD"}, "direction")):
+            response = self.client.patch(reverse("internal-analysis-manage-detail", args=[old.pk]), values, format="json")
+            self.assertEqual(response.status_code, 400)
+            self.assertIn(field, response.data["errors"])
+
+    def test_detail_forbidden_without_market_or_when_unpublished(self):
+        private = self.create_post(status=ChannelPost.Status.DRAFT, image="channels/uploads/private.jpg")
+        published = self.create_post(image="channels/uploads/published.jpg")
+        self.authenticate(self.user)
+        self.assertEqual(self.client.get(reverse("channel-post-detail", args=[private.pk])).status_code, 403)
+        self.user.access_level = User.AccessLevel.LEVEL_1
+        self.user.gold_trial_started_at = None
+        self.user.gold_trial_expires_at = None
+        self.user.save(update_fields=["access_level", "gold_trial_started_at", "gold_trial_expires_at"])
+        denied = self.client.get(reverse("channel-post-detail", args=[published.pk]))
+        self.assertEqual(denied.status_code, 403)
+        self.assertNotIn("published.jpg", str(denied.data))
+
     def test_expired_trial_is_forbidden_but_active_trial_can_read_internal_analysis(self):
         post = self.create_post()
         User.objects.filter(pk=self.user.pk).update(

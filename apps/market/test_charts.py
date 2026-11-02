@@ -4,13 +4,14 @@ from urllib.error import URLError
 
 from django.conf import settings
 from django.core.cache import cache
+from django.test import override_settings
 from django.urls import reverse
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
 
 from apps.accounts.models import User
-from .chart_services import MarketChartService
+from .chart_services import CHART_SYMBOLS, MarketChartService
 from .models import MarketChartSnapshot
 
 
@@ -164,3 +165,58 @@ class MarketChartAPITests(APITestCase):
             response = self.client.get(self.url, params)
         self.assertEqual(response.status_code, status.HTTP_503_SERVICE_UNAVAILABLE)
         self.assertEqual(response.data["error_code"], "historical_series_unavailable")
+
+    def test_all_dashboard_symbols_have_server_provider_routes(self):
+        expected = {
+            "crypto": (
+                "BINANCE:BTCUSDT", "BINANCE:ETHUSDT", "BINANCE:SOLUSDT",
+                "BINANCE:BNBUSDT", "BINANCE:XRPUSDT", "BINANCE:DOGEUSDT",
+                "TRX", "HYPE", "ZEC", "SUI",
+            ),
+            "forex": (
+                "OANDA:XAUUSD", "OANDA:XAGUSD", "FX:EURUSD", "FX:GBPUSD",
+                "FX:USDJPY", "FX:USDCHF", "FX:AUDUSD", "FX:USDCAD",
+                "FX:NZDUSD", "UKOIL",
+            ),
+        }
+        self.assertEqual({market: set(symbols) for market, symbols in CHART_SYMBOLS.items()},
+                         {market: set(symbols) for market, symbols in expected.items()})
+        forex_points = [
+            {"timestamp": f"2026-09-15T{hour:02d}:00:00Z", "value": 100 + hour}
+            for hour in range(2)
+        ]
+        with patch.object(MarketChartService, "_coingecko", return_value=self.points), patch.object(
+            MarketChartService, "_twelve_data", return_value=forex_points
+        ):
+            for market, symbols in expected.items():
+                for symbol in symbols:
+                    with self.subTest(market=market, symbol=symbol):
+                        response = self.client.get(self.url, {
+                            "market": market, "symbol": symbol, "range": "1d", "interval": "1h",
+                        })
+                        self.assertEqual(response.status_code, 200, response.data)
+                        self.assertGreaterEqual(len(response.data["data"]["points"]), 2)
+                        self.assertTrue(response.data["data"]["source"])
+                        self.assertTrue(response.data["data"]["updated_at"])
+
+    def test_new_forex_bare_aliases_and_no_arbitrary_prefix(self):
+        for bare, canonical in (("XAGUSD", "OANDA:XAGUSD"), ("USDCAD", "FX:USDCAD"),
+                                ("NZDUSD", "FX:NZDUSD"), ("UKOIL", "UKOIL")):
+            self.assertEqual(MarketChartService._normalize_symbol("forex", bare), canonical)
+        self.assertEqual(MarketChartService._normalize_symbol("forex", "OTHER:XAGUSD"), "OTHER:XAGUSD")
+        self.assertEqual(self.client.get(self.url, {
+            "market": "forex", "symbol": "OTHER:XAGUSD", "range": "1d", "interval": "1h",
+        }).status_code, 400)
+
+    def test_hype_and_brent_resolve_to_correct_provider_identity(self):
+        with patch("apps.market.chart_services._request_json", return_value={"prices": [
+            [1770000000000, 10], [1770003600000, 11],
+        ]}) as request_json:
+            MarketChartService._coingecko("HYPE", "1d", "1h")
+        self.assertIn("/coins/hyperliquid/", request_json.call_args.args[0])
+        with override_settings(TWELVE_DATA_API_KEY="test-key"), patch(
+            "apps.market.chart_services._request_json",
+            return_value={"values": [{"datetime": "2026-10-01 00:00:00", "close": "100"}]},
+        ) as request_json:
+            MarketChartService._twelve_data("UKOIL", "1d", "1h")
+        self.assertIn("symbol=XBR%2FUSD", request_json.call_args.args[0])
