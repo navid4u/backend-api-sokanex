@@ -178,10 +178,7 @@ class PaymentCreateView(generics.GenericAPIView):
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
         if data["purpose"] == Payment.Purpose.COURSE_PURCHASE:
-            from apps.academy.models import Course
-            course = Course.objects.filter(slug=data.get("metadata", {}).get("course_slug"), status=Course.Status.PUBLISHED).first()
-            if not course or course.is_free or course.price != data["amount_irt"]:
-                raise serializers.ValidationError({"metadata": "Course and server-side price do not match."})
+            raise serializers.ValidationError({"purpose": "Academy purchases are discontinued; courses are free."})
         elif data["purpose"] == Payment.Purpose.LEVEL_UPGRADE:
             plan = UpgradePlan.objects.filter(level=data.get("metadata", {}).get("level"), active=True).first()
             if not plan or plan.level <= request.user.access_level or plan.price_irt != data["amount_irt"]:

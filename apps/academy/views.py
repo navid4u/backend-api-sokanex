@@ -1,6 +1,6 @@
 from django_filters.rest_framework import DjangoFilterBackend
 from django.shortcuts import get_object_or_404
-from rest_framework import generics, serializers
+from rest_framework import generics, serializers, status
 from rest_framework.filters import OrderingFilter, SearchFilter
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
@@ -23,7 +23,7 @@ from apps.accounts.market_access import market_access_v2_enabled
 from common.content_access import restrict_queryset_for_user
 from common.permissions import CanTeachAcademy
 
-from .models import Course, CourseEnrollment, CoursePurchase, CourseSession, SessionProgress, Quiz, QuizAttempt
+from .models import Course, CourseEnrollment, CourseSession, SessionProgress, Quiz, QuizAttempt
 from .access import academy_markets, can_access_academy_market
 from .serializers import (
     CourseListSerializer,
@@ -34,13 +34,9 @@ from .serializers import (
     QuizAttemptSerializer,
     QuizPublicSerializer,
     QuizWriteSerializer,
-    CoursePurchaseSerializer,
 )
 from apps.activity.models import UserActivity
 from apps.activity.services import ActivityService
-from apps.wallet.models import Payment, PaymentProvider
-from apps.wallet.providers import ADAPTERS, PaymentProviderError
-from apps.wallet.services import WalletService
 
 
 def can_manage_all_academy(user):
@@ -93,14 +89,7 @@ def session_lock_reason(session, user):
     if can_edit_academy(user) and manageable_courses(user).filter(pk=session.course_id).exists():
         return ""
     enrollment = CourseEnrollment.objects.filter(user=user, course=session.course).first()
-    if not session.course.is_free:
-        purchased = CoursePurchase.objects.filter(user=user, course=session.course).exists()
-        if not purchased or not enrollment:
-            return "Purchase and enroll in this course to access its content."
-    elif not session.is_preview and not enrollment and not (
-        market_access_v2_enabled() and can_access_academy_market(user, session.course.market)
-    ):
-        return "Enroll in this course to access its content."
+    # Course price/enrollment history must not gate current academy content.
     if session.is_preview:
         return ""
     now = timezone.now()
@@ -296,8 +285,6 @@ class EnrollCourseView(APIView):
         if market_access_v2_enabled():
             assert_course_market_access(request.user, get_object_or_404(Course, slug=slug))
         course = get_object_or_404(visible_courses(request.user), slug=slug, enrollment_open=True)
-        if not course.is_free or course.purchase_required:
-            raise PermissionDenied("Purchase this course before enrollment.")
         enrollment, created = CourseEnrollment.objects.get_or_create(
             user=request.user, course=course
         )
@@ -306,66 +293,22 @@ class EnrollCourseView(APIView):
         return Response(CourseEnrollmentSerializer(enrollment, context={"request": request}).data)
 
 
-class CoursePurchaseView(generics.GenericAPIView):
+class CoursePurchaseView(APIView):
     permission_classes = [IsAuthenticated]
-    serializer_class = CoursePurchaseSerializer
 
-    @transaction.atomic
+    @extend_schema(exclude=True)
     def post(self, request, slug):
-        course = get_object_or_404(
-            Course.objects.select_for_update().filter(status=Course.Status.PUBLISHED),
-            slug=slug, enrollment_open=True,
-        )
-        assert_course_market_access(request.user, course)
-        serializer = CoursePurchaseSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        if CoursePurchase.objects.filter(user=request.user, course=course).exists():
-            raise serializers.ValidationError({"course": "This course was already purchased."})
-        if course.is_free:
-            enrollment, _ = CourseEnrollment.objects.get_or_create(user=request.user, course=course)
-            return Response({"status": "ENROLLED", "enrollment_id": enrollment.pk})
-        method = serializer.validated_data["payment_method"]
-        if method == "WALLET":
-            wallet = WalletService.get_wallet(request.user)
-            if WalletService.balance_irt(wallet) < course.price:
-                raise serializers.ValidationError({"wallet": "Insufficient wallet balance."})
-            ledger = WalletService.post(wallet, course.price, "COURSE_PURCHASE", credit_wallet=False, counterparty="COURSE_REVENUE", metadata={"course": course.slug})
-            purchase = CoursePurchase.objects.create(user=request.user, course=course, amount_irt=course.price, payment_method=method, ledger_transaction=ledger)
-            enrollment = CourseEnrollment.objects.create(user=request.user, course=course)
-            return Response({"status": "PURCHASED", "purchase_id": purchase.pk, "enrollment_id": enrollment.pk})
-        provider = get_object_or_404(PaymentProvider, code=serializer.validated_data.get("provider"), is_active=True)
-        key = serializer.validated_data.get("idempotency_key")
-        if not key:
-            raise serializers.ValidationError({"idempotency_key": "Required for gateway payments."})
-        payment, created = Payment.objects.get_or_create(
-            user=request.user, idempotency_key=key,
-            defaults={"provider": provider, "amount_irt": course.price, "purpose": Payment.Purpose.COURSE_PURCHASE, "metadata": {"course_slug": course.slug}},
-        )
-        if created:
-            callback = f"{settings.PAYMENT_CALLBACK_BASE_URL.rstrip('/')}/api/billing/payments/verify/"
-            try:
-                authority, payment_url = ADAPTERS[provider.code].create(payment, callback)
-            except PaymentProviderError as exc:
-                raise serializers.ValidationError({"provider": str(exc)})
-            payment.authority, payment.status = authority, Payment.Status.PENDING
-            payment.metadata = {**payment.metadata, "payment_url": payment_url}
-            payment.save(update_fields=["authority", "status", "metadata", "updated_at"])
-        return Response({"status": payment.status, "payment_id": payment.pk, "payment_url": payment.metadata.get("payment_url")})
+        return Response({"detail": "Academy purchases are discontinued; courses are free."},
+                        status=status.HTTP_410_GONE)
 
 
-class CoursePurchaseStatusView(generics.GenericAPIView):
+class CoursePurchaseStatusView(APIView):
     permission_classes = [IsAuthenticated]
-    serializer_class = CoursePurchaseSerializer
 
+    @extend_schema(exclude=True)
     def get(self, request, slug):
-        course = get_object_or_404(Course, slug=slug)
-        assert_course_market_access(request.user, course)
-        purchase = CoursePurchase.objects.filter(user=request.user, course=course).select_related("payment").first()
-        enrollment = CourseEnrollment.objects.filter(user=request.user, course=course).first()
-        return Response({
-            "purchased": bool(purchase), "enrolled": bool(enrollment),
-            "payment_status": purchase.payment.status if purchase and purchase.payment_id else None,
-        })
+        return Response({"detail": "Academy purchase status is discontinued."},
+                        status=status.HTTP_410_GONE)
 
 
 class MyEnrollmentListView(generics.ListAPIView):

@@ -48,7 +48,7 @@ class BillingV2Tests(APITestCase):
         self.assertEqual(sum(e.amount_irt for e in entries if e.direction == "DEBIT"), sum(e.amount_irt for e in entries if e.direction == "CREDIT"))
         verify.assert_called_once()
 
-    def test_wallet_course_purchase_is_atomic_and_cannot_repeat(self):
+    def test_wallet_course_purchase_is_discontinued_without_debit(self):
         wallet = WalletService.get_wallet(self.user)
         WalletService.post(wallet, 500000, "TEST_CREDIT")
         course = Course.objects.create(
@@ -57,12 +57,20 @@ class BillingV2Tests(APITestCase):
         )
         url = f"/api/academy/courses/{course.slug}/purchase/"
         first = self.client.post(url, {"payment_method": "WALLET"}, format="json")
-        second = self.client.post(url, {"payment_method": "WALLET"}, format="json")
-        self.assertEqual(first.status_code, 200)
-        self.assertEqual(second.status_code, 400)
-        self.assertEqual(WalletService.balance_irt(wallet), 300000)
-        self.assertTrue(CoursePurchase.objects.filter(user=self.user, course=course).exists())
-        self.assertTrue(CourseEnrollment.objects.filter(user=self.user, course=course).exists())
+        self.assertEqual(first.status_code, 410)
+        self.assertEqual(WalletService.balance_irt(wallet), 500000)
+        self.assertFalse(CoursePurchase.objects.filter(user=self.user, course=course).exists())
+        self.assertFalse(CourseEnrollment.objects.filter(user=self.user, course=course).exists())
+
+    def test_generic_payment_api_cannot_start_course_purchase(self):
+        response = self.client.post("/api/billing/payments/", {
+            "provider": "ZARINPAL", "amount_irt": 200000,
+            "purpose": Payment.Purpose.COURSE_PURCHASE,
+            "idempotency_key": "obsolete-academy-purchase",
+            "metadata": {"course_slug": "any"},
+        }, format="json")
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(Payment.objects.filter(purpose=Payment.Purpose.COURSE_PURCHASE).exists())
 
     def test_only_platform_manager_can_manage_upgrade_prices(self):
         plan = UpgradePlan.objects.get(level=2)

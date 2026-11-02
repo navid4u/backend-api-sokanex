@@ -85,8 +85,12 @@ class CourseListSerializer(
         read_only=True,
     )
     is_enrolled = serializers.SerializerMethodField()
-    is_purchased = serializers.SerializerMethodField()
     can_access_content = serializers.SerializerMethodField()
+    # Transitional read-only values for older clients. No course can be sold.
+    is_free = serializers.SerializerMethodField()
+    price = serializers.SerializerMethodField()
+    currency = serializers.SerializerMethodField()
+    purchase_required = serializers.SerializerMethodField()
 
     class Meta:
         model = Course
@@ -118,7 +122,6 @@ class CourseListSerializer(
             "allowed_levels",
             "sessions_count",
             "is_enrolled",
-            "is_purchased",
             "can_access_content",
             "created_at",
             "updated_at",
@@ -140,21 +143,28 @@ class CourseListSerializer(
             or obj.instructor_id == user.id
         )
         enrolled = obj.enrollments.filter(user=user).exists()
-        purchased = obj.purchases.filter(user=user).exists()
-        can_access = manages or (enrolled and (obj.is_free or purchased))
+        can_access = True
         if market_access_v2_enabled() and not manages:
-            market_ok = can_access_academy_market(user, obj.market)
-            can_access = market_ok and (can_access or obj.is_free)
-        return enrolled, purchased, can_access
+            can_access = can_access_academy_market(user, obj.market)
+        return enrolled, can_access
 
     def get_is_enrolled(self, obj) -> bool:
         return self._access_state(obj)[0]
 
-    def get_is_purchased(self, obj) -> bool:
+    def get_can_access_content(self, obj) -> bool:
         return self._access_state(obj)[1]
 
-    def get_can_access_content(self, obj) -> bool:
-        return self._access_state(obj)[2]
+    def get_is_free(self, obj) -> bool:
+        return True
+
+    def get_price(self, obj) -> int:
+        return 0
+
+    def get_currency(self, obj) -> str:
+        return "IRT"
+
+    def get_purchase_required(self, obj) -> bool:
+        return False
 
 
 class CourseWriteSerializer(
@@ -166,7 +176,6 @@ class CourseWriteSerializer(
         read_only=True,
     )
     instructor_name = serializers.SerializerMethodField()
-    is_free = OmissionPreservingBooleanField(required=False)
     enrollment_open = OmissionPreservingBooleanField(required=False)
     estimated_duration_minutes = serializers.IntegerField(required=False, allow_null=True, min_value=0)
     weekly_session_limit = serializers.IntegerField(required=False, allow_null=True, min_value=0)
@@ -193,10 +202,6 @@ class CourseWriteSerializer(
             "prerequisites",
             "learning_outcomes",
             "enrollment_open",
-            "is_free",
-            "price",
-            "currency",
-            "purchase_required",
             "weekly_session_limit",
             "monthly_session_limit",
             "starts_at",
@@ -231,14 +236,15 @@ class CourseWriteSerializer(
         attrs = super().validate(attrs)
         if market_access_v2_enabled() and not attrs.get("market", getattr(self.instance, "market", "")):
             raise serializers.ValidationError({"market": "Select the course market before publishing in V2."})
-        is_free = attrs.get("is_free", getattr(self.instance, "is_free", True))
-        price = attrs.get("price", getattr(self.instance, "price", 0))
-        if is_free and price:
-            raise serializers.ValidationError({"price": "A free course must have zero price."})
-        if not is_free and price <= 0:
-            raise serializers.ValidationError({"price": "A paid course needs a positive price."})
-        attrs["purchase_required"] = not is_free
-        attrs["currency"] = "IRT"
+        supplied = self.initial_data
+        if "is_free" in supplied and str(supplied["is_free"]).strip().lower() not in ("true", "1", "on"):
+            raise serializers.ValidationError({"is_free": "Paid courses are discontinued."})
+        if "price" in supplied and str(supplied["price"]).strip() not in ("", "0", "0.0"):
+            raise serializers.ValidationError({"price": "Paid courses are discontinued."})
+        if "purchase_required" in supplied and str(supplied["purchase_required"]).strip().lower() not in ("false", "0", "off"):
+            raise serializers.ValidationError({"purchase_required": "Paid courses are discontinued."})
+        if "currency" in supplied and str(supplied["currency"]).strip().upper() not in ("", "IRT"):
+            raise serializers.ValidationError({"currency": "Course currency is no longer configurable."})
         return attrs
 
 
@@ -481,12 +487,6 @@ class CourseEnrollmentSerializer(serializers.ModelSerializer):
             return ""
         from .views import session_lock_reason
         return session_lock_reason(obj.course.sessions.get(pk=session_id), obj.user)
-
-
-class CoursePurchaseSerializer(serializers.Serializer):
-    payment_method = serializers.ChoiceField(choices=("WALLET", "GATEWAY"))
-    provider = serializers.CharField(required=False)
-    idempotency_key = serializers.CharField(max_length=120, required=False)
 
 
 class SessionProgressSerializer(serializers.ModelSerializer):
