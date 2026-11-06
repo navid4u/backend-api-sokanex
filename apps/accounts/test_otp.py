@@ -57,6 +57,43 @@ class OTPAuthenticationTests(TestCase):
         self.assertTrue(UserActivity.objects.filter(user=self.user, activity_type="LOGIN").exists())
 
     @patch("apps.accounts.otp.PayamitoService.send_otp")
+    @patch("apps.accounts.otp.secrets.randbelow", return_value=4839)
+    def test_login_accepts_persian_and_arabic_indic_code_digits(self, randbelow, send_otp):
+        self.assertEqual(self.client.post(
+            "/api/accounts/auth/otp/request/", {"phone": self.user.phone},
+        ).status_code, 200)
+        response = self.client.post(
+            "/api/accounts/auth/otp/verify/",
+            {"phone": self.user.phone, "code": "۴٨۳۹"}, format="json",
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertIsNotNone(OTPChallenge.objects.get().consumed_at)
+
+    @patch("apps.accounts.otp.PayamitoService.send_otp")
+    @patch("apps.accounts.otp.secrets.randbelow", return_value=4839)
+    def test_registration_accepts_persian_code_digits(self, randbelow, send_otp):
+        phone = "09351234567"
+        self.assertEqual(self.client.post(
+            "/api/accounts/auth/registration/request/", {"phone": phone}, format="json",
+        ).status_code, 200)
+        response = self.client.post(
+            "/api/accounts/auth/registration/verify/",
+            {"phone": phone, "code": "۴۸۳۹", "first_name": "تست"}, format="json",
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(User.objects.filter(phone=phone).exists())
+
+    def test_otp_code_rejects_non_digits_and_wrong_length(self):
+        for code in ("۴۸۳", "۴۸۳۹۵", "۴۸۳x", "٤٨٣-", "१२३४"):
+            with self.subTest(code=code):
+                response = self.client.post(
+                    "/api/accounts/auth/otp/verify/",
+                    {"phone": self.user.phone, "code": code}, format="json",
+                )
+                self.assertEqual(response.status_code, 400)
+                self.assertIn("code", response.data.get("errors", response.data))
+
+    @patch("apps.accounts.otp.PayamitoService.send_otp")
     def test_cooldown_returns_429_and_retry_after(self, send_otp):
         self.client.post("/api/accounts/auth/otp/request/", {"phone": "09121234567"})
         response = self.client.post("/api/accounts/auth/otp/request/", {"phone": "09121234567"})

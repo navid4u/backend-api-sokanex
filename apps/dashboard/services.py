@@ -8,6 +8,9 @@ from apps.chat.services import ChatService
 from apps.livestream.services import LiveEventService
 from apps.accounts.models import BrokerConnection
 from apps.accounts.market_access import can_view_vip_market, market_access_payload, market_access_v2_enabled, user_can_manage_market_access
+from apps.accounts.content_section_access import user_can_access_content_section
+from apps.accounts.models import ContentSectionAccessPolicy
+from apps.academy.access import academy_markets
 from apps.content_channels.models import ChannelPost
 from apps.activity.tracking import page_view_tracking_enabled
 from django.utils import timezone
@@ -130,6 +133,19 @@ class DashboardService:
         )
 
         access_state = market_access_payload(user)
+        content_access = None
+        if market_access_v2_enabled():
+            content_access = {
+                "signals": {
+                    market: can_view_vip_market(user, market)
+                    for market in ("crypto", "forex")
+                },
+                "academy_markets": sorted(academy_markets(user)),
+                "livestream": user_can_access_content_section(
+                    user, ContentSectionAccessPolicy.Section.LIVESTREAMS,
+                ),
+                "internal_opportunities": can_view_vip_market(user, "internal"),
+            }
 
         return {
             "user": user,
@@ -175,6 +191,8 @@ class DashboardService:
             "premium_subscription": WalletService.premium_subscription(user),
 
             "market_access_v2": access_state,
+
+            "content_access": content_access,
 
             "analytics_tracking": {"enabled": page_view_tracking_enabled()},
 

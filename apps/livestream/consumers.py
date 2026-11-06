@@ -21,6 +21,9 @@ class LivestreamConsumer(AsyncJsonWebsocketConsumer):
         if not event_id:
             await self.close(code=4403)
             return
+        self.event_slug = slug
+        self.event_id_value = event_id
+        self.user_id = payload.get("user_id")
         self.group_name = f"livestream_{event_id}"
         await self.channel_layer.group_add(self.group_name, self.channel_name)
         await self.accept()
@@ -30,6 +33,9 @@ class LivestreamConsumer(AsyncJsonWebsocketConsumer):
             await self.channel_layer.group_discard(self.group_name, self.channel_name)
 
     async def live_event(self, event):
+        if not await self.event_id(self.event_slug, self.event_id_value, self.user_id):
+            await self.close(code=4403)
+            return
         await self.send_json(event["payload"])
 
     @database_sync_to_async

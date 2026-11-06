@@ -1,6 +1,7 @@
 """V2 content-section policy, independent of legacy per-item level flags."""
 
 from django.db import transaction
+from django.utils import timezone
 from rest_framework.exceptions import PermissionDenied, ValidationError
 
 from common.content_access import restrict_queryset_for_user, user_can_access_levels
@@ -46,6 +47,11 @@ def user_can_access_content_section(user, section, *, legacy_allowed_levels=None
     if user.has_platform_permission(User.Permission.CONTENT_VIEW_ALL):
         return True
     state = resolve_market_access(user)
+    if (section == ContentSectionAccessPolicy.Section.LIVESTREAMS
+            and state.trial_ends_at is not None
+            and state.trial_ends_at <= timezone.now()
+            and not state.granted_markets):
+        return False
     tier = "GOLD" if state.trial_active else state.membership_tier
     if tier not in CONTENT_TIERS:
         return False

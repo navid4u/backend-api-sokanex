@@ -1501,8 +1501,18 @@ class OTPRequestSerializer(serializers.Serializer):
             raise serializers.ValidationError(exc.messages[0])
 
 
+class LocalizedOTPCodeField(serializers.CharField):
+    """Normalize Persian/Arabic-Indic numerals before the ASCII OTP digest."""
+
+    def to_internal_value(self, data):
+        value = super().to_internal_value(data).translate(_LOCALIZED_DIGITS)
+        if re.fullmatch(r"[0-9]{4}", value) is None:
+            raise serializers.ValidationError("کد باید چهار رقم باشد.")
+        return value
+
+
 class OTPVerifySerializer(OTPRequestSerializer):
-    code = serializers.RegexField(r"^\d{4}$", error_messages={"invalid": "کد باید چهار رقم باشد."})
+    code = LocalizedOTPCodeField()
 
 
 class RegistrationOTPRequestSerializer(OTPRequestSerializer):
@@ -1510,7 +1520,7 @@ class RegistrationOTPRequestSerializer(OTPRequestSerializer):
 
 
 class RegistrationOTPVerifySerializer(RegistrationOTPRequestSerializer):
-    code = serializers.RegexField(r"^\d{4}$", error_messages={"invalid": "کد باید چهار رقم باشد."})
+    code = LocalizedOTPCodeField()
     # Optional for existing clients. A new registration can provide its name
     # before the trial day-one message is queued on transaction commit.
     first_name = serializers.CharField(required=False, max_length=150, trim_whitespace=True)

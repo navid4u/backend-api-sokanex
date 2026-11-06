@@ -5,7 +5,7 @@ from channels.generic.websocket import AsyncJsonWebsocketConsumer
 from django.conf import settings
 from django.core import signing
 
-from .models import Channel
+from .models import Channel, ChannelPost
 
 
 class ContentChannelConsumer(AsyncJsonWebsocketConsumer):
@@ -20,6 +20,8 @@ class ContentChannelConsumer(AsyncJsonWebsocketConsumer):
         if payload.get("channel") != slug or not await self.can_access(payload.get("user_id"), slug):
             await self.close(code=4403)
             return
+        self.channel_slug = slug
+        self.user_id = payload.get("user_id")
         self.group_name = f"content_channel_{slug.replace('-', '_')}"
         await self.channel_layer.group_add(self.group_name, self.channel_name)
         await self.accept()
@@ -29,22 +31,52 @@ class ContentChannelConsumer(AsyncJsonWebsocketConsumer):
             await self.channel_layer.group_discard(self.group_name, self.channel_name)
 
     async def channel_event(self, event):
-        await self.send_json(event["payload"])
+        if not await self.can_access(self.user_id, self.channel_slug):
+            await self.close(code=4403)
+            return
+        payload = event["payload"]
+        if (getattr(settings, "MARKET_ACCESS_V2_ENABLED", False)
+                and self.channel_slug == "internal-analysis"
+                and payload.get("type") != "post.deleted"):
+            post_id = payload.get("data", {}).get("id")
+            if not await self.can_view_internal_post(self.user_id, post_id):
+                return
+        await self.send_json(payload)
+
+    @database_sync_to_async
+    def can_view_internal_post(self, user_id, post_id):
+        from django.utils import timezone
+        from apps.accounts.models import User
+        from apps.accounts.market_access import can_view_vip_market
+
+        try:
+            user = User.objects.get(pk=user_id, is_active=True)
+            post = ChannelPost.objects.get(pk=post_id, channel__slug="internal-analysis")
+        except (User.DoesNotExist, ChannelPost.DoesNotExist, TypeError, ValueError):
+            return False
+        if user.is_staff or user.role in (User.Role.SUPER_ADMIN, User.Role.SUPPORT,
+                                         User.Role.ADMIN, User.Role.EMPLOYEE):
+            return True
+        return bool(
+            post.status == ChannelPost.Status.PUBLISHED
+            and post.published_at and post.published_at <= timezone.now()
+            and can_view_vip_market(user, User.MarketType.INTERNAL)
+            and (post.scope != ChannelPost.Scope.FOREX or can_view_vip_market(user, User.MarketType.FOREX))
+        )
 
     @database_sync_to_async
     def can_access(self, user_id, slug):
         from apps.accounts.models import User
-        from apps.accounts.market_access import can_access_gold_features, can_access_market, market_access_v2_enabled
+        from apps.accounts.market_access import can_access_gold_features, can_view_vip_market, market_access_v2_enabled
         try:
             user = User.objects.get(pk=user_id, is_active=True)
             channel = Channel.objects.get(slug=slug, is_active=True)
         except (User.DoesNotExist, Channel.DoesNotExist):
             return False
-        if market_access_v2_enabled() and user.role != User.Role.SUPPORT:
-            if user.is_staff or user.role in (User.Role.EMPLOYEE, User.Role.ADMIN, User.Role.SUPER_ADMIN):
+        if market_access_v2_enabled():
+            if user.is_staff or user.role in (User.Role.SUPPORT, User.Role.EMPLOYEE, User.Role.ADMIN, User.Role.SUPER_ADMIN):
                 return True
             if slug in {"vip-signals", "internal-analysis"}:
-                return can_access_gold_features(user) and (
-                    slug != "internal-analysis" or can_access_market(user, User.MarketType.INTERNAL)
-                )
+                return (can_view_vip_market(user, User.MarketType.INTERNAL)
+                        if slug == "internal-analysis" else can_access_gold_features(user))
         return user.is_staff or user.effective_access_level >= channel.min_access_level

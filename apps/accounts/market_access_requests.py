@@ -10,6 +10,7 @@ from .market_access_admin import update_user_market_access
 from .models import MarketAccessRequest, User, UserAccessProfile, UserMarketGrant, UserMarketPreference
 from apps.activity.models import UserActivity
 from apps.activity.services import ActivityService
+from apps.notifications.models import Notification
 
 
 class MarketAccessRequestConflict(APIException):
@@ -132,4 +133,17 @@ def review_market_access_request(*, actor, request_id, status, admin_note="",
         "status", "approved_markets", "approved_elite", "admin_note",
         "reviewed_by", "reviewed_at", "updated_at",
     ))
+    if status == MarketAccessRequest.Status.APPROVED:
+        Notification.objects.get_or_create(
+            source_key=f"MARKET_ACCESS_REQUEST_APPROVED:{application.pk}",
+            defaults={
+                "recipient": target,
+                "created_by": actor,
+                "title": "دسترسی شما فعال شد",
+                "message": "درخواست اشتراک شما تأیید شد و دسترسی بازارهای تأییدشده فعال است.",
+                "notification_type": Notification.Type.SYSTEM,
+                "target_url": "/dashboard",
+                "send_sms": False,
+            },
+        )
     return application
