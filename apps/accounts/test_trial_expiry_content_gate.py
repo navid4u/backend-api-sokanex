@@ -85,6 +85,12 @@ class TrialExpiryContentGateTests(APITestCase):
         })
         self.assertEqual(dashboard["stats"]["signals"], 0)
         self.assertEqual(dashboard["stats"]["live_events"], 0)
+        self.assertFalse(dashboard["vip_signal_previews"][0]["can_view"])
+        self.assertNotIn("Private signal", dashboard["vip_signal_previews"][0]["excerpt"])
+        self.assertIsNone(dashboard["vip_signal_previews"][0]["image"])
+        self.assertFalse(dashboard["recent_internal_analysis"][0]["can_view"])
+        self.assertNotIn("Private opportunity body", dashboard["recent_internal_analysis"][0]["excerpt"])
+        self.assertIsNone(dashboard["recent_internal_analysis"][0]["image"])
         self.assertEqual(self.client.get("/api/academy/courses/").data["count"], 0)
         self.assertEqual(self.client.get(f"/api/academy/courses/{self.course.slug}/").status_code, 403)
         self.assertEqual(self.client.get(f"/api/academy/sessions/{self.session.pk}/").status_code, 403)
@@ -142,6 +148,16 @@ class TrialExpiryContentGateTests(APITestCase):
         access = self.dashboard()["content_access"]
         self.assertTrue(access["livestream"])
         self.assertEqual(set(access["academy_markets"]), {"crypto", "forex", "internal"})
+
+        support = User.objects.create_user(username="expiry-support", role=User.Role.SUPPORT)
+        self.client.force_authenticate(support)
+        support_access = self.dashboard()["content_access"]
+        self.assertTrue(all(support_access["signals"].values()))
+        self.assertTrue(support_access["livestream"])
+        self.assertTrue(support_access["internal_opportunities"])
+        self.assertEqual(set(support_access["academy_markets"]), {"crypto", "forex", "internal"})
+        self.assertEqual(self.client.get("/api/signals/?channel=CRYPTO").status_code, 200)
+        self.assertEqual(self.client.get("/api/channels/internal-analysis/").status_code, 200)
 
     def test_realtime_checks_expiry_and_do_not_leak_forex_analysis(self):
         channel_access = unwrap(ContentChannelConsumer.can_access)

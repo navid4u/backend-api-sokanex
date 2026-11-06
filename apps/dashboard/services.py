@@ -11,6 +11,8 @@ from apps.accounts.market_access import can_view_vip_market, market_access_paylo
 from apps.accounts.content_section_access import user_can_access_content_section
 from apps.accounts.models import ContentSectionAccessPolicy
 from apps.academy.access import academy_markets
+from apps.academy.models import Course
+from common.content_access import restrict_queryset_for_user
 from apps.content_channels.models import ChannelPost
 from apps.activity.tracking import page_view_tracking_enabled
 from django.utils import timezone
@@ -133,7 +135,6 @@ class DashboardService:
         )
 
         access_state = market_access_payload(user)
-        content_access = None
         if market_access_v2_enabled():
             content_access = {
                 "signals": {
@@ -144,6 +145,25 @@ class DashboardService:
                 "livestream": user_can_access_content_section(
                     user, ContentSectionAccessPolicy.Section.LIVESTREAMS,
                 ),
+                "internal_opportunities": can_view_vip_market(user, "internal"),
+            }
+        else:
+            # Legacy Academy and livestream visibility is per item, not per
+            # V2 market grant. Report only markets with an actually visible
+            # published course, and whether a live event is visible.
+            legacy_courses = restrict_queryset_for_user(
+                Course.objects.filter(
+                    status=Course.Status.PUBLISHED,
+                    market__in=User.MarketType.values,
+                ), user,
+            )
+            legacy_vip = can_view_vip_market(user, "crypto")
+            content_access = {
+                "signals": {"crypto": legacy_vip, "forex": legacy_vip},
+                "academy_markets": sorted(set(
+                    legacy_courses.values_list("market", flat=True).distinct()
+                )),
+                "livestream": LiveEventService.public_events(user).exists(),
                 "internal_opportunities": can_view_vip_market(user, "internal"),
             }
 

@@ -55,14 +55,14 @@ def submit_market_access_request(*, user, requested_tier, message=""):
         raise MarketAccessRequestConflict("A different request is already pending review.")
 
     state = resolve_market_access(target)
-    if state.granted_markets:
-        if requested_tier != MarketAccessRequest.RequestedTier.ELITE:
-            raise MarketAccessRequestConflict("Members may request Elite only.")
+    if requested_tier == MarketAccessRequest.RequestedTier.ELITE:
+        if not state.granted_markets:
+            raise ValidationError({"requested_tier": "Elite requests require an existing approved market."})
         if state.is_elite:
             raise MarketAccessRequestConflict("Elite access is already active.")
     elif requested_tier != MarketAccessRequest.RequestedTier.GOLD:
-        # Revocation removes the current membership, so a fresh Gold request
-        # is allowed after any pending request has been resolved.
+        if state.granted_markets:
+            raise MarketAccessRequestConflict("Members may request GOLD or ELITE.")
         raise ValidationError({"requested_tier": "Initial membership requests must be GOLD."})
 
     request = MarketAccessRequest.objects.create(
@@ -85,6 +85,20 @@ def review_market_access_request(*, actor, request_id, status, admin_note="",
     target = User.objects.select_for_update().get(pk=request_user_id)
     application = MarketAccessRequest.objects.select_for_update().get(pk=request_id)
     if application.status != MarketAccessRequest.Status.PENDING:
+        same_rejection = (
+            status == MarketAccessRequest.Status.REJECTED
+            and approved_markets is None and is_elite is None
+        )
+        same_approval = (
+            status == MarketAccessRequest.Status.APPROVED
+            and approved_markets is not None
+            and sorted(set(approved_markets)) == application.approved_markets
+            and (is_elite is None or is_elite == application.approved_elite)
+        )
+        if (application.status == status
+                and (not admin_note or application.admin_note == admin_note.strip())
+                and (same_rejection or same_approval)):
+            return application
         raise MarketAccessRequestConflict("This request has already been reviewed.")
     if status not in (MarketAccessRequest.Status.APPROVED, MarketAccessRequest.Status.REJECTED):
         raise ValidationError({"status": "Choose APPROVED or REJECTED."})

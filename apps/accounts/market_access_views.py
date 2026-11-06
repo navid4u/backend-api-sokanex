@@ -302,11 +302,21 @@ class MyMarketAccessRequestView(generics.ListAPIView):
 
     permission_classes = [IsAuthenticated, MarketAccessV2Enabled]
     serializer_class = MarketAccessRequestReadSerializer
+    pagination_class = DefaultPagination
 
     def get_queryset(self):
         if getattr(self, "swagger_fake_view", False):
             return MarketAccessRequest.objects.none()
-        return MarketAccessRequest.objects.filter(user=self.request.user).select_related("user", "reviewed_by")
+        unexpected = set(self.request.query_params) - {"status", "page", "page_size"}
+        if unexpected:
+            raise ValidationError({field: "Unknown filter." for field in sorted(unexpected)})
+        queryset = MarketAccessRequest.objects.filter(user=self.request.user).select_related("user", "reviewed_by")
+        requested_status = self.request.query_params.get("status")
+        if requested_status:
+            if requested_status not in MarketAccessRequest.Status.values:
+                raise ValidationError({"status": "Choose PENDING, APPROVED or REJECTED."})
+            queryset = queryset.filter(status=requested_status)
+        return queryset.order_by("-created_at", "-pk")
 
     @extend_schema(
         request=MarketAccessRequestCreateSerializer,
@@ -333,10 +343,12 @@ class MarketAccessRequestManagementView(generics.ListAPIView):
 
     def get_queryset(self):
         queryset = MarketAccessRequest.objects.select_related("user", "reviewed_by")
-        requested_status = self.request.query_params.get("status", "")
-        if requested_status in MarketAccessRequest.Status.values:
+        requested_status = self.request.query_params.get("status")
+        if requested_status:
+            if requested_status not in MarketAccessRequest.Status.values:
+                raise ValidationError({"status": "Choose PENDING, APPROVED or REJECTED."})
             queryset = queryset.filter(status=requested_status)
-        return queryset
+        return queryset.order_by("-created_at", "-pk")
 
 
 @method_decorator(never_cache, name="dispatch")

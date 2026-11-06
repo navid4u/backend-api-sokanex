@@ -248,6 +248,6 @@ class MarketAccessRequestReadSerializer(serializers.ModelSerializer):
     def get_tier_description(self, obj):
         return {
             "PRO": "دسترسی به دو بازار تأییدشده؛ سطح از تعداد بازارها محاسبه می‌شود.",
-            "GOLD": "درخواست عضویت اولیه؛ بازارها و سطح نهایی را مدیر تعیین می‌کند.",
+            "GOLD": "درخواست عضویت یا گسترش دسترسی؛ بازارها و سطح نهایی را مدیر تعیین می‌کند.",
             "ELITE": "نشان ویژهٔ مستقل از تعداد بازارها؛ دسترسی بازار جداگانه تعیین می‌شود.",
         }[obj.requested_tier]

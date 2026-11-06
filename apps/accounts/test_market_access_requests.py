@@ -1,12 +1,18 @@
 from unittest.mock import patch
+from unittest import skipUnless
+from concurrent.futures import ThreadPoolExecutor
+from threading import Barrier
 
-from django.test import override_settings
+from django.db import close_old_connections, connection, connections
+from django.test import TransactionTestCase, override_settings
+from django.utils import timezone
 from rest_framework.test import APITestCase
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from .market_access import resolve_market_access
-from .market_access_requests import review_market_access_request
-from .models import MarketAccessRequest, TrialGrant, UpgradeRequest, User, UserAccessAudit, UserMarketGrant
+from .market_access_requests import review_market_access_request, submit_market_access_request
+from .models import MarketAccessRequest, TrialGrant, UpgradeRequest, User, UserAccessAudit, UserAccessProfile, UserMarketGrant, UserMarketPreference
+from apps.notifications.models import Notification
 from apps.wallet.services import WalletService
 
 
@@ -65,6 +71,60 @@ class MarketAccessRequestAPITests(APITestCase):
         self.assertFalse(WalletService.premium_subscription(self.user)["can_request"])
         self.assertEqual(self.submit("ELITE").status_code, 409)
 
+    def test_same_market_reconfirmation_preserves_pending_and_status_filter(self):
+        self.select(["crypto", "forex"])
+        first = self.submit()
+        confirmed_at = self.user.market_access_profile.market_selection_confirmed_at
+        self.select(["forex", "crypto"])
+        self.user.market_access_profile.refresh_from_db()
+        self.assertEqual(self.user.market_access_profile.market_selection_confirmed_at, confirmed_at)
+        repeated = self.submit()
+        self.assertEqual(repeated.status_code, 200)
+        self.assertEqual(repeated.data["id"], first.data["id"])
+        listing = self.client.get(self.my_url, {"status": "PENDING", "page_size": 1})
+        self.assertEqual(listing.status_code, 200)
+        self.assertEqual(listing.data["count"], 1)
+        self.assertEqual(listing.data["results"][0]["id"], first.data["id"])
+        self.assertIn("no-store", listing["Cache-Control"])
+        self.assertEqual(self.client.get(self.my_url, {"status": "INVALID"}).status_code, 400)
+        self.assertEqual(self.client.get(self.my_url, {"unknown": "value"}).status_code, 400)
+        self.client.force_authenticate(self.admin)
+        management = self.client.get(self.admin_url, {"status": "PENDING"})
+        self.assertEqual(management.status_code, 200)
+        self.assertEqual(management.data["count"], 1)
+        self.assertEqual(management.data["results"][0]["id"], first.data["id"])
+        self.assertEqual(self.client.get(self.admin_url, {"status": "INVALID"}).status_code, 400)
+        self.client.force_authenticate(self.user)
+        self.select(["crypto", "internal"])
+        conflicting = self.submit()
+        self.assertEqual(conflicting.status_code, 409)
+        self.assertEqual(conflicting.data["error_code"], "MARKET_ACCESS_REQUEST_CONFLICT")
+        self.assertEqual(MarketAccessRequest.objects.filter(user=self.user, status="PENDING").count(), 1)
+
+    def test_member_requests_gold_for_another_market_without_automatic_access(self):
+        self.select(["crypto"])
+        first = MarketAccessRequest.objects.get(pk=self.submit().data["id"])
+        self.assertEqual(self.review(first, {
+            "status": "APPROVED", "approved_markets": ["crypto"],
+        }).status_code, 200)
+        self.client.force_authenticate(self.user)
+        self.select(["crypto", "forex"])
+        requested = self.submit()
+        self.assertEqual(requested.status_code, 201)
+        self.assertEqual(requested.data["requested_markets"], ["crypto", "forex"])
+        self.assertFalse(self.client.get("/api/dashboard/").data["data"]["content_access"]["signals"]["forex"])
+        self.client.force_authenticate(self.support)
+        approved = self.client.patch(
+            f"{self.admin_url}{requested.data['id']}/review/",
+            {"status": "APPROVED", "approved_markets": ["crypto", "forex"]}, format="json",
+        )
+        self.assertEqual(approved.status_code, 200)
+        self.client.force_authenticate(self.user)
+        refreshed = self.client.get("/api/dashboard/")
+        self.assertTrue(refreshed.data["data"]["content_access"]["signals"]["forex"])
+        self.assertEqual(refreshed.data["data"]["content_access"]["academy_markets"], ["crypto", "forex"])
+        self.assertIn("no-store", refreshed["Cache-Control"])
+
     def test_manager_sees_contact_and_checkboxes_then_approves_derived_pro(self):
         self.select(["internal", "crypto", "forex"])
         application = MarketAccessRequest.objects.get(pk=self.submit("GOLD").data["id"])
@@ -107,10 +167,19 @@ class MarketAccessRequestAPITests(APITestCase):
             UserAccessAudit.objects.filter(subject_user_id=self.user.pk, action=UserAccessAudit.Action.MARKET_GRANTED).count(),
             2,
         )
-        self.assertEqual(
-            self.client.patch(f"{self.admin_url}{application.pk}/review/", {"status": "APPROVED", "approved_markets": ["crypto", "forex"]}, format="json").status_code,
-            409,
+        repeated = self.client.patch(
+            f"{self.admin_url}{application.pk}/review/",
+            {"status": "APPROVED", "approved_markets": ["crypto", "forex"]}, format="json",
         )
+        self.assertEqual(repeated.status_code, 200)
+        self.assertEqual(UserMarketGrant.objects.filter(user=self.user, revoked_at__isnull=True).count(), 2)
+        self.assertEqual(Notification.objects.filter(
+            source_key=f"MARKET_ACCESS_REQUEST_APPROVED:{application.pk}"
+        ).count(), 1)
+        self.assertEqual(self.client.patch(
+            f"{self.admin_url}{application.pk}/review/",
+            {"status": "APPROVED", "approved_markets": ["internal"]}, format="json",
+        ).status_code, 409)
 
     def test_gold_and_elite_are_independent_of_legacy_level(self):
         self.select(["crypto", "forex", "internal"])
@@ -125,7 +194,12 @@ class MarketAccessRequestAPITests(APITestCase):
         self.assertEqual(self.user.access_level, 1)
 
         self.client.force_authenticate(self.user)
-        self.assertEqual(self.submit("GOLD").status_code, 409)
+        gold_again = self.submit("GOLD")
+        self.assertEqual(gold_again.status_code, 201)
+        self.assertEqual(self.review(MarketAccessRequest.objects.get(pk=gold_again.data["id"]), {
+            "status": "REJECTED",
+        }).status_code, 200)
+        self.client.force_authenticate(self.user)
         elite = MarketAccessRequest.objects.get(pk=self.submit("ELITE").data["id"])
         self.assertEqual(self.review(elite, {
             "status": "APPROVED", "approved_markets": ["crypto", "forex", "internal"], "is_elite": True,
@@ -171,7 +245,7 @@ class MarketAccessRequestAPITests(APITestCase):
         self.assertEqual(application.admin_note, "Needs review.")
         self.assertFalse(UserMarketGrant.objects.filter(user=self.user).exists())
 
-    def test_rejected_or_revoked_user_can_reapply_but_member_can_only_request_elite(self):
+    def test_rejected_or_revoked_user_can_reapply_and_member_can_request_gold_or_elite(self):
         self.select(["crypto"])
         rejected = MarketAccessRequest.objects.get(pk=self.submit().data["id"])
         self.assertEqual(self.review(rejected, {"status": "REJECTED"}).status_code, 200)
@@ -182,7 +256,12 @@ class MarketAccessRequestAPITests(APITestCase):
             "status": "APPROVED", "approved_markets": ["crypto"],
         }).status_code, 200)
         self.client.force_authenticate(self.user)
-        self.assertEqual(self.submit("GOLD").status_code, 409)
+        gold_again = self.submit("GOLD")
+        self.assertEqual(gold_again.status_code, 201)
+        self.assertEqual(self.review(MarketAccessRequest.objects.get(pk=gold_again.data["id"]), {
+            "status": "REJECTED",
+        }).status_code, 200)
+        self.client.force_authenticate(self.user)
         self.assertEqual(self.submit("PRO").status_code, 409)
         elite = self.submit("ELITE")
         self.assertEqual(elite.status_code, 201)
@@ -260,3 +339,32 @@ class MarketAccessRequestAPITests(APITestCase):
         application.refresh_from_db()
         self.assertEqual(application.status, "PENDING")
         self.assertFalse(UserMarketGrant.objects.filter(user=self.user).exists())
+
+
+@skipUnless(connection.vendor == "postgresql", "Row-lock concurrency is PostgreSQL-specific")
+@override_settings(MARKET_ACCESS_V2_ENABLED=True, CRM_ENABLED=False)
+class ConcurrentMarketAccessRequestTests(TransactionTestCase):
+    def test_two_tabs_submit_one_pending_request(self):
+        user = User.objects.create_user(username="two-tab-requester")
+        UserAccessProfile.objects.create(user=user, market_selection_confirmed_at=timezone.now())
+        UserMarketPreference.objects.create(user=user, market="crypto")
+        barrier = Barrier(2)
+
+        def submit():
+            close_old_connections()
+            try:
+                barrier.wait(timeout=10)
+                application, created = submit_market_access_request(
+                    user=user, requested_tier="GOLD",
+                )
+                return application.pk, created
+            finally:
+                connections.close_all()
+
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            first = pool.submit(submit)
+            second = pool.submit(submit)
+            results = [first.result(timeout=30), second.result(timeout=30)]
+        self.assertEqual(results[0][0], results[1][0])
+        self.assertEqual(sorted(created for _, created in results), [False, True])
+        self.assertEqual(MarketAccessRequest.objects.filter(user=user, status="PENDING").count(), 1)

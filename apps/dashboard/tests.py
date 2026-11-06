@@ -9,6 +9,7 @@ from rest_framework.test import APITestCase
 
 from apps.accounts.models import User
 from apps.accounts.models import UserMarketGrant
+from apps.academy.models import Course
 from apps.content_channels.models import Channel, ChannelPost
 from apps.articles.models import Article
 from apps.chat.models import ChatRoom
@@ -451,6 +452,37 @@ class DashboardAPITests(APITestCase):
         self.authenticate(self.customer)
         data = self.client.get(self.dashboard_url).data["data"]
         self.assertFalse(data["vip_signal_previews"][0]["can_view"])
+
+    @override_settings(MARKET_ACCESS_V2_ENABLED=False)
+    def test_legacy_content_access_reports_actual_item_visibility(self):
+        Course.objects.create(
+            title="Visible crypto course", market="crypto", instructor=self.employee,
+            status=Course.Status.PUBLISHED,
+        )
+        Course.objects.create(
+            title="Locked forex course", market="forex", instructor=self.employee,
+            status=Course.Status.PUBLISHED,
+            allowed_level_1=False, allowed_level_2=False,
+            allowed_level_3=False, allowed_level_4=False, allowed_level_5=True,
+        )
+        self.authenticate(self.customer)
+        content = self.client.get(self.dashboard_url).data["data"]["content_access"]
+        self.assertEqual(content["signals"], {"crypto": False, "forex": False})
+        self.assertEqual(content["academy_markets"], ["crypto"])
+        self.assertTrue(content["livestream"])
+        self.assertFalse(content["internal_opportunities"])
+        self.assertEqual(self.client.get("/api/signals/?channel=CRYPTO").status_code, 403)
+        self.assertEqual(self.client.get("/api/academy/courses/?market=crypto").data["count"], 1)
+        self.assertEqual(self.client.get("/api/academy/courses/?market=forex").data["count"], 0)
+
+    @override_settings(MARKET_ACCESS_V2_ENABLED=False)
+    def test_legacy_special_role_flags_match_server_policy(self):
+        self.authenticate(self.super_admin)
+        content = self.client.get(self.dashboard_url).data["data"]["content_access"]
+        self.assertTrue(all(content["signals"].values()))
+        self.assertTrue(content["livestream"])
+        self.assertTrue(content["internal_opportunities"])
+        self.assertEqual(self.client.get("/api/signals/?channel=CRYPTO").status_code, 200)
 
     def test_preview_limits_and_deterministic_order(self):
         now = timezone.now()
