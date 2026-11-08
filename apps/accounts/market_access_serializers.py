@@ -202,6 +202,7 @@ class MarketAccessRequestCreateSerializer(serializers.Serializer):
 
 class MarketAccessRequestReviewSerializer(serializers.Serializer):
     status = serializers.ChoiceField(choices=("APPROVED", "REJECTED"))
+    expected_revision = serializers.IntegerField(required=False, min_value=1)
     approved_markets = serializers.ListField(
         child=serializers.ChoiceField(choices=sorted(MARKETS)),
         required=False, allow_empty=False, max_length=3,
@@ -238,7 +239,7 @@ class MarketAccessRequestReadSerializer(serializers.ModelSerializer):
     class Meta:
         model = MarketAccessRequest
         fields = (
-            "id", "user", "requested_tier", "tier_description", "requested_markets",
+            "id", "user", "requested_tier", "tier_description", "requested_markets", "revision",
             "message", "status", "approved_markets", "approved_elite", "admin_note",
             "reviewed_by", "reviewed_at", "created_at", "updated_at",
         )

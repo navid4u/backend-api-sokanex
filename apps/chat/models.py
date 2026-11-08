@@ -1,6 +1,7 @@
 from django.conf import settings
 from django.db import models
 from django.utils.text import slugify
+from .social_media import private_social_storage
 
 
 class ChatRoom(models.Model):
@@ -207,8 +208,8 @@ class TraderPost(models.Model):
         settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="social_posts"
     )
     text = models.TextField(blank=True)
-    image = models.ImageField(upload_to="social/posts/images/%Y/%m/", null=True, blank=True)
-    video = models.FileField(upload_to="social/posts/videos/%Y/%m/", null=True, blank=True)
+    image = models.ImageField(upload_to="social/posts/images/%Y/%m/", storage=private_social_storage, null=True, blank=True)
+    video = models.FileField(upload_to="social/posts/videos/%Y/%m/", storage=private_social_storage, null=True, blank=True)
     visibility = models.CharField(max_length=20, choices=Visibility.choices, default=Visibility.PUBLIC)
     is_edited = models.BooleanField(default=False)
     is_deleted = models.BooleanField(default=False)

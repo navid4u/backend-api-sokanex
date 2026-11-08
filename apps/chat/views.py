@@ -1,5 +1,11 @@
 from django.shortcuts import get_object_or_404
 from django.db.models import Count, Exists, OuterRef, Prefetch, Q
+from django.db import transaction
+from django.http import Http404, HttpResponse, StreamingHttpResponse
+from django.utils.cache import patch_vary_headers
+from pathlib import Path
+import mimetypes
+import re
 
 from drf_spectacular.utils import (
     extend_schema,
@@ -54,6 +60,8 @@ from .serializers import (
     SocialUserSerializer,
 )
 from .services import ChatService
+from apps.notifications.models import Notification
+from apps.notifications.services import NotificationService
 
 
 class ChatRoomListCreateView(
@@ -389,7 +397,7 @@ class SocialFeedView(generics.ListCreateAPIView):
     serializer_class = TraderPostSerializer
     parser_classes = [JSONParser, MultiPartParser, FormParser]
     filter_backends = [SearchFilter, OrderingFilter]
-    search_fields = ["text", "author__username", "author__first_name", "author__last_name"]
+    search_fields = ["text"]
     ordering_fields = ["created_at", "updated_at"]
     ordering = ["-created_at", "-id"]
 
@@ -418,6 +426,8 @@ class SocialPostDetailView(generics.RetrieveUpdateDestroyAPIView):
     parser_classes = [JSONParser, MultiPartParser, FormParser]
 
     def get_queryset(self):
+        if self.request.method == "DELETE" and can_moderate_social(self.request.user):
+            return TraderPost.objects.filter(is_deleted=False)
         return social_posts_for(self.request.user)
 
     def perform_update(self, serializer):
@@ -426,10 +436,84 @@ class SocialPostDetailView(generics.RetrieveUpdateDestroyAPIView):
         serializer.save(is_edited=True)
 
     def perform_destroy(self, instance):
-        if instance.author_id != self.request.user.id and not self.request.user.is_staff:
-            raise serializers.ValidationError("Only the author or a moderator can delete this post.")
+        if instance.author_id != self.request.user.id and not can_moderate_social(self.request.user):
+            raise PermissionDenied("Only the author or a moderator can delete this post.")
         instance.is_deleted = True
         instance.save(update_fields=["is_deleted", "updated_at"])
+
+
+def can_moderate_social(user):
+    return bool(user.is_staff or user.is_superuser or user.has_platform_permission(user.Permission.CONTENT_MANAGE))
+
+
+def _social_media_chunks(file_obj, remaining):
+    try:
+        while remaining:
+            chunk = file_obj.read(min(64 * 1024, remaining))
+            if not chunk:
+                break
+            remaining -= len(chunk)
+            yield chunk
+    finally:
+        file_obj.close()
+
+
+class SocialPostMediaView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, pk, kind):
+        if kind not in ("image", "video"):
+            raise Http404
+        post = get_object_or_404(social_posts_for(request.user), pk=pk)
+        field = getattr(post, kind)
+        if not field:
+            raise Http404
+        try:
+            file_obj = field.storage.open(field.name, "rb")
+        except FileNotFoundError:
+            # Older files can remain in MEDIA_ROOT. The origin/CDN must deny
+            # direct /media/social/posts/ to close that legacy bypass.
+            legacy_root = Path(settings.MEDIA_ROOT).resolve()
+            legacy_path = (legacy_root / field.name).resolve()
+            if not field.name.startswith("social/posts/") or not legacy_path.is_relative_to(legacy_root) or not legacy_path.is_file():
+                raise Http404 from None
+            file_obj = legacy_path.open("rb")
+        size = file_obj.seek(0, 2)
+        file_obj.seek(0)
+        start, end = 0, size - 1
+        requested_range = request.headers.get("Range", "")
+        if requested_range:
+            match = re.fullmatch(r"bytes=(\d*)-(\d*)", requested_range)
+            if not match or (not match.group(1) and not match.group(2)):
+                file_obj.close()
+                response = HttpResponse(status=416)
+                response["Content-Range"] = f"bytes */{size}"
+                return response
+            if match.group(1):
+                start = int(match.group(1))
+                end = min(int(match.group(2)), size - 1) if match.group(2) else size - 1
+            else:
+                start = max(size - int(match.group(2)), 0)
+            if start > end or start >= size:
+                file_obj.close()
+                response = HttpResponse(status=416)
+                response["Content-Range"] = f"bytes */{size}"
+                return response
+            file_obj.seek(start)
+        content_type = mimetypes.guess_type(field.name)[0] or "application/octet-stream"
+        response = StreamingHttpResponse(
+            _social_media_chunks(file_obj, end - start + 1),
+            status=206 if requested_range else 200,
+            content_type=content_type,
+        )
+        response["Content-Length"] = str(end - start + 1)
+        response["Accept-Ranges"] = "bytes"
+        response["Cache-Control"] = "private, no-store"
+        response["X-Content-Type-Options"] = "nosniff"
+        patch_vary_headers(response, ["Authorization"])
+        if requested_range:
+            response["Content-Range"] = f"bytes {start}-{end}/{size}"
+        return response
 
 
 class TopContributorsView(generics.ListAPIView):
@@ -468,7 +552,7 @@ class SocialUserPostListView(generics.ListAPIView):
     def get_queryset(self):
         return social_posts_for(self.request.user).filter(
             author_id=self.kwargs["user_id"]
-        )
+        ).order_by("-created_at", "-id")
 
 
 class PostCommentListCreateView(generics.ListCreateAPIView):
@@ -527,7 +611,7 @@ class SavedPostListView(generics.ListAPIView):
     def get_queryset(self):
         if getattr(self, "swagger_fake_view", False):
             return TraderPost.objects.none()
-        return social_posts_for(self.request.user).filter(saves__user=self.request.user)
+        return social_posts_for(self.request.user).filter(saves__user=self.request.user).order_by("-created_at", "-id")
 
 
 class FollowUserView(APIView):
@@ -608,20 +692,8 @@ class SupportMessageListCreateView(generics.ListCreateAPIView):
     def perform_create(self, serializer):
         thread = self.get_thread()
         key = self.request.headers.get("Idempotency-Key", "").strip()
-        if key:
-            existing = SupportMessage.objects.filter(
-                thread=thread, sender=self.request.user, idempotency_key=key
-            ).first()
-            if existing:
-                serializer.instance = existing
-                return
-        message = serializer.save(
-            thread=thread,
-            sender=self.request.user,
-            delivered_at=timezone.now(),
-            idempotency_key=key,
-        )
-        update_support_thread_after_message(thread, self.request.user, message)
+        message, _ = create_support_message(serializer, thread, self.request.user, key)
+        serializer.instance = message
 
 
 def is_support_account(user):
@@ -635,8 +707,44 @@ def is_support_account(user):
     )
 
 
+def create_support_message(serializer, thread, sender, idempotency_key=""):
+    """Persist a support reply and its private notification/outbox as one unit."""
+    if len(idempotency_key) > 120:
+        raise ValidationError({"Idempotency-Key": "Must be at most 120 characters."})
+    with transaction.atomic():
+        thread = SupportThread.objects.select_for_update().select_related("user").get(pk=thread.pk)
+        if idempotency_key:
+            existing = SupportMessage.objects.filter(
+                thread=thread, sender=sender, idempotency_key=idempotency_key,
+            ).first()
+            if existing:
+                return existing, False
+        message = serializer.save(
+            thread=thread, sender=sender, delivered_at=timezone.now(),
+            idempotency_key=idempotency_key,
+        )
+        update_support_thread_after_message(thread, sender, message)
+        if is_support_account(sender) and sender.pk != thread.user_id:
+            notification, created = Notification.objects.get_or_create(
+                source_key=f"SUPPORT_REPLY:{message.pk}",
+                defaults={
+                    "recipient": thread.user,
+                    "created_by": sender,
+                    "title": "پاسخ پشتیبانی",
+                    "message": "پاسخ سؤال شما در سوکانکس داده شد.",
+                    "notification_type": Notification.Type.SYSTEM,
+                    "action_label": "مشاهده پاسخ",
+                    "target_url": "/chat/support",
+                    "send_sms": True,
+                },
+            )
+            if created:
+                NotificationService.queue_sms(notification, allow_inline=False)
+        return message, True
+
+
 def update_support_thread_after_message(thread, sender, message):
-    if sender.username.lower() == "support":
+    if is_support_account(sender) and sender.pk != thread.user_id:
         if thread.status == SupportThread.Status.PENDING:
             thread.status = SupportThread.Status.OPEN
     elif thread.status == SupportThread.Status.CLOSED:
@@ -730,22 +838,14 @@ class SupportConversationMessageView(generics.ListCreateAPIView):
     def perform_create(self, serializer):
         thread = self.get_thread()
         key = self.request.headers.get("Idempotency-Key", "").strip()
-        if key:
-            existing = SupportMessage.objects.filter(
-                thread=thread, sender=self.request.user, idempotency_key=key
-            ).first()
-            if existing:
-                serializer.instance = existing
-                return
-        message = serializer.save(
-            thread=thread, sender=self.request.user, delivered_at=timezone.now(),
-            idempotency_key=key,
-        )
-        update_support_thread_after_message(thread, self.request.user, message)
+        message, created = create_support_message(serializer, thread, self.request.user, key)
+        serializer.instance = message
+        if not created:
+            return
         payload = SupportMessageSerializer(message, context={"request": self.request}).data
-        async_to_sync(get_channel_layer().group_send)(
+        transaction.on_commit(lambda: async_to_sync(get_channel_layer().group_send)(
             f"support_{thread.pk}", {"type": "support.event", "payload": {"type": "message.created", "data": payload}}
-        )
+        ))
 
 
 class SupportConversationReadView(APIView):

@@ -32,13 +32,13 @@ def submit_market_access_request(*, user, requested_tier, message=""):
     ).first()
     if confirmed_at is None:
         raise ValidationError({"selected_markets": "Confirm your market preferences first."})
-    selected = sorted(UserMarketPreference.objects.filter(user=target).values_list("market", flat=True))
-    if not selected:
+    selected = sorted(set(UserMarketPreference.objects.filter(user=target).values_list("market", flat=True)))
+    if not selected or not set(selected).issubset(MARKETS):
         raise ValidationError({"selected_markets": "Select at least one market."})
     if requested_tier not in MarketAccessRequest.RequestedTier.values:
         raise ValidationError({"requested_tier": "Unknown requested tier."})
 
-    pending = MarketAccessRequest.objects.filter(
+    pending = MarketAccessRequest.objects.select_for_update().filter(
         user=target, status=MarketAccessRequest.Status.PENDING
     ).first()
     if pending and pending.created_at < confirmed_at:
@@ -50,8 +50,14 @@ def submit_market_access_request(*, user, requested_tier, message=""):
         pending.save(update_fields=("status", "admin_note", "reviewed_at", "updated_at"))
         pending = None
     if pending:
-        if pending.requested_tier == requested_tier and pending.requested_markets == selected:
-            return pending, False
+        if pending.requested_tier == requested_tier:
+            if pending.requested_markets == selected:
+                return pending, False
+            if requested_tier == MarketAccessRequest.RequestedTier.GOLD:
+                pending.requested_markets = selected
+                pending.revision += 1
+                pending.save(update_fields=("requested_markets", "revision", "updated_at"))
+                return pending, False
         raise MarketAccessRequestConflict("A different request is already pending review.")
 
     state = resolve_market_access(target)
@@ -77,7 +83,7 @@ def submit_market_access_request(*, user, requested_tier, message=""):
 
 @transaction.atomic
 def review_market_access_request(*, actor, request_id, status, admin_note="",
-                                 approved_markets=None, is_elite=None):
+                                 approved_markets=None, is_elite=None, expected_revision=None):
     if not market_access_v2_enabled() or not user_can_manage_market_access(actor):
         raise PermissionDenied("Market access request review is unavailable.")
     # Consistent lock order with submit and direct admin access changes: user, then request.
@@ -103,6 +109,10 @@ def review_market_access_request(*, actor, request_id, status, admin_note="",
     if status not in (MarketAccessRequest.Status.APPROVED, MarketAccessRequest.Status.REJECTED):
         raise ValidationError({"status": "Choose APPROVED or REJECTED."})
     if status == MarketAccessRequest.Status.APPROVED:
+        if application.revision > 1 and expected_revision is None:
+            raise MarketAccessRequestConflict("Request markets changed. Refresh the pending list and retry with expected_revision.")
+        if expected_revision is not None and expected_revision != application.revision:
+            raise MarketAccessRequestConflict("Request markets changed. Refresh the pending list before approval.")
         confirmed_at = UserAccessProfile.objects.filter(user=target).values_list(
             "market_selection_confirmed_at", flat=True
         ).first()

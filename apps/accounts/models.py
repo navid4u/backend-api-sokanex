@@ -897,6 +897,7 @@ class MarketAccessRequest(models.Model):
     )
     requested_tier = models.CharField(max_length=8, choices=RequestedTier.choices)
     requested_markets = models.JSONField(default=list)
+    revision = models.PositiveIntegerField(default=1)
     message = models.CharField(max_length=1000, blank=True)
     status = models.CharField(max_length=8, choices=Status.choices, default=Status.PENDING)
     approved_markets = models.JSONField(default=list)

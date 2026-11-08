@@ -11,6 +11,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 
 from .market_access import resolve_market_access
 from .market_access_requests import review_market_access_request, submit_market_access_request
+from .market_preferences import update_market_preferences
 from .models import MarketAccessRequest, TrialGrant, UpgradeRequest, User, UserAccessAudit, UserAccessProfile, UserMarketGrant, UserMarketPreference
 from apps.notifications.models import Notification
 from apps.wallet.services import WalletService
@@ -96,9 +97,43 @@ class MarketAccessRequestAPITests(APITestCase):
         self.assertEqual(self.client.get(self.admin_url, {"status": "INVALID"}).status_code, 400)
         self.client.force_authenticate(self.user)
         self.select(["crypto", "internal"])
-        conflicting = self.submit()
-        self.assertEqual(conflicting.status_code, 409)
-        self.assertEqual(conflicting.data["error_code"], "MARKET_ACCESS_REQUEST_CONFLICT")
+        revised = self.submit()
+        self.assertEqual(revised.status_code, 200)
+        self.assertEqual(revised.data["id"], first.data["id"])
+        self.assertEqual(revised.data["requested_markets"], ["crypto", "internal"])
+        self.assertEqual(revised.data["revision"], 2)
+        self.assertEqual(MarketAccessRequest.objects.filter(user=self.user, status="PENDING").count(), 1)
+        self.assertFalse(UserMarketGrant.objects.filter(user=self.user).exists())
+        self.client.force_authenticate(self.admin)
+        refreshed = self.client.get(self.admin_url, {"status": "PENDING"})
+        self.assertEqual(refreshed.data["results"][0]["revision"], 2)
+        self.assertEqual(refreshed.data["results"][0]["requested_markets"], ["crypto", "internal"])
+        stale = self.client.patch(
+            f"{self.admin_url}{first.data['id']}/review/",
+            {"status": "APPROVED", "approved_markets": ["crypto"], "expected_revision": 1}, format="json",
+        )
+        self.assertEqual(stale.status_code, 409)
+        self.assertEqual(MarketAccessRequest.objects.get(pk=first.data["id"]).status, "PENDING")
+        self.assertFalse(UserMarketGrant.objects.filter(user=self.user).exists())
+        approved = self.client.patch(
+            f"{self.admin_url}{first.data['id']}/review/",
+            {"status": "APPROVED", "approved_markets": ["internal"], "expected_revision": 2}, format="json",
+        )
+        self.assertEqual(approved.status_code, 200)
+
+    def test_pending_gold_can_add_all_markets_then_remove_one(self):
+        self.select(["crypto"])
+        first = self.submit()
+        self.select(["crypto", "forex", "internal"])
+        all_markets = self.submit()
+        self.assertEqual(all_markets.status_code, 200)
+        self.assertEqual(all_markets.data["requested_markets"], ["crypto", "forex", "internal"])
+        self.select(["forex", "internal"])
+        reduced = self.submit()
+        self.assertEqual(reduced.status_code, 200)
+        self.assertEqual(reduced.data["requested_markets"], ["forex", "internal"])
+        self.assertEqual(reduced.data["revision"], 3)
+        self.assertEqual(self.submit().data["revision"], 3)
         self.assertEqual(MarketAccessRequest.objects.filter(user=self.user, status="PENDING").count(), 1)
 
     def test_member_requests_gold_for_another_market_without_automatic_access(self):
@@ -367,4 +402,29 @@ class ConcurrentMarketAccessRequestTests(TransactionTestCase):
             results = [first.result(timeout=30), second.result(timeout=30)]
         self.assertEqual(results[0][0], results[1][0])
         self.assertEqual(sorted(created for _, created in results), [False, True])
+        self.assertEqual(MarketAccessRequest.objects.filter(user=user, status="PENDING").count(), 1)
+
+    def test_two_tabs_revise_same_gold_request_once(self):
+        user = User.objects.create_user(username="two-tab-gold-revision")
+        update_market_preferences(user=user, selected_markets=["crypto"])
+        original, _ = submit_market_access_request(user=user, requested_tier="GOLD")
+        update_market_preferences(user=user, selected_markets=["crypto", "forex", "internal"])
+        barrier = Barrier(2)
+
+        def revise():
+            close_old_connections()
+            try:
+                barrier.wait(timeout=10)
+                application, created = submit_market_access_request(user=user, requested_tier="GOLD")
+                return application.pk, application.revision, created
+            finally:
+                connections.close_all()
+
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            first = pool.submit(revise)
+            second = pool.submit(revise)
+            results = [first.result(timeout=30), second.result(timeout=30)]
+        self.assertEqual(results, [(original.pk, 2, False), (original.pk, 2, False)])
+        original.refresh_from_db()
+        self.assertEqual(original.requested_markets, ["crypto", "forex", "internal"])
         self.assertEqual(MarketAccessRequest.objects.filter(user=user, status="PENDING").count(), 1)

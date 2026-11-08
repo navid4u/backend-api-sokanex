@@ -1,4 +1,6 @@
 from rest_framework import serializers
+from django.urls import reverse
+import re
 
 from common.validators import (
     validate_attachment_upload,
@@ -155,12 +157,17 @@ class MessageSerializer(
 
 class SocialUserSerializer(serializers.Serializer):
     id = serializers.IntegerField(read_only=True)
-    username = serializers.CharField(read_only=True)
-    first_name = serializers.CharField(read_only=True)
-    last_name = serializers.CharField(read_only=True)
+    display_name = serializers.SerializerMethodField()
     avatar = serializers.ImageField(read_only=True)
     access_level = serializers.IntegerField(read_only=True)
     posts_count = serializers.IntegerField(read_only=True, default=0)
+
+    def get_display_name(self, obj):
+        name = " ".join(part.strip() for part in (obj.first_name or "", obj.last_name or "") if part.strip())
+        digits = re.sub(r"\D", "", name)
+        if name and not (len(digits) >= 10 and len(digits) >= len(name.strip()) - 3):
+            return name[:100]
+        return f"کاربر سوکانکس {obj.pk}"
 
 
 class SupportUserSerializer(serializers.Serializer):
@@ -183,6 +190,8 @@ class PostCommentSerializer(serializers.ModelSerializer):
 
 class TraderPostSerializer(serializers.ModelSerializer):
     author = SocialUserSerializer(read_only=True)
+    image = serializers.ImageField(required=False, allow_null=True, use_url=False)
+    video = serializers.FileField(required=False, allow_null=True, use_url=False)
     reactions_count = serializers.IntegerField(read_only=True)
     comments_count = serializers.IntegerField(read_only=True)
     is_reacted = serializers.BooleanField(read_only=True)
@@ -213,6 +222,14 @@ class TraderPostSerializer(serializers.ModelSerializer):
         if not text and not image and not video:
             raise serializers.ValidationError("A post must contain text, image, or video.")
         return attrs
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        request = self.context.get("request")
+        for kind in ("image", "video"):
+            path = reverse("social-post-media", args=[instance.pk, kind]) if getattr(instance, kind) else None
+            data[kind] = request.build_absolute_uri(path) if path and request else path
+        return data
 
 
 class PostReactionSerializer(serializers.ModelSerializer):

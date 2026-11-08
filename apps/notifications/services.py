@@ -54,6 +54,8 @@ class NotificationService:
 
     @classmethod
     def notification_sms_text(cls, notification):
+        if notification.source_key and notification.source_key.startswith("SUPPORT_REPLY:"):
+            return "پاسخ سؤال شما در سوکانکس داده شد.\nhttps://app.sokanex.com/chat/support"
         title = cls._without_blank_lines(strip_tags(notification.title or "")).strip()
         message = cls._clean_message(notification.message)
         target_url = cls._notification_url(notification.target_url)
@@ -334,7 +336,7 @@ class NotificationService:
         return sent_count
 
     @classmethod
-    def queue_sms(cls, notification):
+    def queue_sms(cls, notification, *, allow_inline=True):
         if not notification.send_sms:
             return 0
         deliveries = []
@@ -349,18 +351,20 @@ class NotificationService:
         NotificationSMSDelivery.objects.bulk_create(deliveries, ignore_conflicts=True)
         # Production defaults to a durable outbox processed by the retry command.
         # Inline delivery is useful only for small/local installations and tests.
-        if settings.PAYAMITO_SMS_SEND_INLINE:
+        if allow_inline and settings.PAYAMITO_SMS_SEND_INLINE:
             transaction.on_commit(lambda: cls.send_pending_sms(notification_id=notification.pk))
         return len(deliveries)
 
     @staticmethod
-    def send_pending_sms(notification_id=None, limit=100):
+    def send_pending_sms(notification_id=None, limit=100, source_prefix=None):
         queryset = NotificationSMSDelivery.objects.filter(
             status__in=[NotificationSMSDelivery.Status.PENDING, NotificationSMSDelivery.Status.FAILED],
             attempts__lt=settings.PAYAMITO_SMS_RETRY_LIMIT,
         ).select_related("notification")
         if notification_id:
             queryset = queryset.filter(notification_id=notification_id)
+        if source_prefix:
+            queryset = queryset.filter(notification__source_key__startswith=source_prefix)
         for delivery in queryset.order_by("created_at")[:limit]:
             delivery.attempts += 1
             try:
