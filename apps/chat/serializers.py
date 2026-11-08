@@ -228,7 +228,10 @@ class TraderPostSerializer(serializers.ModelSerializer):
         request = self.context.get("request")
         for kind in ("image", "video"):
             path = reverse("social-post-media", args=[instance.pk, kind]) if getattr(instance, kind) else None
-            data[kind] = request.build_absolute_uri(path) if path and request else path
+            if path and request and request.get_host().split(":", 1)[0] == "api.sokanex.com":
+                data[kind] = f"https://api.sokanex.com{path}"
+            else:
+                data[kind] = request.build_absolute_uri(path) if path and request else path
         return data
 
 

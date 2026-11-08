@@ -64,8 +64,9 @@ class SocialPrivacyTests(APITestCase):
         image = SimpleUploadedFile("cover.png", image_bytes.getvalue(), content_type="image/png")
         created = self.client.post("/api/chat/social/feed/", {
             "image": image, "visibility": "PRIVATE",
-        }, format="multipart")
+        }, format="multipart", HTTP_HOST="api.sokanex.com")
         self.assertEqual(created.status_code, 201)
+        self.assertTrue(created.data["image"].startswith("https://api.sokanex.com/"))
         self.assertIn(f"/social/posts/{created.data['id']}/media/image/", created.data["image"])
         self.client.force_authenticate(self.viewer)
         self.assertEqual(self.client.get(created.data["image"]).status_code, 404)
