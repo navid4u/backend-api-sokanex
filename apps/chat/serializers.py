@@ -37,6 +37,7 @@ class ChatRoomSerializer(
             "description",
             "image",
             "is_public",
+            "is_active",
             "member_count",
             "is_member",
             "created_at",
@@ -94,6 +95,8 @@ class MessageSerializer(
     )
 
     can_delete = serializers.SerializerMethodField()
+    is_mine = serializers.SerializerMethodField()
+    sender_display_name = serializers.SerializerMethodField()
 
     class Meta:
         model = Message
@@ -101,6 +104,8 @@ class MessageSerializer(
         fields = (
             "id",
             "sender",
+            "sender_display_name",
+            "is_mine",
             "text",
             "attachment",
             "reply_to",
@@ -114,6 +119,8 @@ class MessageSerializer(
         read_only_fields = (
             "id",
             "sender",
+            "sender_display_name",
+            "is_mine",
             "is_deleted",
             "can_delete",
             "created_at",
@@ -134,6 +141,23 @@ class MessageSerializer(
             obj,
             request.user,
         )
+
+    def get_is_mine(self, obj) -> bool:
+        request = self.context.get("request")
+        return bool(
+            request is not None
+            and request.user.is_authenticated
+            and obj.sender_id == request.user.pk
+        )
+
+    def get_sender_display_name(self, obj) -> str:
+        if obj.sender_id is None:
+            return "عضو اتاق"
+        name = obj.sender.get_full_name().strip()
+        digits = re.sub(r"\D", "", name)
+        if not name or len(digits) >= 10:
+            return "عضو اتاق"
+        return name
 
     def validate(self, attrs):
         if (

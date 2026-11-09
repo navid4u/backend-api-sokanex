@@ -97,6 +97,47 @@ class ChatAPITests(APITestCase):
             self.inactive_room.name,
             names,
         )
+        self.assertIs(response.data["results"][0]["is_active"], True)
+
+    def test_manage_list_requires_content_manage_and_keeps_pagination(self):
+        self.authenticate(self.customer)
+        self.assertEqual(
+            self.client.get(self.list_url, {"manage": "true"}).status_code,
+            status.HTTP_403_FORBIDDEN,
+        )
+
+        self.authenticate(self.employee)
+        response = self.client.get(self.list_url, {"manage": "true", "page_size": 2})
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["count"], 3)
+        self.assertEqual(len(response.data["results"]), 2)
+        self.assertIsNotNone(response.data["next"])
+        rooms = response.data["results"]
+        rooms += self.client.get(self.list_url, {"manage": "true", "page_size": 2, "page": 2}).data["results"]
+        by_slug = {room["slug"]: room for room in rooms}
+        self.assertEqual(set(by_slug), {
+            self.public_room.slug, self.private_room.slug, self.inactive_room.slug,
+        })
+        self.assertIs(by_slug[self.inactive_room.slug]["is_active"], False)
+        self.assertIs(by_slug[self.private_room.slug]["is_public"], False)
+        self.assertIs(by_slug[self.private_room.slug]["is_member"], True)
+        self.assertEqual(by_slug[self.private_room.slug]["member_count"], 1)
+
+    def test_inactive_and_unjoined_private_detail_stays_hidden_without_manage(self):
+        self.authenticate(self.customer)
+        for room in (self.inactive_room, self.private_room):
+            url = reverse("chat-room-detail", kwargs={"slug": room.slug})
+            self.assertEqual(self.client.get(url).status_code, status.HTTP_404_NOT_FOUND)
+            self.assertEqual(
+                self.client.get(url, {"manage": "true"}).status_code,
+                status.HTTP_403_FORBIDDEN,
+            )
+
+        self.authenticate(self.employee)
+        url = reverse("chat-room-detail", kwargs={"slug": self.inactive_room.slug})
+        response = self.client.get(url, {"manage": "true"})
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIs(response.data["is_active"], False)
 
     def test_private_room_is_visible_to_member(self):
         RoomMembership.objects.create(
@@ -221,6 +262,13 @@ class ChatAPITests(APITestCase):
             ).exists()
         )
 
+    def test_customer_cannot_join_inactive_room(self):
+        self.authenticate(self.customer)
+        response = self.client.post(reverse(
+            "chat-room-join", kwargs={"slug": self.inactive_room.slug},
+        ))
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
     def test_non_member_cannot_access_room_messages(self):
         self.authenticate(self.customer)
 
@@ -237,6 +285,20 @@ class ChatAPITests(APITestCase):
             response.status_code,
             status.HTTP_403_FORBIDDEN,
         )
+        response = self.client.post(url, {"text": "Not a member"}, format="json")
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertFalse(Message.objects.filter(text="Not a member").exists())
+
+    def test_inactive_room_messages_are_unavailable_even_to_member(self):
+        RoomMembership.objects.create(room=self.inactive_room, user=self.customer)
+        self.authenticate(self.customer)
+        url = reverse("chat-room-messages", kwargs={"slug": self.inactive_room.slug})
+        self.assertEqual(self.client.get(url).status_code, status.HTTP_404_NOT_FOUND)
+        self.assertEqual(
+            self.client.post(url, {"text": "Inactive"}, format="json").status_code,
+            status.HTTP_404_NOT_FOUND,
+        )
+        self.assertFalse(Message.objects.filter(text="Inactive").exists())
 
     def test_member_can_create_text_message(self):
         RoomMembership.objects.create(
@@ -492,6 +554,83 @@ class ChatAPITests(APITestCase):
                 pk=self.public_room.pk,
             ).exists()
         )
+
+    def test_manager_can_reactivate_inactive_room_without_losing_members(self):
+        RoomMembership.objects.create(room=self.inactive_room, user=self.customer)
+        self.authenticate(self.employee)
+        url = reverse("chat-room-detail", kwargs={"slug": self.inactive_room.slug})
+        response = self.client.patch(
+            url, {"description": "Reopened", "is_active": True}, format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.inactive_room.refresh_from_db()
+        self.assertTrue(self.inactive_room.is_active)
+        self.assertEqual(self.inactive_room.description, "Reopened")
+        self.assertTrue(RoomMembership.objects.filter(
+            room=self.inactive_room, user=self.customer,
+        ).exists())
+
+        response = self.client.patch(url, {"is_active": False}, format="json")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(RoomMembership.objects.filter(
+            room=self.inactive_room, user=self.customer,
+        ).exists())
+
+    def test_manager_can_create_and_delete_test_room(self):
+        self.authenticate(self.employee)
+        response = self.client.post(
+            self.list_url, {"name": "Temporary Test Room", "is_public": True}, format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        room = ChatRoom.objects.get(name="Temporary Test Room")
+        url = reverse("chat-room-detail", kwargs={"slug": room.slug})
+        self.assertEqual(self.client.delete(url).status_code, status.HTTP_204_NO_CONTENT)
+        self.assertFalse(ChatRoom.objects.filter(pk=room.pk).exists())
+
+    def test_manager_can_delete_inactive_private_test_room(self):
+        self.private_room.is_active = False
+        self.private_room.save(update_fields=["is_active"])
+        self.authenticate(self.employee)
+        url = reverse("chat-room-detail", kwargs={"slug": self.private_room.slug})
+        self.assertEqual(self.client.delete(url).status_code, status.HTTP_204_NO_CONTENT)
+        self.assertFalse(ChatRoom.objects.filter(pk=self.private_room.pk).exists())
+
+    def test_message_ownership_and_safe_display_name_are_viewer_specific(self):
+        RoomMembership.objects.create(room=self.public_room, user=self.customer)
+        RoomMembership.objects.create(room=self.public_room, user=self.other_customer)
+        self.customer.first_name = "آرمان"
+        self.customer.last_name = "نمونه"
+        self.customer.save(update_fields=["first_name", "last_name"])
+        message = Message.objects.create(
+            room=self.public_room, sender=self.customer, text="Owner check",
+        )
+        url = reverse("chat-room-messages", kwargs={"slug": self.public_room.slug})
+
+        self.authenticate(self.customer)
+        own = self.client.get(url).data["results"][0]
+        self.assertEqual(own["id"], message.pk)
+        self.assertIs(own["is_mine"], True)
+        self.assertEqual(own["sender_display_name"], "آرمان نمونه")
+        self.assertIn("can_delete", own)
+        self.assertIn("reply_to", own)
+        self.assertIn("attachment", own)
+
+        self.authenticate(self.other_customer)
+        other = self.client.get(url).data["results"][0]
+        self.assertEqual(other["id"], message.pk)
+        self.assertIs(other["is_mine"], False)
+        self.assertEqual(other["sender_display_name"], "آرمان نمونه")
+
+        self.customer.first_name = "09123456789"
+        self.customer.last_name = ""
+        self.customer.save(update_fields=["first_name", "last_name"])
+        fallback = self.client.get(url).data["results"][0]
+        self.assertEqual(fallback["sender_display_name"], "عضو اتاق")
+
+        self.customer.first_name = "آرمان 09123456789"
+        self.customer.save(update_fields=["first_name"])
+        fallback_with_phone = self.client.get(url).data["results"][0]
+        self.assertEqual(fallback_with_phone["sender_display_name"], "عضو اتاق")
     def test_sender_sees_can_delete_true(
         self
     ):

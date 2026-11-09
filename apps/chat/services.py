@@ -20,6 +20,21 @@ from .models import (
 
 class ChatService:
     @staticmethod
+    def manageable_rooms(user):
+        membership = RoomMembership.objects.filter(
+            room_id=OuterRef("pk"),
+            user=user,
+        )
+
+        return (
+            ChatRoom.objects.annotate(
+                member_count=Count("members", distinct=True),
+                is_member=Exists(membership),
+            )
+            .order_by("name", "pk")
+        )
+
+    @staticmethod
     def visible_rooms(user):
         membership = RoomMembership.objects.filter(
             room_id=OuterRef("pk"),

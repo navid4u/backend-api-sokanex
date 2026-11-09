@@ -68,6 +68,9 @@ class ChatRoomListCreateView(
     generics.ListCreateAPIView
 ):
 
+    def is_manage_request(self):
+        return self.request.query_params.get("manage", "").lower() == "true"
+
     filter_backends = [
         SearchFilter,
         OrderingFilter,
@@ -86,7 +89,7 @@ class ChatRoomListCreateView(
     def get_permissions(self):
         permissions = [IsAuthenticated()]
 
-        if self.request.method == "POST":
+        if self.request.method == "POST" or self.is_manage_request():
             permissions.append(IsEmployee())
 
         return permissions
@@ -105,9 +108,10 @@ class ChatRoomListCreateView(
         ):
             return ChatRoom.objects.none()
 
-        return ChatService.visible_rooms(
-            self.request.user
-        )
+        if self.is_manage_request():
+            return ChatService.manageable_rooms(self.request.user)
+
+        return ChatService.visible_rooms(self.request.user)
 
     def perform_create(self, serializer):
         ChatService.create_room(
@@ -122,6 +126,9 @@ class ChatRoomDetailView(
 
     lookup_field = "slug"
 
+    def is_manage_request(self):
+        return self.request.query_params.get("manage", "").lower() == "true"
+
     def get_permissions(self):
         permissions = [IsAuthenticated()]
 
@@ -129,7 +136,7 @@ class ChatRoomDetailView(
             "PUT",
             "PATCH",
             "DELETE",
-        ]:
+        ] or self.is_manage_request():
             permissions.append(IsEmployee())
 
         return permissions
@@ -151,9 +158,10 @@ class ChatRoomDetailView(
         ):
             return ChatRoom.objects.none()
 
-        return ChatService.visible_rooms(
-            self.request.user
-        )
+        if self.request.method in ["PUT", "PATCH", "DELETE"] or self.is_manage_request():
+            return ChatService.manageable_rooms(self.request.user)
+
+        return ChatService.visible_rooms(self.request.user)
 
 
 class JoinChatRoomView(APIView):
