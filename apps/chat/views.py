@@ -43,7 +43,7 @@ from common.permissions import IsEmployee
 
 from .models import (
     ChatRoom, Message, PostComment, PostReaction, PostReport,
-    SavedPost, SupportMessage, SupportThread, TraderPost, UserFollow,
+    SavedPost, SupportMessage, SupportThread, TraderPost, UserFollow, PostUseful,
 )
 from .serializers import (
     ChatRoomSerializer,
@@ -60,6 +60,7 @@ from .serializers import (
     SocialUserSerializer,
 )
 from .services import ChatService
+from .throttles import SocialWriteThrottle, SocialReportThrottle
 from apps.notifications.models import Notification
 from apps.notifications.services import NotificationService
 
@@ -108,10 +109,13 @@ class ChatRoomListCreateView(
         ):
             return ChatRoom.objects.none()
 
-        if self.is_manage_request():
-            return ChatService.manageable_rooms(self.request.user)
-
-        return ChatService.visible_rooms(self.request.user)
+        queryset = ChatService.manageable_rooms(self.request.user) if self.is_manage_request() else ChatService.visible_rooms(self.request.user)
+        market = self.request.query_params.get("market")
+        if market:
+            if market not in TraderPost.Market.values:
+                raise ValidationError({"market": "Unknown market."})
+            queryset = queryset.filter(market=market)
+        return queryset.select_related("manager")
 
     def perform_create(self, serializer):
         ChatService.create_room(
@@ -159,9 +163,15 @@ class ChatRoomDetailView(
             return ChatRoom.objects.none()
 
         if self.request.method in ["PUT", "PATCH", "DELETE"] or self.is_manage_request():
-            return ChatService.manageable_rooms(self.request.user)
+            return ChatService.manageable_rooms(self.request.user).select_related("manager")
 
-        return ChatService.visible_rooms(self.request.user)
+        return ChatService.visible_rooms(self.request.user).select_related("manager")
+
+    def perform_update(self, serializer):
+        room = serializer.save()
+        if not room.is_active:
+            from .community import clear_presence
+            clear_presence(room)
 
 
 class JoinChatRoomView(APIView):
@@ -225,6 +235,8 @@ class LeaveChatRoomView(APIView):
             room,
             request.user,
         )
+        from .community import clear_presence
+        clear_presence(room, request.user)
 
         return Response(
             {
@@ -395,16 +407,32 @@ def social_posts_for(user):
     return queryset.select_related("author").annotate(
         reactions_count=Count("reactions", distinct=True),
         comments_count=Count("comments", filter=Q(comments__is_deleted=False), distinct=True),
+        useful_count=Count("useful_votes", distinct=True),
         is_reacted=Exists(PostReaction.objects.filter(post=OuterRef("pk"), user=user)),
         is_saved=Exists(SavedPost.objects.filter(post=OuterRef("pk"), user=user)),
+        is_useful=Exists(PostUseful.objects.filter(post=OuterRef("pk"), user=user)),
+    )
+
+
+def social_users_for(queryset, viewer):
+    followed = UserFollow.objects.filter(follower=viewer).values("following_id")
+    visible = Q(social_posts__visibility=TraderPost.Visibility.PUBLIC) | Q(pk=viewer.pk) | Q(
+        pk__in=followed, social_posts__visibility=TraderPost.Visibility.FOLLOWERS
+    )
+    return queryset.annotate(
+        visible_posts_count=Count("social_posts", filter=Q(social_posts__is_deleted=False) & visible, distinct=True),
+        followers_count=Count("follower_relations", distinct=True),
+        following_count=Count("following_relations", distinct=True),
+        followed_by_viewer=Exists(UserFollow.objects.filter(follower=viewer, following_id=OuterRef("pk"))),
     )
 
 
 class SocialFeedView(generics.ListCreateAPIView):
     permission_classes = [IsAuthenticated]
+    throttle_classes = [SocialWriteThrottle]
     serializer_class = TraderPostSerializer
     parser_classes = [JSONParser, MultiPartParser, FormParser]
-    filter_backends = [SearchFilter, OrderingFilter]
+    filter_backends = []
     search_fields = ["text"]
     ordering_fields = ["created_at", "updated_at"]
     ordering = ["-created_at", "-id"]
@@ -419,10 +447,13 @@ class SocialFeedView(generics.ListCreateAPIView):
 
     def get_queryset(self):
         queryset = social_posts_for(self.request.user)
-        if self.request.query_params.get("following") == "true":
-            followed = UserFollow.objects.filter(follower=self.request.user).values("following_id")
-            queryset = queryset.filter(author_id__in=followed)
+        from .social_v3 import filter_social_posts
+        queryset = filter_social_posts(queryset, self.request)
         return queryset
+
+    def list(self, request, *args, **kwargs):
+        from .social_v3 import paginated_social_posts
+        return paginated_social_posts(self.get_queryset(), request, self.get_serializer)
 
     def perform_create(self, serializer):
         serializer.save(author=self.request.user)
@@ -434,13 +465,13 @@ class SocialPostDetailView(generics.RetrieveUpdateDestroyAPIView):
     parser_classes = [JSONParser, MultiPartParser, FormParser]
 
     def get_queryset(self):
-        if self.request.method == "DELETE" and can_moderate_social(self.request.user):
+        if self.request.method in ("PATCH", "DELETE") and can_moderate_social(self.request.user):
             return TraderPost.objects.filter(is_deleted=False)
         return social_posts_for(self.request.user)
 
     def perform_update(self, serializer):
-        if serializer.instance.author_id != self.request.user.id:
-            raise serializers.ValidationError("Only the post author can edit this post.")
+        if serializer.instance.author_id != self.request.user.id and not can_moderate_social(self.request.user):
+            raise PermissionDenied("Only the post author or content manager can edit this post.")
         serializer.save(is_edited=True)
 
     def perform_destroy(self, instance):
@@ -534,9 +565,7 @@ class TopContributorsView(generics.ListAPIView):
             from apps.accounts.models import User
             return User.objects.none()
         limit = min(max(int(self.request.query_params.get("limit", 10)), 1), 50)
-        return self.request.user.__class__.objects.filter(is_active=True).annotate(
-            posts_count=Count("social_posts", filter=Q(social_posts__is_deleted=False))
-        ).order_by("-posts_count", "id")[:limit]
+        return social_users_for(self.request.user.__class__.objects.filter(is_active=True), self.request.user).order_by("-visible_posts_count", "id")[:limit]
 
 
 class SocialUserDetailView(generics.RetrieveAPIView):
@@ -545,9 +574,7 @@ class SocialUserDetailView(generics.RetrieveAPIView):
     lookup_url_kwarg = "user_id"
 
     def get_queryset(self):
-        return self.request.user.__class__.objects.filter(is_active=True).annotate(
-            posts_count=Count("social_posts", filter=Q(social_posts__is_deleted=False))
-        )
+        return social_users_for(self.request.user.__class__.objects.filter(is_active=True), self.request.user)
 
 
 class SocialUserPostListView(generics.ListAPIView):
@@ -558,15 +585,27 @@ class SocialUserPostListView(generics.ListAPIView):
     ordering = ["-created_at", "-id"]
 
     def get_queryset(self):
-        return social_posts_for(self.request.user).filter(
+        queryset = social_posts_for(self.request.user).filter(
             author_id=self.kwargs["user_id"]
-        ).order_by("-created_at", "-id")
+        )
+        post_type = self.request.query_params.get("post_type")
+        if post_type:
+            if post_type not in TraderPost.Type.values:
+                raise ValidationError({"post_type": "Unknown post type."})
+            queryset = queryset.filter(post_type=post_type)
+        return queryset.order_by("-created_at", "-id")
+
+    def list(self, request, *args, **kwargs):
+        from .social_v3 import paginated_social_posts
+        return paginated_social_posts(self.get_queryset(), request, self.get_serializer, extra_filter={"author_id": self.kwargs["user_id"], "post_type": request.query_params.get("post_type", "")})
 
 
 class PostCommentListCreateView(generics.ListCreateAPIView):
     permission_classes = [IsAuthenticated]
+    throttle_classes = [SocialWriteThrottle]
     serializer_class = PostCommentSerializer
     ordering = ["created_at", "id"]
+    pagination_class = DefaultPagination
 
     def get_post(self):
         return get_object_or_404(social_posts_for(self.request.user), pk=self.kwargs["pk"])
@@ -574,23 +613,52 @@ class PostCommentListCreateView(generics.ListCreateAPIView):
     def get_queryset(self):
         if getattr(self, "swagger_fake_view", False):
             return PostComment.objects.none()
-        return PostComment.objects.filter(post=self.get_post(), is_deleted=False).select_related("author")
+        ordering = self.request.query_params.get("ordering", "created_at")
+        if ordering not in ("created_at", "-created_at"):
+            raise ValidationError({"ordering": "Unknown ordering."})
+        return PostComment.objects.filter(post=self.get_post(), is_deleted=False).select_related("author", "parent").order_by(ordering, "id" if ordering == "created_at" else "-id")
+
+    def list(self, request, *args, **kwargs):
+        from .social_v3 import enrich_social_authors
+        queryset = self.filter_queryset(self.get_queryset())
+        page = self.paginate_queryset(queryset)
+        if page is not None:
+            enrich_social_authors(request, page)
+            return self.get_paginated_response(self.get_serializer(page, many=True).data)
+        rows = list(queryset)
+        enrich_social_authors(request, rows)
+        return Response(self.get_serializer(rows, many=True).data)
 
     def perform_create(self, serializer):
-        serializer.save(post=self.get_post(), author=self.request.user)
+        post = self.get_post()
+        parent = serializer.validated_data.get("parent")
+        if parent and (parent.post_id != post.pk or parent.is_deleted):
+            raise ValidationError({"reply_to": "Reply must belong to this post."})
+        with transaction.atomic():
+            comment = serializer.save(post=post, author=self.request.user)
+            if post.author_id != self.request.user.pk and (not parent or post.author_id != parent.author_id):
+                from .community import queue_social_notification
+                transaction.on_commit(lambda: queue_social_notification(key=f"COMMENT:{comment.pk}", recipient_id=post.author_id, title="نظر جدید برای پست شما", url=f"/chat?post={post.pk}"))
+            if parent and parent.author_id != self.request.user.pk:
+                from .community import queue_social_notification
+                transaction.on_commit(lambda: queue_social_notification(key=f"REPLY:{comment.pk}", recipient_id=parent.author_id, title="پاسخ جدید به نظر شما", url=f"/chat?post={post.pk}"))
 
 
 class PostReactionView(APIView):
     permission_classes = [IsAuthenticated]
+    throttle_classes = [SocialWriteThrottle]
     serializer_class = PostReactionSerializer
 
     def post(self, request, pk):
         post = get_object_or_404(social_posts_for(request.user), pk=pk)
         serializer = PostReactionSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        reaction, _ = PostReaction.objects.update_or_create(
+        reaction, created = PostReaction.objects.update_or_create(
             post=post, user=request.user, defaults=serializer.validated_data
         )
+        if created and post.author_id != request.user.pk:
+            from .community import queue_social_notification
+            transaction.on_commit(lambda: queue_social_notification(key=f"LIKE:{reaction.pk}", recipient_id=post.author_id, title="واکنش جدید به پست شما", url=f"/chat?post={post.pk}"))
         return Response(PostReactionSerializer(reaction).data)
 
     def delete(self, request, pk):
@@ -624,13 +692,17 @@ class SavedPostListView(generics.ListAPIView):
 
 class FollowUserView(APIView):
     permission_classes = [IsAuthenticated]
+    throttle_classes = [SocialWriteThrottle]
     serializer_class = FollowSerializer
 
     def post(self, request, user_id):
         if request.user.id == user_id:
             raise serializers.ValidationError("You cannot follow yourself.")
         target = get_object_or_404(request.user.__class__, pk=user_id, is_active=True)
-        UserFollow.objects.get_or_create(follower=request.user, following=target)
+        relation, created = UserFollow.objects.get_or_create(follower=request.user, following=target)
+        if created:
+            from .community import queue_social_notification
+            transaction.on_commit(lambda: queue_social_notification(key=f"FOLLOW:{relation.pk}", recipient_id=target.pk, title="دنبال‌کنندهٔ جدید", url=f"/chat/users/{request.user.pk}"))
         return Response({"message": "User followed."})
 
     def delete(self, request, user_id):
@@ -651,11 +723,17 @@ class FollowingListView(generics.ListAPIView):
 
 class ReportPostView(generics.CreateAPIView):
     permission_classes = [IsAuthenticated]
+    throttle_classes = [SocialReportThrottle]
     serializer_class = PostReportSerializer
 
-    def perform_create(self, serializer):
-        post = get_object_or_404(social_posts_for(self.request.user), pk=self.kwargs["pk"])
-        serializer.save(post=post, reporter=self.request.user)
+    def create(self, request, *args, **kwargs):
+        from .social_extra import _report_data
+        post = get_object_or_404(social_posts_for(request.user), pk=self.kwargs["pk"])
+        reason, description = _report_data(request)
+        report, created = PostReport.objects.get_or_create(
+            post=post, reporter=request.user, defaults={"reason": reason, "description": description}
+        )
+        return Response(PostReportSerializer(report).data, status=201 if created else 200)
 
 
 class SupportThreadView(APIView):

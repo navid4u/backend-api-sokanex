@@ -22,7 +22,7 @@ class SocialV2ContractTests(APITestCase):
         posts = self.client.get(f"/api/chat/social/users/{self.author.id}/posts/?ordering=-created_at")
         self.assertEqual(profile.status_code, 200)
         self.assertEqual(posts.status_code, 200)
-        self.assertEqual(posts.data["count"], 3)
+        self.assertEqual(len(posts.data["results"]), 3)
 
     def test_feed_cursor_pagination_has_stable_next(self):
         response = self.client.get("/api/chat/social/feed/?page_size=2")

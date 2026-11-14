@@ -14,7 +14,7 @@ class SocialNetworkAPITests(TestCase):
         self.client.force_authenticate(self.user)
 
     def test_post_reaction_comment_save_and_follow_flow(self):
-        response = self.client.post("/api/chat/social/feed/", {"text": "Market update"})
+        response = self.client.post("/api/chat/social/feed/", {"text": "Market update", "market": "general"})
         self.assertEqual(response.status_code, 201)
         post_id = response.data["id"]
         self.assertEqual(
@@ -30,8 +30,8 @@ class SocialNetworkAPITests(TestCase):
 
     def test_user_cannot_edit_another_users_post(self):
         self.client.force_authenticate(self.other)
-        post = self.client.post("/api/chat/social/feed/", {"text": "Other post"}).data
+        post = self.client.post("/api/chat/social/feed/", {"text": "Other post", "market": "general"}).data
         self.client.force_authenticate(self.user)
         response = self.client.patch(f"/api/chat/social/posts/{post['id']}/", {"text": "Changed"})
-        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.status_code, 403)
 

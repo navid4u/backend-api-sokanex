@@ -25,11 +25,13 @@ class ChatService:
             room_id=OuterRef("pk"),
             user=user,
         )
+        invitation_role = membership.filter(role__in=[RoomMembership.Role.ADMIN, RoomMembership.Role.MODERATOR])
 
         return (
             ChatRoom.objects.annotate(
                 member_count=Count("members", distinct=True),
                 is_member=Exists(membership),
+                can_invite_flag=Exists(invitation_role),
             )
             .order_by("name", "pk")
         )
@@ -40,6 +42,7 @@ class ChatService:
             room_id=OuterRef("pk"),
             user=user,
         )
+        invitation_role = membership.filter(role__in=[RoomMembership.Role.ADMIN, RoomMembership.Role.MODERATOR])
 
         return (
             ChatRoom.objects.filter(
@@ -55,6 +58,7 @@ class ChatService:
                 is_member=Exists(
                     membership
                 ),
+                can_invite_flag=Exists(invitation_role),
             )
             .distinct()
             .order_by(
@@ -68,6 +72,9 @@ class ChatService:
         room = serializer.save(
             created_by=creator
         )
+        if room.manager_id is None:
+            room.manager = creator
+            room.save(update_fields=["manager", "updated_at"])
 
         RoomMembership.objects.create(
             room=room,

@@ -20,9 +20,10 @@ class SocialPrivacyTests(APITestCase):
         self.client.force_authenticate(self.author)
 
     def test_multipart_video_and_authorized_range_without_public_storage_url(self):
-        video = SimpleUploadedFile("clip.mp4", b"0123456789", content_type="video/mp4")
+        video_bytes = b"\x00\x00\x00\x18ftypisom0123456789"
+        video = SimpleUploadedFile("clip.mp4", video_bytes, content_type="video/mp4")
         response = self.client.post("/api/chat/social/feed/", {
-            "video": video, "visibility": "FOLLOWERS",
+            "video": video, "visibility": "FOLLOWERS", "market": "general",
         }, format="multipart")
         self.assertEqual(response.status_code, 201)
         self.assertEqual(response.data["text"], "")
@@ -33,19 +34,19 @@ class SocialPrivacyTests(APITestCase):
         path = f"/api/chat/social/posts/{post.pk}/media/video/"
         own = self.client.get(path, HTTP_RANGE="bytes=2-5")
         self.assertEqual(own.status_code, 206)
-        self.assertEqual(b"".join(own.streaming_content), b"2345")
-        self.assertEqual(own["Content-Range"], "bytes 2-5/10")
+        self.assertEqual(b"".join(own.streaming_content), video_bytes[2:6])
+        self.assertEqual(own["Content-Range"], f"bytes 2-5/{len(video_bytes)}")
         self.client.force_authenticate(self.viewer)
         self.assertEqual(self.client.get(path).status_code, 404)
         UserFollow.objects.create(follower=self.viewer, following=self.author)
         allowed = self.client.get(path)
         self.assertEqual(allowed.status_code, 200)
-        self.assertEqual(b"".join(allowed.streaming_content), b"0123456789")
+        self.assertEqual(b"".join(allowed.streaming_content), video_bytes)
         self.client.force_authenticate(user=None)
         self.assertEqual(self.client.get(path).status_code, 401)
 
     def test_public_social_payload_and_search_hide_phone_username(self):
-        response = self.client.post("/api/chat/social/feed/", {"text": "hello"}, format="json")
+        response = self.client.post("/api/chat/social/feed/", {"text": "hello", "market": "general"}, format="json")
         self.assertEqual(response.status_code, 201)
         self.assertEqual(response.data["author"]["display_name"], "Ali Trader")
         self.assertNotIn("username", response.data["author"])
@@ -63,7 +64,7 @@ class SocialPrivacyTests(APITestCase):
         Image.new("RGB", (1, 1), "red").save(image_bytes, format="PNG")
         image = SimpleUploadedFile("cover.png", image_bytes.getvalue(), content_type="image/png")
         created = self.client.post("/api/chat/social/feed/", {
-            "image": image, "visibility": "PRIVATE",
+            "image": image, "visibility": "PRIVATE", "market": "general",
         }, format="multipart", HTTP_HOST="api.sokanex.com")
         self.assertEqual(created.status_code, 201)
         self.assertTrue(created.data["image"].startswith("https://api.sokanex.com/"))
@@ -72,12 +73,12 @@ class SocialPrivacyTests(APITestCase):
         self.assertEqual(self.client.get(created.data["image"]).status_code, 404)
         self.client.force_authenticate(self.author)
         bad = SimpleUploadedFile("not-video.exe", b"bad", content_type="application/octet-stream")
-        response = self.client.post("/api/chat/social/feed/", {"video": bad}, format="multipart")
+        response = self.client.post("/api/chat/social/feed/", {"video": bad, "market": "general"}, format="multipart")
         self.assertEqual(response.status_code, 400)
         self.assertIn("video", response.data["errors"])
 
     def test_soft_deleted_post_disappears_from_feed_profile_saved_and_media(self):
-        response = self.client.post("/api/chat/social/feed/", {"text": "temporary"}, format="json")
+        response = self.client.post("/api/chat/social/feed/", {"text": "temporary", "market": "general"}, format="json")
         post_id = response.data["id"]
         SavedPost.objects.create(user=self.viewer, post_id=post_id)
         self.assertEqual(self.client.delete(f"/api/chat/social/posts/{post_id}/").status_code, 204)

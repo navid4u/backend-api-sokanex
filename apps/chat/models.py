@@ -5,6 +5,9 @@ from .social_media import private_social_storage
 
 
 class ChatRoom(models.Model):
+    market = models.CharField(max_length=20, default="general", db_index=True)
+    topic = models.CharField(max_length=200, blank=True)
+    manager = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="managed_chat_rooms")
 
     name = models.CharField(
         max_length=150,
@@ -199,6 +202,20 @@ class Message(models.Model):
 
 
 class TraderPost(models.Model):
+    class Market(models.TextChoices):
+        FOREX = "forex", "Forex"
+        CRYPTO = "crypto", "Crypto"
+        GOLD_DOLLAR = "gold_dollar", "Gold and dollar"
+        STOCK = "stock", "Stock"
+        REAL_ESTATE = "real_estate", "Real estate"
+        GENERAL = "general", "General"
+
+    class Type(models.TextChoices):
+        POST = "POST", "Post"
+        ANALYSIS = "ANALYSIS", "Analysis"
+        QUESTION = "QUESTION", "Question"
+        POLL = "POLL", "Poll"
+
     class Visibility(models.TextChoices):
         PUBLIC = "PUBLIC", "Public"
         FOLLOWERS = "FOLLOWERS", "Followers"
@@ -207,6 +224,8 @@ class TraderPost(models.Model):
     author = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="social_posts"
     )
+    market = models.CharField(max_length=20, choices=Market.choices, default=Market.GENERAL, db_index=True)
+    post_type = models.CharField(max_length=12, choices=Type.choices, default=Type.POST, db_index=True)
     text = models.TextField(blank=True)
     image = models.ImageField(upload_to="social/posts/images/%Y/%m/", storage=private_social_storage, null=True, blank=True)
     video = models.FileField(upload_to="social/posts/videos/%Y/%m/", storage=private_social_storage, null=True, blank=True)
@@ -290,6 +309,7 @@ class PostReport(models.Model):
     class Status(models.TextChoices):
         PENDING = "PENDING", "Pending"
         REVIEWED = "REVIEWED", "Reviewed"
+        RESOLVED = "RESOLVED", "Resolved"
         DISMISSED = "DISMISSED", "Dismissed"
 
     post = models.ForeignKey(TraderPost, on_delete=models.CASCADE, related_name="reports")
@@ -297,6 +317,10 @@ class PostReport(models.Model):
         settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="post_reports"
     )
     reason = models.CharField(max_length=500)
+    description = models.CharField(max_length=1000, blank=True)
+    reviewed_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="reviewed_social_post_reports")
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+    admin_note = models.CharField(max_length=1000, blank=True)
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -304,6 +328,94 @@ class PostReport(models.Model):
         constraints = [
             models.UniqueConstraint(fields=["post", "reporter"], name="unique_user_post_report")
         ]
+
+
+class PostUseful(models.Model):
+    post = models.ForeignKey(TraderPost, on_delete=models.CASCADE, related_name="useful_votes")
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="useful_posts")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["post", "user"], name="unique_social_post_useful")]
+
+
+class PostHashtag(models.Model):
+    post = models.ForeignKey(TraderPost, on_delete=models.CASCADE, related_name="hashtags")
+    tag = models.CharField(max_length=100, db_index=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["post", "tag"], name="unique_social_post_tag")]
+
+
+class PostPoll(models.Model):
+    post = models.OneToOneField(TraderPost, on_delete=models.CASCADE, related_name="poll")
+    question = models.CharField(max_length=250)
+    closes_at = models.DateTimeField(null=True, blank=True)
+
+
+class PollOption(models.Model):
+    poll = models.ForeignKey(PostPoll, on_delete=models.CASCADE, related_name="options")
+    text = models.CharField(max_length=120)
+    position = models.PositiveSmallIntegerField()
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["poll", "position"], name="unique_social_poll_position")]
+        ordering = ["position", "pk"]
+
+
+class PollVote(models.Model):
+    poll = models.ForeignKey(PostPoll, on_delete=models.CASCADE, related_name="votes")
+    option = models.ForeignKey(PollOption, on_delete=models.CASCADE, related_name="votes")
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="social_poll_votes")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["poll", "user"], name="unique_social_poll_vote")]
+
+
+class SocialAnalystProfile(models.Model):
+    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="social_analyst_profile")
+    is_active_analyst = models.BooleanField(default=False)
+    is_verified = models.BooleanField(default=False)
+    specialty = models.CharField(max_length=200, blank=True)
+    credibility_score = models.PositiveSmallIntegerField(default=0)
+
+
+class CommentReport(models.Model):
+    comment = models.ForeignKey(PostComment, on_delete=models.CASCADE, related_name="reports")
+    reporter = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="social_comment_reports")
+    reason = models.CharField(max_length=20)
+    description = models.CharField(max_length=1000, blank=True)
+    status = models.CharField(max_length=20, choices=PostReport.Status.choices, default=PostReport.Status.PENDING)
+    reviewed_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="reviewed_social_comment_reports")
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+    admin_note = models.CharField(max_length=1000, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["comment", "reporter"], name="unique_user_comment_report")]
+
+
+class RoomInvitation(models.Model):
+    room = models.ForeignKey(ChatRoom, on_delete=models.CASCADE, related_name="invitations")
+    invitee = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="chat_invitations")
+    inviter = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, related_name="sent_chat_invitations")
+    accepted_at = models.DateTimeField(null=True, blank=True)
+    cancelled_at = models.DateTimeField(null=True, blank=True)
+    expires_at = models.DateTimeField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["room", "invitee"], condition=models.Q(accepted_at__isnull=True, cancelled_at__isnull=True), name="unique_pending_room_invitation")]
+
+
+class SocialReportAudit(models.Model):
+    target_type = models.CharField(max_length=10)
+    report_id = models.PositiveIntegerField()
+    action = models.CharField(max_length=20)
+    actor = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True)
+    admin_note = models.CharField(max_length=1000, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
 
 
 class SupportThread(models.Model):
