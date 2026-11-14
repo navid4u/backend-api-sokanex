@@ -22,6 +22,7 @@ from .services import ChatService
 class ChatRoomSerializer(
     serializers.ModelSerializer
 ):
+    image = serializers.ImageField(read_only=True, use_url=False)
 
     member_count = serializers.IntegerField(
         read_only=True,
@@ -69,6 +70,11 @@ class ChatRoomSerializer(
         serializer = SocialUserSerializer(context=self.context)
         return {"id": obj.manager_id, "display_name": serializer.get_display_name(obj.manager)}
 
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        data["image"] = _chat_media_url(self.context.get("request"), "chat-room-image", instance.pk) if instance.image else None
+        return data
+
     class Meta:
         model = ChatRoom
 
@@ -95,6 +101,7 @@ class ChatRoomSerializer(
 class ChatRoomWriteSerializer(
     serializers.ModelSerializer
 ):
+    image = serializers.ImageField(required=False, allow_null=True, use_url=False)
 
     manager_id = serializers.IntegerField(required=False, write_only=True, allow_null=True)
 
@@ -169,10 +176,16 @@ class ChatRoomWriteSerializer(
                 RoomMembership.objects.update_or_create(room=room, user_id=manager_id, defaults={"role": RoomMembership.Role.ADMIN})
         return room
 
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        data["image"] = _chat_media_url(self.context.get("request"), "chat-room-image", instance.pk) if instance.image else None
+        return data
+
 
 class MessageSerializer(
     serializers.ModelSerializer
 ):
+    attachment = serializers.FileField(required=False, allow_null=True, use_url=False)
 
     sender = serializers.SerializerMethodField()
 
@@ -271,6 +284,20 @@ class MessageSerializer(
             max_size_mb=20,
             file_label="Chat attachment",
         )
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        data["attachment"] = _chat_media_url(self.context.get("request"), "chat-message-attachment", instance.pk) if instance.attachment and not instance.is_deleted else None
+        return data
+
+
+def _chat_media_url(request, route, pk):
+    path = reverse(route, args=[pk])
+    if request is None:
+        return path
+    if request.get_host().split(":", 1)[0] == "api.sokanex.com":
+        return f"https://api.sokanex.com{path}"
+    return request.build_absolute_uri(path)
 
 
 class SocialUserSerializer(serializers.Serializer):
@@ -475,7 +502,7 @@ class TraderPostSerializer(serializers.ModelSerializer):
         return value
 
     def validate_video(self, value):
-        value = validate_video_upload(value, max_size_mb=200, file_label="Post video")
+        value = validate_video_upload(value, max_size_mb=20, file_label="Post video")
         value.seek(0)
         header = value.read(16)
         value.seek(0)

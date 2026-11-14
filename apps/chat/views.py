@@ -397,6 +397,77 @@ class DeleteMessageView(APIView):
         )
 
 
+def _chat_media_response(request, field, legacy_prefix):
+    try:
+        file_obj = field.storage.open(field.name, "rb")
+    except FileNotFoundError:
+        # Existing public files are not moved by the storage migration.
+        legacy_root = Path(settings.MEDIA_ROOT).resolve()
+        legacy_path = (legacy_root / field.name).resolve()
+        if not field.name.startswith(legacy_prefix) or not legacy_path.is_relative_to(legacy_root) or not legacy_path.is_file():
+            raise Http404 from None
+        file_obj = legacy_path.open("rb")
+    size = file_obj.seek(0, 2)
+    file_obj.seek(0)
+    start, end = 0, size - 1
+    requested_range = request.headers.get("Range", "")
+    if requested_range:
+        match = re.fullmatch(r"bytes=(\d*)-(\d*)", requested_range)
+        if not match or (not match.group(1) and not match.group(2)):
+            file_obj.close()
+            response = HttpResponse(status=416)
+            response["Content-Range"] = f"bytes */{size}"
+            return response
+        if match.group(1):
+            start = int(match.group(1))
+            end = min(int(match.group(2)), size - 1) if match.group(2) else size - 1
+        else:
+            start = max(size - int(match.group(2)), 0)
+        if start > end or start >= size:
+            file_obj.close()
+            response = HttpResponse(status=416)
+            response["Content-Range"] = f"bytes */{size}"
+            return response
+        file_obj.seek(start)
+    response = StreamingHttpResponse(
+        _social_media_chunks(file_obj, end - start + 1),
+        status=206 if requested_range else 200,
+        content_type=mimetypes.guess_type(field.name)[0] or "application/octet-stream",
+    )
+    response["Content-Length"] = str(end - start + 1)
+    response["Accept-Ranges"] = "bytes"
+    response["Cache-Control"] = "private, no-store"
+    response["X-Content-Type-Options"] = "nosniff"
+    patch_vary_headers(response, ["Authorization"])
+    if requested_range:
+        response["Content-Range"] = f"bytes {start}-{end}/{size}"
+    return response
+
+
+class ChatRoomImageView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, pk):
+        room = get_object_or_404(ChatRoom, pk=pk)
+        can_manage = IsEmployee().has_permission(request, self)
+        can_view = room.is_active and (
+            room.is_public or room.members.filter(pk=request.user.pk).exists()
+        )
+        if not (can_manage or can_view) or not room.image:
+            raise Http404
+        return _chat_media_response(request, room.image, "chat/rooms/")
+
+
+class ChatMessageAttachmentView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, pk):
+        message = get_object_or_404(Message.objects.select_related("room"), pk=pk, is_deleted=False)
+        if not message.room.is_active or not message.room.members.filter(pk=request.user.pk).exists() or not message.attachment:
+            raise Http404
+        return _chat_media_response(request, message.attachment, "chat/attachments/")
+
+
 def social_posts_for(user):
     following_ids = UserFollow.objects.filter(follower=user).values("following_id")
     queryset = TraderPost.objects.filter(is_deleted=False).filter(

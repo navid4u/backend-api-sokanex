@@ -2,11 +2,13 @@ from django.urls import path
 
 from .views import (
     ChatRoomDetailView,
+    ChatRoomImageView,
     ChatRoomListCreateView,
     DeleteMessageView,
     JoinChatRoomView,
     LeaveChatRoomView,
     RoomMessageListCreateView,
+    ChatMessageAttachmentView,
     FollowingListView,
     FollowUserView,
     PostCommentListCreateView,
@@ -32,6 +34,8 @@ from .social_extra import (
 
 
 urlpatterns = [
+    path("rooms/<int:pk>/image/", ChatRoomImageView.as_view(), name="chat-room-image"),
+    path("messages/<int:pk>/attachment/", ChatMessageAttachmentView.as_view(), name="chat-message-attachment"),
     path("support/", SupportThreadView.as_view(), name="support-thread"),
     path("support/messages/", SupportMessageListCreateView.as_view(), name="support-messages"),
     path("social/feed/", SocialFeedView.as_view(), name="social-feed"),

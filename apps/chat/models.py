@@ -27,6 +27,7 @@ class ChatRoom(models.Model):
 
     image = models.ImageField(
         upload_to="chat/rooms/",
+        storage=private_social_storage,
         null=True,
         blank=True,
     )
@@ -152,6 +153,7 @@ class Message(models.Model):
 
     attachment = models.FileField(
         upload_to="chat/attachments/",
+        storage=private_social_storage,
         null=True,
         blank=True,
     )
